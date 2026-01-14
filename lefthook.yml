@@ -1,0 +1,33 @@
+output:
+  - summary
+
+pre-commit:
+  jobs:
+    - name: "Formatting"
+      group:
+        jobs:
+          - name: format
+            glob: "**/*.py"
+            exclude:
+              - "src/everyrow_sdk/generated/**"
+            run: uv run ruff format {staged_files}
+            stage_fixed: true
+
+    - name: "Linting"
+      group:
+        jobs:
+          - name: lint
+            glob: "**/*.py"
+            exclude:
+              - "src/everyrow_sdk/generated/**"
+            run: uv run ruff check --fix {staged_files}
+            stage_fixed: true
+
+    - name: "Typechecking"
+      group:
+        jobs:
+          - name: typecheck
+            glob: "**/*.py"
+            exclude:
+              - "src/everyrow_sdk/generated/**"
+            run: uv run basedpyright --project ./pyproject.toml
