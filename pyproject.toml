@@ -8,6 +8,7 @@ dependencies = [
     "attrs>=25.4.0",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
 ]
 
 [tool.hatch.build.targets.wheel]
