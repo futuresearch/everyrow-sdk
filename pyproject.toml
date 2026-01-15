@@ -6,9 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "attrs>=25.4.0",
-    "ipykernel>=7.1.0",
     "pandas>=2.3.3",
-    "pyarrow>=22.0.0",
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
 ]
@@ -21,6 +19,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
+case-studies = [
+    "ipykernel>=7.1.0",
+    "pyarrow>=22.0.0",
+]
 dev = [
     "openapi-python-client>=0.28.1",
     "pytest>=9.0.2",
