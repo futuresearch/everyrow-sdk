@@ -174,6 +174,16 @@ task = await rank_async(
 result = await task.await_result(session.client)
 ```
 
+## Case Studies
+
+The `case_studies/` directory contains example workflows demonstrating real-world usage of the SDK. To run case studies, install the optional dependencies:
+
+```bash
+uv sync --group case-studies
+```
+
+Then you can run the case study scripts or open the Jupyter notebooks in your preferred environment.
+
 ## Development
 
 ### Setup
