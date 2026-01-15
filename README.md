@@ -57,7 +57,7 @@ from everyrow_sdk.ops import rank
 
 result = await rank(
     session=session,
-    task="Rank organizations by their contribution to AI research",
+    task="Score this organization by their contribution to AI research",
     input=dataframe,
     field_name="contribution_score",
     ascending_order=False,
@@ -164,7 +164,7 @@ from everyrow_sdk.ops import rank_async
 
 task = await rank_async(
     session=session,
-    task="Rank organizations",
+    task="Score this organization",
     input=dataframe,
     field_name="score",
 )

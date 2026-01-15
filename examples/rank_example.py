@@ -88,7 +88,7 @@ async def call_rank(session: Session):
     )
 
     task = dedent("""
-        Rank these AI research organizations by their overall contribution to
+        Score the given AI research organization by their overall contribution to
         advancing large language models and generative AI in the past 2 years.
 
         Consider factors such as:
