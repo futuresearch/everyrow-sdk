@@ -16,6 +16,7 @@ from everyrow_sdk.generated.models import (
 from everyrow_sdk.ops import (
     agent_map,
     create_scalar_artifact,
+    rank_async,
     single_agent,
 )
 from everyrow_sdk.result import ScalarResult, TableResult
@@ -316,3 +317,38 @@ async def test_agent_map_with_table_output(mocker, mock_session):
     assert isinstance(result, TableResult)
     assert len(result.data) == 2
     assert result.artifact_id == artifact_id
+
+
+@pytest.mark.asyncio
+async def test_rank_model_validation(mocker, mock_session) -> None:
+    input_df = pd.DataFrame(
+        [
+            {"country": "China"},
+            {"country": "India"},
+            {"country": "Indonesia"},
+            {"country": "Pakistan"},
+            {"country": "USA"},
+        ],
+    )
+
+    class ResponseModel(BaseModel):
+        population_size: int
+
+    input_artifact_id = uuid.uuid4()
+    # Mock create_table_artifact (called because input is DataFrame)
+    mock_create_table = mocker.patch(
+        "everyrow_sdk.ops.create_table_artifact", new_callable=AsyncMock
+    )
+    mock_create_table.return_value = input_artifact_id
+
+    with pytest.raises(
+        ValueError,
+        match="Field population not in response model ResponseModel",
+    ):
+        await rank_async(
+            task="Find the population of the given country",
+            session=mock_session,
+            input=input_df,
+            field_name="population",
+            response_model=ResponseModel,
+        )
