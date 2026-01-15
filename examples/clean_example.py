@@ -5,11 +5,11 @@ from textwrap import dedent
 from pandas import DataFrame
 
 from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import clean
+from everyrow_sdk.ops import dedupe
 from everyrow_sdk.session import Session
 
 
-async def call_clean(session: Session):
+async def call_dedupe(session: Session):
     # Deduplicate academic papers where duplicates may be:
     # - Same paper listed with arXiv ID and DOI
     # - Preprint versions vs published versions
@@ -81,7 +81,7 @@ async def call_clean(session: Session):
         ]
     )
 
-    result = await clean(
+    result = await dedupe(
         session=session,
         input=papers,
         equivalence_relation=dedent("""
@@ -112,7 +112,7 @@ async def main():
         async with create_session(client=client, name=session_name) as session:
             print(f"Session URL: {session.get_url()}")
             print("Deduplicating academic papers...")
-            await call_clean(session)
+            await call_dedupe(session)
 
 
 if __name__ == "__main__":

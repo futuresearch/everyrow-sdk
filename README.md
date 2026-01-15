@@ -1,6 +1,6 @@
 # everyrow SDK
 
-The everyrow SDK provides intelligent data processing utilities powered by AI agents. Transform, clean, merge, rank, and screen your dataframes using natural language instructions. Whether you're deduplicating research papers, merging complex datasets, ranking organizations, or screening vendors, the SDK handles the heavy lifting by combining AI research capabilities with structured data operations.
+The everyrow SDK provides intelligent data processing utilities powered by AI agents. Transform, dedupe, merge, rank, and screen your dataframes using natural language instructions. Whether you're deduplicating research papers, merging complex datasets, ranking organizations, or screening vendors, the SDK handles the heavy lifting by combining AI research capabilities with structured data operations.
 
 ## Installation
 
@@ -33,12 +33,12 @@ EVERYROW_API_KEY=your_api_key_here
 
 ```python
 from everyrow_sdk import create_session
-from everyrow_sdk.ops import clean
+from everyrow_sdk.ops import dedupe
 from pandas import DataFrame
 
 async with create_session() as session:
     data = DataFrame([...])
-    result = await clean(
+    result = await dedupe(
         session=session,
         input=data,
         equivalence_relation="Two items are duplicates if...",
@@ -64,14 +64,14 @@ result = await rank(
 )
 ```
 
-#### Clean: `clean`
+#### Dedupe: `dedupe`
 
 Intelligently deduplicate your data using AI-powered equivalence detection:
 
 ```python
-from everyrow_sdk.ops import clean
+from everyrow_sdk.ops import dedupe
 
-result = await clean(
+result = await dedupe(
     session=session,
     input=dataframe,
     equivalence_relation="Two entries are duplicates if they represent the same research work",
