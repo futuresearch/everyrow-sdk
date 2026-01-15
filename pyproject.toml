@@ -8,7 +8,6 @@ dependencies = [
     "attrs>=25.4.0",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
-    "python-dotenv>=1.2.1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -22,6 +21,7 @@ build-backend = "hatchling.build"
 case-studies = [
     "ipykernel>=7.1.0",
     "pyarrow>=22.0.0",
+    "python-dotenv>=1.2.1",
 ]
 dev = [
     "openapi-python-client>=0.28.1",
