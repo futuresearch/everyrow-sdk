@@ -3,10 +3,20 @@ from datetime import datetime
 from textwrap import dedent
 
 from pandas import DataFrame
+from pydantic import BaseModel, Field
 
 from everyrow_sdk import create_client, create_session
 from everyrow_sdk.ops import rank
 from everyrow_sdk.session import Session
+
+
+class ContributionRanking(BaseModel):
+    contribution_score: float = Field(
+        description="Score from 0-100 reflecting contribution"
+    )
+    most_significant_contribution: str = Field(
+        description="Single most significant contribution"
+    )
 
 
 async def call_rank(session: Session):
@@ -45,6 +55,8 @@ async def call_rank(session: Session):
         ]
     )
 
+    # Example 1: Basic ranking with a single score field
+    print("Example 1: Basic ranking")
     result = await rank(
         session=session,
         task=dedent("""
@@ -68,6 +80,25 @@ async def call_rank(session: Session):
     print("AI Research Organization Rankings:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")
+
+    # Example 2: Ranking with a custom response model for additional context
+    print("\n" + "=" * 80)
+    print("Example 2: Ranking with detailed response model")
+    detailed_result = await rank(
+        session=session,
+        task=dedent("""
+            Rank these AI research organizations by their overall contribution to
+            advancing large language models and generative AI in the past 2 years.
+            Also include their single most significant contribution.
+        """),
+        input=ai_research_orgs,
+        field_name="contribution_score",
+        response_model=ContributionRanking,
+        ascending_order=False,
+    )
+    print("Detailed Rankings with Context:")
+    print(detailed_result.data.to_string())
+    print(f"\nArtifact ID: {detailed_result.artifact_id}")
 
 
 async def main():
