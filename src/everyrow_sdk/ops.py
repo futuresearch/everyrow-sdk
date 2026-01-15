@@ -126,7 +126,9 @@ async def single_agent_async[T: BaseModel](
         session_id=session.session_id,
     )
 
-    cohort_task = EveryrowTask(response_model=response_model, is_map=False, is_expand=return_table)
+    cohort_task = EveryrowTask(
+        response_model=response_model, is_map=False, is_expand=return_table
+    )
     await cohort_task.submit(body, session.client)
     return cohort_task
 
@@ -140,7 +142,9 @@ async def agent_map(
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table_per_row: bool = False,
 ) -> TableResult:
-    cohort_task = await agent_map_async(task, session, input, effort_level, llm, response_model, return_table_per_row)
+    cohort_task = await agent_map_async(
+        task, session, input, effort_level, llm, response_model, return_table_per_row
+    )
     result = await cohort_task.await_result(session.client)
     if isinstance(result, TableResult):
         return result
@@ -240,7 +244,9 @@ async def agent_map_async(
         session_id=session.session_id,
     )
 
-    cohort_task = EveryrowTask(response_model=response_model, is_map=True, is_expand=return_table_per_row)
+    cohort_task = EveryrowTask(
+        response_model=response_model, is_map=True, is_expand=return_table_per_row
+    )
     await cohort_task.submit(body, session.client)
     return cohort_task
 
@@ -283,7 +289,9 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
 
 
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
-    payload = CreateGroupRequest(query=CreateGroupQueryParams(data_to_create=input.to_dict(orient="records")))
+    payload = CreateGroupRequest(
+        query=CreateGroupQueryParams(data_to_create=input.to_dict(orient="records"))
+    )
     body = SubmitTaskBody(
         payload=payload,
         session_id=session.session_id,
@@ -371,12 +379,13 @@ async def merge_async(
     return cohort_task
 
 
-async def rank(
+async def rank[T: BaseModel](
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
     field_name: str,
     field_type: Literal["float", "int", "str", "bool"] = "float",
+    response_model: type[T] | None = None,
     ascending_order: bool = True,
     preview: bool = False,
 ) -> TableResult:
@@ -387,7 +396,8 @@ async def rank(
         session: The session to use
         input: The input table (DataFrame, UUID, or TableResult)
         field_name: The name of the field to extract and sort by
-        field_type: The type of the field (default: "float")
+        field_type: The type of the field (default: "float", ignored if response_model is provided)
+        response_model: Optional Pydantic model for the response schema
         ascending_order: If True, sort in ascending order
         preview: If True, process only the first few inputs
 
@@ -400,6 +410,7 @@ async def rank(
         input=input,
         field_name=field_name,
         field_type=field_type,
+        response_model=response_model,
         ascending_order=ascending_order,
         preview=preview,
     )
@@ -410,26 +421,29 @@ async def rank(
         raise EveryrowError("Rank task did not return a table result")
 
 
-async def rank_async(
+async def rank_async[T: BaseModel](
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
     field_name: str,
     field_type: Literal["float", "int", "str", "bool"] = "float",
+    response_model: type[T] | None = None,
     ascending_order: bool = True,
     preview: bool = False,
-) -> EveryrowTask[BaseModel]:
+) -> EveryrowTask[T]:
     """Submit a rank task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
-    # Build response schema with single field
-    response_schema = {
-        "_model_name": "RankResponse",
-        field_name: {
-            "type": field_type,
-            "optional": False,
-        },
-    }
+    if response_model is not None:
+        response_schema = _convert_pydantic_to_custom_schema(response_model)
+    else:
+        response_schema = {
+            "_model_name": "RankResponse",
+            field_name: {
+                "type": field_type,
+                "optional": False,
+            },
+        }
 
     query = DeepRankPublicParams(
         task=task,
@@ -448,7 +462,11 @@ async def rank_async(
         session_id=session.session_id,
     )
 
-    cohort_task = EveryrowTask(response_model=BaseModel, is_map=True, is_expand=False)
+    cohort_task: EveryrowTask[T] = EveryrowTask(
+        response_model=response_model or BaseModel,  # type: ignore[arg-type]
+        is_map=True,
+        is_expand=False,
+    )
     await cohort_task.submit(body, session.client)
     return cohort_task
 
@@ -625,7 +643,8 @@ async def derive(
     input_artifact_id = await _process_agent_map_input(input, session)
 
     derive_expressions = [
-        DeriveExpression(column_name=col_name, expression=expr) for col_name, expr in expressions.items()
+        DeriveExpression(column_name=col_name, expression=expr)
+        for col_name, expr in expressions.items()
     ]
 
     query = DeriveQueryParams(expressions=derive_expressions)
