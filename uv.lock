@@ -195,14 +195,16 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
-    { name = "ipykernel" },
     { name = "pandas" },
-    { name = "pyarrow" },
     { name = "pydantic" },
-    { name = "python-dotenv" },
 ]
 
 [package.dev-dependencies]
+case-studies = [
+    { name = "ipykernel" },
+    { name = "pyarrow" },
+    { name = "python-dotenv" },
+]
 dev = [
     { name = "basedpyright" },
     { name = "openapi-python-client" },
@@ -215,14 +217,16 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
-    { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pyarrow", specifier = ">=22.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
 ]
 
 [package.metadata.requires-dev]
+case-studies = [
+    { name = "ipykernel", specifier = ">=7.1.0" },
+    { name = "pyarrow", specifier = ">=22.0.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+]
 dev = [
     { name = "basedpyright", specifier = ">=1.22.0" },
     { name = "openapi-python-client", specifier = ">=0.28.1" },
