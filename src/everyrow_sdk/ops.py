@@ -436,6 +436,10 @@ async def rank_async[T: BaseModel](
 
     if response_model is not None:
         response_schema = _convert_pydantic_to_custom_schema(response_model)
+        if field_name not in response_schema:
+            raise ValueError(
+                f"Field {field_name} not in response model {response_model.__name__}"
+            )
     else:
         response_schema = {
             "_model_name": "RankResponse",
