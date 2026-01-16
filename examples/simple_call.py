@@ -4,10 +4,10 @@ from datetime import datetime
 from pandas import DataFrame
 from pydantic import BaseModel
 
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.generated.models import TaskEffort
-from everyrow_sdk.ops import agent_map, create_scalar_artifact, single_agent
-from everyrow_sdk.session import Session
+from everyrow import create_client, create_session
+from everyrow.generated.models import TaskEffort
+from everyrow.ops import agent_map, create_scalar_artifact, single_agent
+from everyrow.session import Session
 
 
 async def upload_simple_scalar(session: Session):

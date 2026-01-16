@@ -12,8 +12,8 @@ from datetime import datetime
 
 from pandas import DataFrame
 
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import derive
+from everyrow import create_client, create_session
+from everyrow.ops import derive
 
 
 async def main():

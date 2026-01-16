@@ -4,9 +4,9 @@ from textwrap import dedent
 
 from pandas import DataFrame
 
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import dedupe
-from everyrow_sdk.session import Session
+from everyrow import create_client, create_session
+from everyrow.ops import dedupe
+from everyrow.session import Session
 
 
 async def call_dedupe(session: Session):
