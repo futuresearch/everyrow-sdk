@@ -1,5 +1,5 @@
 [project]
-name = "everyrow-sdk"
+name = "everyrow"
 version = "0.1.0"
 description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
