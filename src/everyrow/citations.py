@@ -1,12 +1,12 @@
 from copy import deepcopy
 from typing import Any
 
-from everyrow_sdk.generated.models import (
+from everyrow.generated.models import (
     ArtifactGroupRecord,
     AuxDataSourceBank,
     StandaloneArtifactRecord,
 )
-from everyrow_sdk.generated.types import Unset
+from everyrow.generated.types import Unset
 
 
 def _render_citations(data: dict[str, Any], source_bank: AuxDataSourceBank) -> dict[str, Any]:

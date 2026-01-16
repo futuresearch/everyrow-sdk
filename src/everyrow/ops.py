@@ -4,8 +4,8 @@ from uuid import UUID
 from pandas import DataFrame
 from pydantic import BaseModel
 
-from everyrow_sdk.constants import EveryrowError
-from everyrow_sdk.generated.models import (
+from everyrow.constants import EveryrowError
+from everyrow.generated.models import (
     AgentQueryParams,
     CreateGroupQueryParams,
     CreateGroupRequest,
@@ -29,11 +29,11 @@ from everyrow_sdk.generated.models import (
     ReduceAgentRequestParams,
     ResponseSchemaType,
 )
-from everyrow_sdk.generated.models.submit_task_body import SubmitTaskBody
-from everyrow_sdk.generated.types import UNSET
-from everyrow_sdk.result import Result, ScalarResult, TableResult
-from everyrow_sdk.session import Session
-from everyrow_sdk.task import (
+from everyrow.generated.models.submit_task_body import SubmitTaskBody
+from everyrow.generated.types import UNSET
+from everyrow.result import Result, ScalarResult, TableResult
+from everyrow.session import Session
+from everyrow.task import (
     LLM,
     EffortLevel,
     EveryrowTask,

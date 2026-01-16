@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/everyrow_sdk"]
+packages = ["src/everyrow"]
 
 [build-system]
 requires = ["hatchling"]
@@ -37,12 +37,12 @@ dev = [
 venvPath = "."
 venv = ".venv"
 include = ["src", "tests", "examples"]
-exclude = ["src/everyrow_sdk/generated"]
+exclude = ["src/everyrow/generated"]
 typeCheckingMode = "standard"
 
 [tool.ruff]
 include = ["src/**/*.py", "tests/**/*.py", "examples/**/*.py"]
-exclude = [".venv", "src/everyrow_sdk/generated/**"]
+exclude = [".venv", "src/everyrow/generated/**"]
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -60,13 +60,13 @@ fixable = ["ALL"]
 unfixable = []
 extend-select = ["I"]
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?)|[a-zA-Z0-9_]+_)$"
-exclude = [".venv", "src/everyrow_sdk/generated/**"]
+exclude = [".venv", "src/everyrow/generated/**"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
 [tool.ruff.format]
-exclude = ["src/everyrow_sdk/generated/**"]
+exclude = ["src/everyrow/generated/**"]
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]

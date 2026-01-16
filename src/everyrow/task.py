@@ -5,16 +5,16 @@ from uuid import UUID
 from pandas import DataFrame
 from pydantic.main import BaseModel
 
-from everyrow_sdk.api_utils import handle_response
-from everyrow_sdk.citations import render_citations_group, render_citations_standalone
-from everyrow_sdk.constants import EveryrowError
-from everyrow_sdk.generated.api.default import (
+from everyrow.api_utils import handle_response
+from everyrow.citations import render_citations_group, render_citations_standalone
+from everyrow.constants import EveryrowError
+from everyrow.generated.api.default import (
     get_artifacts_artifacts_get,
     get_task_status_endpoint_tasks_task_id_status_get,
     submit_task_tasks_post,
 )
-from everyrow_sdk.generated.client import AuthenticatedClient
-from everyrow_sdk.generated.models import (
+from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.models import (
     ArtifactGroupRecord,
     LLMEnum,
     StandaloneArtifactRecord,
@@ -22,8 +22,8 @@ from everyrow_sdk.generated.models import (
     TaskStatus,
     TaskStatusResponse,
 )
-from everyrow_sdk.generated.models.submit_task_body import SubmitTaskBody
-from everyrow_sdk.result import ScalarResult, TableResult
+from everyrow.generated.models.submit_task_body import SubmitTaskBody
+from everyrow.result import ScalarResult, TableResult
 
 # "export" generated types.
 LLM = LLMEnum
