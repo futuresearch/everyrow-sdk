@@ -3,6 +3,9 @@
   "owner": {
     "name": "FutureSearch"
   },
+  "metadata": {
+    "description": "AI-powered data processing plugins from FutureSearch"
+  },
   "plugins": [
     {
       "name": "everyrow",
