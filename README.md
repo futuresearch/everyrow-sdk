@@ -184,6 +184,20 @@ uv sync --group case-studies
 
 Then you can run the case study scripts or open the Jupyter notebooks in your preferred environment.
 
+## Claude Code Plugin
+
+This repository includes a plugin for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that teaches Claude how to write code using the everyrow SDK. Once installed, Claude will understand the SDK's patterns and can help you build data processing pipelines.
+
+```sh
+# from Claude Code
+/plugin marketplace add futuresearch/everyrow-sdk
+/plugin install everyrow@futuresearch
+
+# from terminal
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
+
 ## Development
 
 ### Setup
