@@ -30,7 +30,7 @@ from everyrow.generated.models import (
 from everyrow.generated.models.submit_task_body import SubmitTaskBody
 from everyrow.generated.types import UNSET
 from everyrow.result import Result, ScalarResult, TableResult
-from everyrow.session import Session
+from everyrow.session import Session, create_session
 from everyrow.task import (
     LLM,
     EffortLevel,
@@ -50,7 +50,7 @@ class DefaultAgentResponse(BaseModel):
 @overload
 async def single_agent[T: BaseModel](
     task: str,
-    session: Session,
+    session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
@@ -62,7 +62,7 @@ async def single_agent[T: BaseModel](
 @overload
 async def single_agent(
     task: str,
-    session: Session,
+    session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
@@ -73,13 +73,25 @@ async def single_agent(
 
 async def single_agent[T: BaseModel](
     task: str,
-    session: Session,
+    session: Session | None = None,
     input: BaseModel | DataFrame | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
 ) -> ScalarResult[T] | TableResult:
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await single_agent_async(
+                task=task,
+                session=internal_session,
+                input=input,
+                effort_level=effort_level,
+                llm=llm,
+                response_model=response_model,
+                return_table=return_table,
+            )
+            return await cohort_task.await_result()
     cohort_task = await single_agent_async(
         task=task,
         session=session,
@@ -89,7 +101,7 @@ async def single_agent[T: BaseModel](
         response_model=response_model,
         return_table=return_table,
     )
-    return await cohort_task.await_result(session.client)
+    return await cohort_task.await_result()
 
 
 async def single_agent_async[T: BaseModel](
@@ -133,17 +145,29 @@ async def single_agent_async[T: BaseModel](
 
 async def agent_map(
     task: str,
-    session: Session,
-    input: DataFrame | UUID | TableResult,
+    session: Session | None = None,
+    input: DataFrame | UUID | TableResult | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table_per_row: bool = False,
 ) -> TableResult:
+    if input is None:
+        raise EveryrowError("input is required for agent_map")
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await agent_map_async(
+                task, internal_session, input, effort_level, llm, response_model, return_table_per_row
+            )
+            result = await cohort_task.await_result()
+            if isinstance(result, TableResult):
+                return result
+            else:
+                raise EveryrowError("Agent map task did not return a table result")
     cohort_task = await agent_map_async(
         task, session, input, effort_level, llm, response_model, return_table_per_row
     )
-    result = await cohort_task.await_result(session.client)
+    result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
     else:
@@ -301,9 +325,9 @@ async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
 
 async def merge(
     task: str,
-    session: Session,
-    left_table: DataFrame | UUID | TableResult,
-    right_table: DataFrame | UUID | TableResult,
+    session: Session | None = None,
+    left_table: DataFrame | UUID | TableResult | None = None,
+    right_table: DataFrame | UUID | TableResult | None = None,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     merge_model: LLM | None = None,
@@ -313,7 +337,7 @@ async def merge(
 
     Args:
         task: The task description for the merge operation
-        session: The session to use
+        session: Optional session. If not provided, one will be created automatically.
         left_table: The left table to merge (DataFrame, UUID, or TableResult)
         right_table: The right table to merge (DataFrame, UUID, or TableResult)
         merge_on_left: Optional column name in left table to merge on
@@ -324,6 +348,25 @@ async def merge(
     Returns:
         TableResult containing the merged table
     """
+    if left_table is None or right_table is None:
+        raise EveryrowError("left_table and right_table are required for merge")
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await merge_async(
+                task=task,
+                session=internal_session,
+                left_table=left_table,
+                right_table=right_table,
+                merge_on_left=merge_on_left,
+                merge_on_right=merge_on_right,
+                merge_model=merge_model,
+                preview=preview,
+            )
+            result = await cohort_task.await_result()
+            if isinstance(result, TableResult):
+                return result
+            else:
+                raise EveryrowError("Merge task did not return a table result")
     cohort_task = await merge_async(
         task=task,
         session=session,
@@ -334,7 +377,7 @@ async def merge(
         merge_model=merge_model,
         preview=preview,
     )
-    result = await cohort_task.await_result(session.client)
+    result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
     else:
@@ -379,9 +422,9 @@ async def merge_async(
 
 async def rank[T: BaseModel](
     task: str,
-    session: Session,
-    input: DataFrame | UUID | TableResult,
-    field_name: str,
+    session: Session | None = None,
+    input: DataFrame | UUID | TableResult | None = None,
+    field_name: str | None = None,
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
@@ -391,7 +434,7 @@ async def rank[T: BaseModel](
 
     Args:
         task: The task description for ranking
-        session: The session to use
+        session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         field_name: The name of the field to extract and sort by
         field_type: The type of the field (default: "float", ignored if response_model is provided)
@@ -402,6 +445,25 @@ async def rank[T: BaseModel](
     Returns:
         TableResult containing the ranked table
     """
+    if input is None or field_name is None:
+        raise EveryrowError("input and field_name are required for rank")
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await rank_async(
+                task=task,
+                session=internal_session,
+                input=input,
+                field_name=field_name,
+                field_type=field_type,
+                response_model=response_model,
+                ascending_order=ascending_order,
+                preview=preview,
+            )
+            result = await cohort_task.await_result()
+            if isinstance(result, TableResult):
+                return result
+            else:
+                raise EveryrowError("Rank task did not return a table result")
     cohort_task = await rank_async(
         task=task,
         session=session,
@@ -412,7 +474,7 @@ async def rank[T: BaseModel](
         ascending_order=ascending_order,
         preview=preview,
     )
-    result = await cohort_task.await_result(session.client)
+    result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
     else:
@@ -475,8 +537,8 @@ async def rank_async[T: BaseModel](
 
 async def screen[T: BaseModel](
     task: str,
-    session: Session,
-    input: DataFrame | UUID | TableResult,
+    session: Session | None = None,
+    input: DataFrame | UUID | TableResult | None = None,
     response_model: type[T] | None = None,
     batch_size: int | None = None,
     preview: bool = False,
@@ -485,7 +547,7 @@ async def screen[T: BaseModel](
 
     Args:
         task: The task description for screening
-        session: The session to use
+        session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         response_model: Optional Pydantic model for the response schema
         batch_size: Optional batch size for processing (default: 10)
@@ -494,6 +556,23 @@ async def screen[T: BaseModel](
     Returns:
         TableResult containing the screened table
     """
+    if input is None:
+        raise EveryrowError("input is required for screen")
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await screen_async(
+                task=task,
+                session=internal_session,
+                input=input,
+                response_model=response_model,
+                batch_size=batch_size,
+                preview=preview,
+            )
+            result = await cohort_task.await_result()
+            if isinstance(result, TableResult):
+                return result
+            else:
+                raise EveryrowError("Screen task did not return a table result")
     cohort_task = await screen_async(
         task=task,
         session=session,
@@ -502,7 +581,7 @@ async def screen[T: BaseModel](
         batch_size=batch_size,
         preview=preview,
     )
-    result = await cohort_task.await_result(session.client)
+    result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
     else:
@@ -553,31 +632,40 @@ async def screen_async[T: BaseModel](
 
 
 async def dedupe(
-    session: Session,
-    input: DataFrame | UUID | TableResult,
-    equivalence_relation: str,
+    session: Session | None = None,
+    input: DataFrame | UUID | TableResult | None = None,
+    equivalence_relation: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
 
     Args:
-        session: The session to use
+        session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         equivalence_relation: Description of what makes items equivalent
-        llm: Optional LLM model to use for deduplication
-        chunk_size: Optional maximum number of items to process in a single LLM call (default: 40)
-        mode: Optional dedupe mode (AGENTIC or DIRECT)
-        max_consecutive_empty: Optional stop processing a row after this many consecutive comparisons with no matches
-        embedding_model: Optional embedding model to use when reorder_by_embedding is True
 
     Returns:
         TableResult containing the deduped table with duplicates removed
     """
+    if input is None or equivalence_relation is None:
+        raise EveryrowError("input and equivalence_relation are required for dedupe")
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await dedupe_async(
+                session=internal_session,
+                input=input,
+                equivalence_relation=equivalence_relation,
+            )
+            result = await cohort_task.await_result()
+            if isinstance(result, TableResult):
+                return result
+            else:
+                raise EveryrowError("Dedupe task did not return a table result")
     cohort_task = await dedupe_async(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
     )
-    result = await cohort_task.await_result(session.client)
+    result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
     else:
@@ -611,14 +699,14 @@ async def dedupe_async(
 
 
 async def derive(
-    session: Session,
-    input: DataFrame | UUID | TableResult,
-    expressions: dict[str, str],
+    session: Session | None = None,
+    input: DataFrame | UUID | TableResult | None = None,
+    expressions: dict[str, str] | None = None,
 ) -> TableResult:
     """Derive new columns using pandas eval expressions.
 
     Args:
-        session: The session to use
+        session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         expressions: A dictionary mapping column names to pandas expressions.
             Example: {"approved": "True", "score": "price * quantity"}
@@ -626,6 +714,36 @@ async def derive(
     Returns:
         TableResult containing the table with new derived columns
     """
+    if input is None or expressions is None:
+        raise EveryrowError("input and expressions are required for derive")
+    if session is None:
+        async with create_session() as internal_session:
+            input_artifact_id = await _process_agent_map_input(input, internal_session)
+
+            derive_expressions = [
+                DeriveExpression(column_name=col_name, expression=expr)
+                for col_name, expr in expressions.items()
+            ]
+
+            query = DeriveQueryParams(expressions=derive_expressions)
+            request = DeriveRequest(
+                query=query,
+                input_artifacts=[input_artifact_id],
+            )
+            body = SubmitTaskBody(
+                payload=request,
+                session_id=internal_session.session_id,
+            )
+
+            task_id = await submit_task(body, internal_session.client)
+            finished_task = await await_task_completion(task_id, internal_session.client)
+
+            data = await read_table_result(finished_task.artifact_id, internal_session.client)  # type: ignore
+            return TableResult(
+                artifact_id=finished_task.artifact_id,  # type: ignore
+                data=data,
+                error=finished_task.error,
+            )
     input_artifact_id = await _process_agent_map_input(input, session)
 
     derive_expressions = [

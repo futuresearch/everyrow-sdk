@@ -8,11 +8,9 @@ Usage:
 """
 
 import asyncio
-from datetime import datetime
 
 from pandas import DataFrame
 
-from everyrow import create_client, create_session
 from everyrow.ops import derive
 
 
@@ -28,21 +26,15 @@ async def main():
     print("Input data:")
     print(data.to_string())
 
-    async with create_client() as client:
-        session_name = f"Derive Example {datetime.now().isoformat()}"
-        async with create_session(client=client, name=session_name) as session:
-            print(f"\nSession URL: {session.get_url()}")
+    result = await derive(
+        input=data,
+        expressions={
+            "total": "price * quantity",
+        },
+    )
 
-            result = await derive(
-                session=session,
-                input=data,
-                expressions={
-                    "total": "price * quantity",
-                },
-            )
-
-            print("\nWith derived 'total' column:")
-            print(result.data.to_string())
+    print("\nWith derived 'total' column:")
+    print(result.data.to_string())
 
 
 if __name__ == "__main__":

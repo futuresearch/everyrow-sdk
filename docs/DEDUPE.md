@@ -81,7 +81,3 @@ After running `clean`, duplicate rows are merged into canonical representatives:
 | `session` | `Session` | Session created via `create_session()` |
 | `input` | `pd.DataFrame` | Input dataframe with potential duplicates |
 | `equivalence_relation` | `str` | Natural language description of what makes two rows duplicates |
-
-## Getting Started
-
-Get an API key at [everyrow.io](https://everyrow.io).
