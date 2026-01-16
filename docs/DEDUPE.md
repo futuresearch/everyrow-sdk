@@ -1,4 +1,4 @@
-# everyrow_sdk.clean Documentation
+# everyrow_sdk.dedupe Documentation
 
 AI-powered deduplication for messy datasets.
 
@@ -8,7 +8,7 @@ AI-powered deduplication for messy datasets.
 
 ## How It Works
 
-The `clean` operation deduplicates data through a five-stage pipeline:
+The `dedupe` operation deduplicates data through a five-stage pipeline:
 
 1. **Semantic Item Comparison**: Each row is compared against others using an LLM that understands context—recognizing that "A. Butoi" and "Alexandra Butoi" are likely the same person, or that "BAIR Lab (Former)" indicates a career transition rather than a different organization.
 
@@ -62,7 +62,7 @@ The `equivalence_relation` parameter tells the AI what counts as a duplicate. Un
 
 ### Example Output
 
-After running `clean`, duplicate rows are merged into canonical representatives:
+After running `dedupe`, duplicate rows are merged into canonical representatives:
 
 | row_id | name | organization | email | github |
 |--------|------|--------------|-------|--------|
