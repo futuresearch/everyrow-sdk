@@ -1,15 +1,12 @@
 import asyncio
-from datetime import datetime
 from textwrap import dedent
 
 from pandas import DataFrame
 
-from everyrow import create_client, create_session
 from everyrow.ops import merge
-from everyrow.session import Session
 
 
-async def call_merge(session: Session):
+async def main():
     # Merge clinical trial data with pharmaceutical companies
     # The challenge: trial data uses sponsor names (often abbreviated or subsidiary names)
     # while company data uses parent company names - requires research to match correctly
@@ -79,8 +76,8 @@ async def call_merge(session: Session):
         ]
     )
 
+    print("Merging clinical trials with parent company data...")
     result = await merge(
-        session=session,
         task=dedent("""
             Merge clinical trial data with parent pharmaceutical company information.
 
@@ -99,15 +96,6 @@ async def call_merge(session: Session):
     print("Clinical Trials with Parent Company Data:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")
-
-
-async def main():
-    async with create_client() as client:
-        session_name = f"Pharma Trial Merge {datetime.now().isoformat()}"
-        async with create_session(client=client, name=session_name) as session:
-            print(f"Session URL: {session.get_url()}")
-            print("Merging clinical trials with parent company data...")
-            await call_merge(session)
 
 
 if __name__ == "__main__":
