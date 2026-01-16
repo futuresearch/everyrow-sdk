@@ -554,7 +554,7 @@ async def screen_async[T: BaseModel](
     return cohort_task
 
 
-async def clean(
+async def dedupe(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
@@ -563,7 +563,7 @@ async def clean(
     mode: DedupeMode | None = None,
     embedding_model: EmbeddingModels | None = None,
 ) -> TableResult:
-    """Clean a table by removing duplicates using clean (dedupe) operation.
+    """Dedupe a table by removing duplicates using dedupe operation.
 
     Args:
         session: The session to use
@@ -576,9 +576,9 @@ async def clean(
         embedding_model: Optional embedding model to use when reorder_by_embedding is True
 
     Returns:
-        TableResult containing the cleaned table with duplicates removed
+        TableResult containing the deduped table with duplicates removed
     """
-    cohort_task = await clean_async(
+    cohort_task = await dedupe_async(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
@@ -591,10 +591,10 @@ async def clean(
     if isinstance(result, TableResult):
         return result
     else:
-        raise EveryrowError("Clean task did not return a table result")
+        raise EveryrowError("Dedupe task did not return a table result")
 
 
-async def clean_async(
+async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
@@ -603,7 +603,7 @@ async def clean_async(
     mode: DedupeMode | None = None,
     embedding_model: EmbeddingModels | None = None,
 ) -> EveryrowTask[BaseModel]:
-    """Submit a clean (dedupe) task asynchronously."""
+    """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
     query = DedupeQueryParams(
