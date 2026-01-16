@@ -1,3 +1,5 @@
+![hero](https://github.com/user-attachments/assets/7ed92cea-4c81-4ccd-9f7f-738763bfdee4)
+
 # everyrow SDK
 
 The everyrow SDK provides intelligent data processing utilities powered by AI agents. Transform, dedupe, merge, rank, and screen your dataframes using natural language instructions. Whether you're deduplicating research papers, merging complex datasets, ranking organizations, or screening vendors, the SDK handles the heavy lifting by combining AI research capabilities with structured data operations.
