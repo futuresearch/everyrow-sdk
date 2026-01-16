@@ -5,6 +5,5 @@
   "author": {
     "name": "FutureSearch"
   },
-  "repository": "https://github.com/futuresearch/everyrow-sdk",
-  "skills": "./plugin/skills/"
+  "repository": "https://github.com/futuresearch/everyrow-sdk"
 }
