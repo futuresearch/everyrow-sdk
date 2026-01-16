@@ -1,15 +1,12 @@
 import asyncio
-from datetime import datetime
 from textwrap import dedent
 
 from pandas import DataFrame
 
-from everyrow import create_client, create_session
 from everyrow.ops import dedupe
-from everyrow.session import Session
 
 
-async def call_dedupe(session: Session):
+async def main():
     # Deduplicate academic papers where duplicates may be:
     # - Same paper listed with arXiv ID and DOI
     # - Preprint versions vs published versions
@@ -81,8 +78,8 @@ async def call_dedupe(session: Session):
         ]
     )
 
+    print("Deduplicating academic papers...")
     result = await dedupe(
-        session=session,
         input=papers,
         equivalence_relation=dedent("""
             Two entries are duplicates if they represent the same research work, which requires
@@ -104,15 +101,6 @@ async def call_dedupe(session: Session):
     print(f"\nOriginal entries: {len(papers)}")
     print(f"Unique papers: {len(result.data)}")
     print(f"Duplicates removed: {len(papers) - len(result.data)}")
-
-
-async def main():
-    async with create_client() as client:
-        session_name = f"Paper Deduplication {datetime.now().isoformat()}"
-        async with create_session(client=client, name=session_name) as session:
-            print(f"Session URL: {session.get_url()}")
-            print("Deduplicating academic papers...")
-            await call_dedupe(session)
 
 
 if __name__ == "__main__":

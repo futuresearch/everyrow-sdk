@@ -1,13 +1,10 @@
 import asyncio
-from datetime import datetime
 from textwrap import dedent
 
 from pandas import DataFrame
 from pydantic import BaseModel
 
-from everyrow import create_client, create_session
 from everyrow.ops import screen
-from everyrow.session import Session
 
 
 class VendorRiskAssessment(BaseModel):
@@ -18,37 +15,21 @@ class VendorRiskAssessment(BaseModel):
     recommendation: str
 
 
-async def call_screen(session: Session):
+async def main():
     # Screen potential enterprise software vendors for partnership
     # This requires actual research - not just pattern matching on the input data
     vendors = DataFrame(
         [
-            {
-                "company": "Okta",
-                "category": "Identity Management",
-                "website": "okta.com",
-            },
-            {
-                "company": "LastPass",
-                "category": "Password Management",
-                "website": "lastpass.com",
-            },
-            {
-                "company": "Snowflake",
-                "category": "Data Warehouse",
-                "website": "snowflake.com",
-            },
-            {
-                "company": "Cloudflare",
-                "category": "CDN & Security",
-                "website": "cloudflare.com",
-            },
+            {"company": "Okta", "category": "Identity Management", "website": "okta.com"},
+            {"company": "LastPass", "category": "Password Management", "website": "lastpass.com"},
+            {"company": "Snowflake", "category": "Data Warehouse", "website": "snowflake.com"},
+            {"company": "Cloudflare", "category": "CDN & Security", "website": "cloudflare.com"},
             {"company": "MongoDB", "category": "Database", "website": "mongodb.com"},
         ]
     )
 
+    print("Running vendor risk assessment screening...")
     result = await screen(
-        session=session,
         task=dedent("""Perform vendor risk assessment for each company. Research and evaluate:
 
             1. Security track record: Have they had any significant data breaches or security
@@ -68,15 +49,6 @@ async def call_screen(session: Session):
     print("Vendor Risk Assessment Results:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")
-
-
-async def main():
-    async with create_client() as client:
-        session_name = f"Vendor Risk Assessment {datetime.now().isoformat()}"
-        async with create_session(client=client, name=session_name) as session:
-            print(f"Session URL: {session.get_url()}")
-            print("Running vendor risk assessment screening...")
-            await call_screen(session)
 
 
 if __name__ == "__main__":

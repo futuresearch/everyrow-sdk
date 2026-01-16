@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from uuid import UUID
 
-from everyrow.api_utils import handle_response
+from everyrow.api_utils import create_client, handle_response
 from everyrow.generated.api.default import (
     create_session_endpoint_sessions_create_post,
 )
@@ -33,23 +33,43 @@ class Session:
 
 @asynccontextmanager
 async def create_session(
-    client: AuthenticatedClient,
+    client: AuthenticatedClient | None = None,
     name: str | None = None,
 ) -> AsyncGenerator[Session, None]:
     """Create a new session and yield it as an async context manager.
 
     Args:
-        client: Authenticated client to use for session creation.
-                The client should already be in an async context manager.
+        client: Optional authenticated client. If not provided, one will be created
+                automatically using the EVERYROW_API_KEY environment variable and
+                managed within this context manager.
         name: Name for the session. If not provided, defaults to
               "everyrow-sdk-session-{timestamp}".
+
+    Example:
+        # With explicit client (client lifecycle managed externally)
+        async with create_client() as client:
+            async with create_session(client=client, name="My Session") as session:
+                ...
+
+        # Without client (client created and managed internally)
+        async with create_session(name="My Session") as session:
+            ...
     """
-    response = await create_session_endpoint_sessions_create_post.asyncio(
-        client=client,
-        body=CreateSessionRequest(
-            name=name or f"everyrow-sdk-session-{datetime.now().isoformat()}"
-        ),
-    )
-    response = handle_response(response)
-    session = Session(client=client, session_id=response.session_id)
-    yield session
+    owns_client = client is None
+    if owns_client:
+        client = create_client()
+        await client.__aenter__()
+
+    try:
+        response = await create_session_endpoint_sessions_create_post.asyncio(
+            client=client,
+            body=CreateSessionRequest(
+                name=name or f"everyrow-sdk-session-{datetime.now().isoformat()}"
+            ),
+        )
+        response = handle_response(response)
+        session = Session(client=client, session_id=response.session_id)
+        yield session
+    finally:
+        if owns_client:
+            await client.__aexit__()
