@@ -32,8 +32,8 @@ EVERYROW_API_KEY=your_api_key_here
 ### Quick Start
 
 ```python
-from everyrow_sdk import create_session
-from everyrow_sdk.ops import dedupe
+from everyrow import create_session
+from everyrow.ops import dedupe
 from pandas import DataFrame
 
 async with create_session() as session:
@@ -53,7 +53,7 @@ async with create_session() as session:
 Extract and rank rows based on AI-generated scores:
 
 ```python
-from everyrow_sdk.ops import rank
+from everyrow.ops import rank
 
 result = await rank(
     session=session,
@@ -69,7 +69,7 @@ result = await rank(
 Intelligently deduplicate your data using AI-powered equivalence detection:
 
 ```python
-from everyrow_sdk.ops import dedupe
+from everyrow.ops import dedupe
 
 result = await dedupe(
     session=session,
@@ -83,7 +83,7 @@ result = await dedupe(
 Merge two tables using AI to match related rows:
 
 ```python
-from everyrow_sdk.ops import merge
+from everyrow.ops import merge
 
 result = await merge(
     session=session,
@@ -100,7 +100,7 @@ result = await merge(
 Evaluate and filter rows based on criteria that require research:
 
 ```python
-from everyrow_sdk.ops import screen
+from everyrow.ops import screen
 from pydantic import BaseModel
 
 class Assessment(BaseModel):
@@ -130,7 +130,7 @@ async with create_session(name="My Session") as session:
 For single-input tasks, use `single_agent`:
 
 ```python
-from everyrow_sdk.ops import single_agent
+from everyrow.ops import single_agent
 from pydantic import BaseModel
 
 class Input(BaseModel):
@@ -146,7 +146,7 @@ result = await single_agent(
 For batch processing, use `agent_map`:
 
 ```python
-from everyrow_sdk.ops import agent_map
+from everyrow.ops import agent_map
 
 result = await agent_map(
     session=session,
@@ -160,7 +160,7 @@ result = await agent_map(
 All utilities have async variants for background processing:
 
 ```python
-from everyrow_sdk.ops import rank_async
+from everyrow.ops import rank_async
 
 task = await rank_async(
     session=session,
@@ -219,7 +219,7 @@ uv run basedpyright
 ./generate_openapi.sh
 ```
 
-Note: The `everyrow_sdk/generated/` directory is excluded from linting as it contains auto-generated code.
+Note: The `everyrow/generated/` directory is excluded from linting as it contains auto-generated code.
 
 ## License
 

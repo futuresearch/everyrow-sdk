@@ -5,9 +5,9 @@ from textwrap import dedent
 from pandas import DataFrame
 from pydantic import BaseModel
 
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import screen
-from everyrow_sdk.session import Session
+from everyrow import create_client, create_session
+from everyrow.ops import screen
+from everyrow.session import Session
 
 
 class VendorRiskAssessment(BaseModel):

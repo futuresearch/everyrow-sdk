@@ -1,10 +1,10 @@
 import os
 from typing import TypeVar
 
-from everyrow_sdk.constants import DEFAULT_EVERYROW_API_URL, EveryrowError
-from everyrow_sdk.generated.client import AuthenticatedClient
-from everyrow_sdk.generated.models.http_validation_error import HTTPValidationError
-from everyrow_sdk.generated.models.insufficient_balance_error import (
+from everyrow.constants import DEFAULT_EVERYROW_API_URL, EveryrowError
+from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.models.http_validation_error import HTTPValidationError
+from everyrow.generated.models.insufficient_balance_error import (
     InsufficientBalanceError,
 )
 

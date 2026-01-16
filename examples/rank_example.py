@@ -5,9 +5,9 @@ from textwrap import dedent
 from pandas import DataFrame
 from pydantic import BaseModel, Field
 
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import rank
-from everyrow_sdk.session import Session
+from everyrow import create_client, create_session
+from everyrow.ops import rank
+from everyrow.session import Session
 
 
 class ContributionRanking(BaseModel):
