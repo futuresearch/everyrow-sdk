@@ -9,7 +9,9 @@ from everyrow.generated.models import (
 from everyrow.generated.types import Unset
 
 
-def _render_citations(data: dict[str, Any], source_bank: AuxDataSourceBank) -> dict[str, Any]:
+def _render_citations(
+    data: dict[str, Any], source_bank: AuxDataSourceBank
+) -> dict[str, Any]:
     result = deepcopy(data)
     for source_id, source_data in source_bank.to_dict().items():
         for key, value in result.items():
@@ -21,7 +23,9 @@ def _render_citations(data: dict[str, Any], source_bank: AuxDataSourceBank) -> d
 
 
 def render_citations_standalone(artifact: StandaloneArtifactRecord):
-    if isinstance(artifact.aux_data, Unset) or isinstance(artifact.aux_data.source_bank, Unset):
+    if isinstance(artifact.aux_data, Unset) or isinstance(
+        artifact.aux_data.source_bank, Unset
+    ):
         return artifact
     source_bank = (
         artifact.aux_data.source_bank
