@@ -1,6 +1,6 @@
 ![hero](https://github.com/user-attachments/assets/7ed92cea-4c81-4ccd-9f7f-738763bfdee4)
 
-# <picture><img src="images/future-search-logo-128.webp" alt="FutureSearch" height="24" align="top"></picture> everyrow SDK
+# <picture><img src="images/future-search-logo-128.webp" alt="FutureSearch" height="24" align="bottom"></picture> everyrow SDK
 
 The everyrow python SDK is an interface to [everyrow.io](https://everyrow.io) for intelligent data processing utilities powered by AI agents. Rank, Dedupe, Merge, and Screen your dataframes using natural language instructions, or apply web agents to research every row.
 
