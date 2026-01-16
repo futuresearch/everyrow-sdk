@@ -1,83 +1,90 @@
-# everyrow_sdk.dedupe Documentation
+# Dedupe
 
-AI-powered deduplication for messy datasets.
+Deduplicate when fuzzy matching can't cut it.
 
-## Relevant case-studies
-### ...
-### ...
+## The problem
 
-## How It Works
+You've got a messy CRM export. "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are obviously the same company. So are "Big Blue" and "IBM Corporation". A person who was at "BAIR Lab" last year and "Google DeepMind" this year is still the same person.
 
-The `dedupe` operation deduplicates data through a five-stage pipeline:
+Fuzzy matching forces you to pick a threshold. Set it high (0.9) and you miss "Big Blue" ↔ "IBM" (completely different strings). Set it low (0.7) and you false-positive on "John Smith" ↔ "Jane Smith". There's no threshold that works.
 
-1. **Semantic Item Comparison**: Each row is compared against others using an LLM that understands context—recognizing that "A. Butoi" and "Alexandra Butoi" are likely the same person, or that "BAIR Lab (Former)" indicates a career transition rather than a different organization.
+## How it works
 
-2. **Association Matrix Construction**: Pairwise comparison results are assembled into a matrix of match/no-match decisions. To scale efficiently, items are first clustered by embedding similarity, so only semantically similar items are compared.
+You describe what "duplicate" means for your data. The system figures out which rows match.
 
-3. **Equivalence Class Creation**: Connected components in the association graph form equivalence classes. If A matches B and B matches C, then A, B, and C form a single cluster representing one entity.
-
-4. **Validation**: Each multi-member cluster is re-evaluated to catch false positives—cases where the initial comparison was too aggressive.
-
-5. **Candidate Selection**: For each equivalence class, the most complete/canonical record is selected as the representative (e.g., preferring "Alexandra Butoi" over "A. Butoi").
-
-## Sample Usage
-
-### Code
 ```python
-from everyrow import create_client, create_session
 from everyrow.ops import dedupe
-import pandas as pd
 
-input_df = pd.read_csv("researchers.csv")
-
-async with create_client() as client:
-    async with create_session(client, name="Researcher Dedupe") as session:
-        result = await dedupe(
-            session=session,
-            input=input_df,
-            equivalence_relation=(
-                "Two rows are duplicates if they represent the same person "
-                "despite different email/organization (career changes). "
-                "Consider name variations like typos, nicknames (Robert/Bob), "
-                "and format differences (John Smith/J. Smith)."
-            ),
-        )
-        result.data.to_csv("deduplicated.csv", index=False)
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Two entries are duplicates if they represent the same legal entity",
+)
 ```
 
-The `equivalence_relation` parameter tells the AI what counts as a duplicate. Unlike regex or fuzzy matching, this is natural language that captures the semantic intent.
+The `equivalence_relation` is natural language. Be as specific as you need:
 
-### Example Input
+```python
+result = await dedupe(
+    input=researchers,
+    equivalence_relation="""
+        Two rows are duplicates if they're the same person, even if:
+        - They changed jobs (different org/email)
+        - Name is abbreviated (A. Smith vs Alex Smith)
+        - There are typos (Naomi vs Namoi)
+        - They use a nickname (Bob vs Robert)
+    """,
+)
+```
 
-| row_id | name | organization | email | github |
-|--------|------|--------------|-------|--------|
-| 2 | A. Butoi | Rycolab | alexandra.butoi@personal.edu | butoialexandra |
-| 8 | Alexandra Butoi | Ryoclab | — | butoialexandra |
-| 43 | Namoi Saphra | — | nsaphra@alumni | nsaphra |
-| 47 | Naomi Saphra | Harvard University | nsaphra@fas.harvard.edu | nsaphra |
-| 18 | T. Gupta | AUTON Lab (Former) | — | tejus-gupta |
-| 26 | Tejus Gupta | AUTON Lab | tejusg@cs.cmu.edu | tejus-gupta |
+## What you get back
 
-*Rows 2+8, 43+47, and 18+26 are duplicates (same person, different records).*
+Three columns added to your data:
 
-### Example Output
+- `equivalence_class_id` — rows with the same ID are duplicates of each other
+- `equivalence_class_name` — human-readable label for the cluster ("Alexandra Butoi", "Naomi Saphra", etc.)
+- `selected` — True for the canonical record in each cluster (usually the most complete one)
 
-After running `dedupe`, duplicate rows are merged into canonical representatives:
+To get just the deduplicated rows:
 
-| row_id | name | organization | email | github |
-|--------|------|--------------|-------|--------|
-| 2 | Alexandra Butoi | Rycolab | alexandra.butoi@personal.edu | butoialexandra |
-| 43 | Naomi Saphra | Harvard University | nsaphra@fas.harvard.edu | nsaphra |
-| 18 | Tejus Gupta | AUTON Lab | tejusg@cs.cmu.edu | tejus-gupta |
+```python
+deduped = result.data[result.data["selected"] == True]
+```
 
-*The most complete/canonical record is selected as the representative for each equivalence class.*
+## Example
 
-## API Reference
+Input:
 
-### `dedupe(session, input, equivalence_relation)`
+| name | org | email |
+|------|-----|-------|
+| A. Butoi | Rycolab | a.butoi@edu |
+| Alexandra Butoi | Ryoclab | — |
+| Namoi Saphra | — | nsaphra@alumni |
+| Naomi Saphra | Harvard | nsaphra@harvard.edu |
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `session` | `Session` | Session created via `create_session()` |
-| `input` | `pd.DataFrame` | Input dataframe with potential duplicates |
-| `equivalence_relation` | `str` | Natural language description of what makes two rows duplicates |
+Output (selected rows only):
+
+| name | org | email |
+|------|-----|-------|
+| Alexandra Butoi | Rycolab | a.butoi@edu |
+| Naomi Saphra | Harvard | nsaphra@harvard.edu |
+
+## Parameters
+
+| Name | Type | Description |
+|------|------|-------------|
+| `input` | DataFrame | Data with potential duplicates |
+| `equivalence_relation` | str | What makes two rows duplicates |
+| `session` | Session | Optional, auto-created if omitted |
+
+## Performance
+
+| Rows | Time | Cost |
+|------|------|------|
+| 200 | ~90 sec | ~$0.40 |
+| 500 | ~2 min | ~$1.67 |
+| 2,000 | ~8 min | ~$7 |
+
+## Case studies
+
+- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) — 500 rows down to 124 (75% were duplicates)
+- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) — 98% accuracy handling career changes and typos
