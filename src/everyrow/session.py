@@ -4,12 +4,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from uuid import UUID
 
-from everyrow_sdk.api_utils import handle_response
-from everyrow_sdk.generated.api.default import (
+from everyrow.api_utils import handle_response
+from everyrow.generated.api.default import (
     create_session_endpoint_sessions_create_post,
 )
-from everyrow_sdk.generated.client import AuthenticatedClient
-from everyrow_sdk.generated.models.create_session_request import CreateSessionRequest
+from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.models.create_session_request import CreateSessionRequest
 
 
 class Session:

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 
-from everyrow_sdk.generated.models import (
+from everyrow.generated.models import (
     ArtifactGroupRecord,
     StandaloneArtifactRecord,
     TaskEffort,
@@ -13,14 +13,14 @@ from everyrow_sdk.generated.models import (
     TaskStatus,
     TaskStatusResponse,
 )
-from everyrow_sdk.ops import (
+from everyrow.ops import (
     agent_map,
     create_scalar_artifact,
     rank_async,
     single_agent,
 )
-from everyrow_sdk.result import ScalarResult, TableResult
-from everyrow_sdk.session import Session
+from everyrow.result import ScalarResult, TableResult
+from everyrow.session import Session
 
 
 @pytest.fixture
@@ -48,13 +48,13 @@ async def test_create_scalar_artifact(mocker, mock_session):
 
     # Mock submit_task
     mock_submit = mocker.patch(
-        "everyrow_sdk.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
     )
     mock_submit.return_value = TaskResponse(task_id=task_id)
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow_sdk.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
     mock_status.return_value = TaskStatusResponse(
@@ -84,13 +84,13 @@ async def test_single_agent(mocker, mock_session):
 
     # Mock submit_task
     mock_submit = mocker.patch(
-        "everyrow_sdk.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
     )
     mock_submit.return_value = TaskResponse(task_id=task_id)
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow_sdk.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
     mock_status.return_value = TaskStatusResponse(
@@ -102,7 +102,7 @@ async def test_single_agent(mocker, mock_session):
 
     # Mock get_artifacts
     mock_get_artifacts = mocker.patch(
-        "everyrow_sdk.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
     )
     mock_get_artifacts.return_value = [
         StandaloneArtifactRecord(
@@ -132,13 +132,13 @@ async def test_single_agent_with_table_output(mocker, mock_session):
 
     # Mock submit_task
     mock_submit = mocker.patch(
-        "everyrow_sdk.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
     )
     mock_submit.return_value = TaskResponse(task_id=task_id)
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow_sdk.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
     mock_status.return_value = TaskStatusResponse(
@@ -150,7 +150,7 @@ async def test_single_agent_with_table_output(mocker, mock_session):
 
     # Mock get_artifacts for TableResult
     mock_get_artifacts = mocker.patch(
-        "everyrow_sdk.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
     )
     mock_get_artifacts.return_value = [
         ArtifactGroupRecord(
@@ -193,19 +193,19 @@ async def test_agent_map(mocker, mock_session):
 
     # Mock create_table_artifact (called because input is DataFrame)
     mock_create_table = mocker.patch(
-        "everyrow_sdk.ops.create_table_artifact", new_callable=AsyncMock
+        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
     )
     mock_create_table.return_value = input_artifact_id
 
     # Mock submit_task
     mock_submit = mocker.patch(
-        "everyrow_sdk.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
     )
     mock_submit.return_value = TaskResponse(task_id=task_id)
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow_sdk.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
     mock_status.return_value = TaskStatusResponse(
@@ -217,7 +217,7 @@ async def test_agent_map(mocker, mock_session):
 
     # Mock get_artifacts
     mock_get_artifacts = mocker.patch(
-        "everyrow_sdk.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
     )
     mock_get_artifacts.return_value = [
         ArtifactGroupRecord(
@@ -260,19 +260,19 @@ async def test_agent_map_with_table_output(mocker, mock_session):
 
     # Mock create_table_artifact
     mock_create_table = mocker.patch(
-        "everyrow_sdk.ops.create_table_artifact", new_callable=AsyncMock
+        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
     )
     mock_create_table.return_value = input_artifact_id
 
     # Mock submit_task
     mock_submit = mocker.patch(
-        "everyrow_sdk.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
     )
     mock_submit.return_value = TaskResponse(task_id=task_id)
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow_sdk.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
     mock_status.return_value = TaskStatusResponse(
@@ -284,7 +284,7 @@ async def test_agent_map_with_table_output(mocker, mock_session):
 
     # Mock get_artifacts
     mock_get_artifacts = mocker.patch(
-        "everyrow_sdk.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
     )
     mock_get_artifacts.return_value = [
         ArtifactGroupRecord(
@@ -337,7 +337,7 @@ async def test_rank_model_validation(mocker, mock_session) -> None:
     input_artifact_id = uuid.uuid4()
     # Mock create_table_artifact (called because input is DataFrame)
     mock_create_table = mocker.patch(
-        "everyrow_sdk.ops.create_table_artifact", new_callable=AsyncMock
+        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
     )
     mock_create_table.return_value = input_artifact_id
 

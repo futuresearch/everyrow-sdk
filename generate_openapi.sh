@@ -10,10 +10,10 @@ uv run openapi-python-client generate \
   --overwrite \
   --meta uv
 
-echo "Removing generated files from everyrow_sdk..."
-rm -f src/everyrow_sdk/README.md
-rm -f src/everyrow_sdk/.gitignore
-rm -f src/everyrow_sdk/pyproject.toml
+echo "Removing generated files from everyrow..."
+rm -f src/everyrow/README.md
+rm -f src/everyrow/.gitignore
+rm -f src/everyrow/pyproject.toml
 
 echo "OpenAPI generation complete!"
 
