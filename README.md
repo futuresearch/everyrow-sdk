@@ -1,4 +1,4 @@
-![hero](https://github.com/user-attachments/assets/7ed92cea-4c81-4ccd-9f7f-738763bfdee4)
+![hero](https://github.com/user-attachments/assets/254fa2ed-c1f3-4ee8-b93d-d169edf32f27)
 
 # <picture><img src="images/future-search-logo-128.webp" alt="FutureSearch" height="24" align="bottom"></picture> everyrow SDK
 
