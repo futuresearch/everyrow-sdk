@@ -558,10 +558,6 @@ async def dedupe(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
-    llm: LLM | None = None,
-    chunk_size: int | None = None,
-    mode: DedupeMode | None = None,
-    embedding_model: EmbeddingModels | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
 
@@ -582,10 +578,6 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
-        llm=llm,
-        chunk_size=chunk_size,
-        mode=mode,
-        embedding_model=embedding_model,
     )
     result = await cohort_task.await_result(session.client)
     if isinstance(result, TableResult):
@@ -598,20 +590,12 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
-    llm: LLM | None = None,
-    chunk_size: int | None = None,
-    mode: DedupeMode | None = None,
-    embedding_model: EmbeddingModels | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
     query = DedupeQueryParams(
         equivalence_relation=equivalence_relation,
-        llm=llm or UNSET,
-        chunk_size=chunk_size or UNSET,
-        mode=mode or UNSET,
-        embedding_model=embedding_model or UNSET,
     )
     request = DedupeRequestParams(
         query=query,
