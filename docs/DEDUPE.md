@@ -2,6 +2,10 @@
 
 AI-powered deduplication for messy datasets.
 
+## Relevant case-studies
+### ...
+### ...
+
 ## How It Works
 
 The `clean` operation deduplicates data through a five-stage pipeline:
@@ -16,11 +20,12 @@ The `clean` operation deduplicates data through a five-stage pipeline:
 
 5. **Candidate Selection**: For each equivalence class, the most complete/canonical record is selected as the representative (e.g., preferring "Alexandra Butoi" over "A. Butoi").
 
-## Sample Code
+## Sample Usage
 
+### Code
 ```python
-from everyrow_sdk import create_client, create_session
-from everyrow_sdk.ops import dedupe
+from everyrow import create_client, create_session
+from everyrow.ops import dedupe
 import pandas as pd
 
 input_df = pd.read_csv("researchers.csv")
@@ -42,7 +47,7 @@ async with create_client() as client:
 
 The `equivalence_relation` parameter tells the AI what counts as a duplicate. Unlike regex or fuzzy matching, this is natural language that captures the semantic intent.
 
-## Example Input
+### Example Input
 
 | row_id | name | organization | email | github |
 |--------|------|--------------|-------|--------|
@@ -55,7 +60,7 @@ The `equivalence_relation` parameter tells the AI what counts as a duplicate. Un
 
 *Rows 2+8, 43+47, and 18+26 are duplicates (same person, different records).*
 
-## Example Output
+### Example Output
 
 After running `clean`, duplicate rows are merged into canonical representatives:
 
@@ -69,7 +74,7 @@ After running `clean`, duplicate rows are merged into canonical representatives:
 
 ## API Reference
 
-### `clean(session, input, equivalence_relation)`
+### `dedupe(session, input, equivalence_relation)`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -77,12 +82,6 @@ After running `clean`, duplicate rows are merged into canonical representatives:
 | `input` | `pd.DataFrame` | Input dataframe with potential duplicates |
 | `equivalence_relation` | `str` | Natural language description of what makes two rows duplicates |
 
-**Returns**: `CleanResult` with `.data` attribute containing the deduplicated dataframe.
-
 ## Getting Started
-
-```bash
-uv pip install everyrow-sdk
-```
 
 Get an API key at [everyrow.io](https://everyrow.io).
