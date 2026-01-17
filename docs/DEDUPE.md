@@ -84,6 +84,20 @@ Output (selected rows only):
 | 500 | ~2 min | ~$1.67 |
 | 2,000 | ~8 min | ~$7 |
 
+## Details
+
+The `dedupe` operation deduplicates data through a five-stage pipeline:
+
+1. **Semantic Item Comparison**: Each row is compared against others using an LLM that understands context—recognizing that "A. Butoi" and "Alexandra Butoi" are likely the same person, or that "BAIR Lab (Former)" indicates a career transition rather than a different organization.
+
+2. **Association Matrix Construction**: Pairwise comparison results are assembled into a matrix of match/no-match decisions. To scale efficiently, items are first clustered by embedding similarity, so only semantically similar items are compared.
+
+3. **Equivalence Class Creation**: Connected components in the association graph form equivalence classes. If A matches B and B matches C, then A, B, and C form a single cluster representing one entity.
+
+4. **Validation**: Each multi-member cluster is re-evaluated to catch false positives—cases where the initial comparison was too aggressive.
+
+5. **Candidate Selection**: For each equivalence class, the most complete/canonical record is selected as the representative (e.g., preferring "Alexandra Butoi" over "A. Butoi").
+
 ## Case studies
 
 - [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) — 500 rows down to 124 (75% were duplicates)
