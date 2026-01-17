@@ -1,24 +1,6 @@
 # everyrow_sdk.dedupe Documentation
 
-AI-powered deduplication for messy datasets.
-
-## Relevant case-studies
-### ...
-### ...
-
-## How It Works
-
-The `dedupe` operation deduplicates data through a five-stage pipeline:
-
-1. **Semantic Item Comparison**: Each row is compared against others using an LLM that understands context—recognizing that "A. Butoi" and "Alexandra Butoi" are likely the same person, or that "BAIR Lab (Former)" indicates a career transition rather than a different organization.
-
-2. **Association Matrix Construction**: Pairwise comparison results are assembled into a matrix of match/no-match decisions. To scale efficiently, items are first clustered by embedding similarity, so only semantically similar items are compared.
-
-3. **Equivalence Class Creation**: Connected components in the association graph form equivalence classes. If A matches B and B matches C, then A, B, and C form a single cluster representing one entity.
-
-4. **Validation**: Each multi-member cluster is re-evaluated to catch false positives—cases where the initial comparison was too aggressive.
-
-5. **Candidate Selection**: For each equivalence class, the most complete/canonical record is selected as the representative (e.g., preferring "Alexandra Butoi" over "A. Butoi").
+The `dedupe` operation deduplicates datasets by combining fuzzy string matching, embedding similarity, and the intelligence of LLMs to cluster similar items and select the best representative for each cluster.
 
 ## Sample Usage
 
@@ -28,7 +10,7 @@ from everyrow import create_client, create_session
 from everyrow.ops import dedupe
 import pandas as pd
 
-input_df = pd.read_csv("researchers.csv")
+input_df = pd.read_csv("/case_studies/dedupe/case_02_researchers.csv")
 
 async with create_client() as client:
     async with create_session(client, name="Researcher Dedupe") as session:
@@ -71,6 +53,32 @@ After running `dedupe`, duplicate rows are merged into canonical representatives
 | 18 | Tejus Gupta | AUTON Lab | tejusg@cs.cmu.edu | tejus-gupta |
 
 *The most complete/canonical record is selected as the representative for each equivalence class.*
+
+## Case-studies
+- [Deduplicating CRM data](case_studies/dedupe/case_01_crm_data.ipynb)
+
+## Costs
+
+The cost of the `dedupe` increases both with the number of rows, the amount of content per row, and the number of duplicates.
+
+The following gives a broad overview of the cost of the `dedupe` operation:
+
+![](docs/images/dedupe_cost.png)
+
+## Details
+
+The `dedupe` operation deduplicates data through a five-stage pipeline:
+
+1. **Semantic Item Comparison**: Each row is compared against others using an LLM that understands context—recognizing that "A. Butoi" and "Alexandra Butoi" are likely the same person, or that "BAIR Lab (Former)" indicates a career transition rather than a different organization.
+
+2. **Association Matrix Construction**: Pairwise comparison results are assembled into a matrix of match/no-match decisions. To scale efficiently, items are first clustered by embedding similarity, so only semantically similar items are compared.
+
+3. **Equivalence Class Creation**: Connected components in the association graph form equivalence classes. If A matches B and B matches C, then A, B, and C form a single cluster representing one entity.
+
+4. **Validation**: Each multi-member cluster is re-evaluated to catch false positives—cases where the initial comparison was too aggressive.
+
+5. **Candidate Selection**: For each equivalence class, the most complete/canonical record is selected as the representative (e.g., preferring "Alexandra Butoi" over "A. Butoi").
+
 
 ## API Reference
 
