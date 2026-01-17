@@ -52,15 +52,6 @@ result = await merge(
 
 A DataFrame with all left table columns plus matched right table columns. Rows that don't match get nulls for the right columns (like a left join).
 
-## Why fuzzy matching fails
-
-Even when there *is* some string overlap, thresholds don't work:
-
-- Threshold > 0.9: Misses "Dr. Ioana Colfescu" ↔ "Colfi" (same person, GitHub username)
-- Threshold < 0.7: Matches "John Smith" ↔ "Jane Smith" (different people)
-
-There's no good threshold because matching is contextual. "Colfi" as a GitHub handle should match the full name. "John" and "Jane" shouldn't match even though they're 80% similar.
-
 ## Parameters
 
 | Name | Type | Description |
@@ -68,9 +59,10 @@ There's no good threshold because matching is contextual. "Colfi" as a GitHub ha
 | `task` | str | How to match the tables |
 | `left_table` | DataFrame | Primary table (all rows kept) |
 | `right_table` | DataFrame | Table to match from |
-| `merge_on_left` | str | Column in left table |
-| `merge_on_right` | str | Column in right table |
+| `merge_on_left` | Optional[str] | Column in left table. Model will try to guess if not specified. |
+| `merge_on_right` | Optional[str] | Column in right table. Model will try to guess if not specified. |
 | `session` | Session | Optional, auto-created if omitted |
+| `merge_model` | Optional[str] | LLM Model to use for the merging |
 
 ## Performance
 
