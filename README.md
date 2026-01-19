@@ -17,7 +17,7 @@ Looking to use our agent-backed utilities? Check out:
 
 ## Getting Started
 
-Get an API key at [everyrow.io](https://everyrow.io).
+Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key), then set it in your environment:
 
 ```bash
 export EVERYROW_API_KEY=your_api_key_here
