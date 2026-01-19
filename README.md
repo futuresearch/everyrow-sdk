@@ -4,9 +4,17 @@
 
 Python SDK for [everyrow.io](https://everyrow.io). Rank, dedupe, merge, and screen your dataframes using natural language—or run web agents to research every row.
 
+## About FutureSearch
+
+everyrow is built by [FutureSearch](https://futuresearch.ai), an AI research company focused on web agents and deep research. We built everyrow to solve data problems we kept running into: ranking leads, deduping messy CRM exports, merging tables without clean keys. Tasks that are tedious for humans but require judgment that traditional automation can't handle.
+
+- [everyrow.io](https://everyrow.io) — the app, dashboard, and API key management
+- [Solutions & case studies](https://futuresearch.ai/solutions/)
+- [Research](https://futuresearch.ai/research/)
+
 ## Table of Contents
 
-New to everyrow? Head to [Getting Started](#getting-started)
+New to everyrow? Head to [Getting Started](#getting-started).
 
 Looking to use our agent-backed utilities? Check out:
 - [Rank](#rank)
@@ -34,6 +42,12 @@ For development:
 ```bash
 uv pip install -e .
 uv sync
+```
+
+To run case study notebooks:
+
+```bash
+uv sync --group case-studies
 ```
 
 Requires Python >= 3.12
@@ -68,7 +82,10 @@ result = await rank(
 
 Say you want to rank leads by "likelihood to need data integration tools"—Ultramain Systems (sells software to airlines) looks similar to Ukraine International Airlines (is an airline) by industry code, but their actual needs are completely different. Traditional scoring can't tell them apart.
 
-**Case studies:** [Lead Scoring with Data Fragmentation](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, 7 min, $13) · [Lead Scoring Without CRM](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145 with Clay)
+**Examples and case studies**
+- Simple usage example: [rank_example.py](examples/rank_example.py)
+- [Lead Scoring with Data Fragmentation](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, 7 min, $13)
+- [Lead Scoring Without CRM](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145 with Clay)
 
 [Full documentation →](docs/RANK.md)
 
@@ -87,7 +104,10 @@ result = await dedupe(
 
 The `equivalence_relation` tells the AI what counts as a duplicate—natural language, not regex. Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record in each cluster).
 
-**Case studies:** [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) (500→124 rows, 2 min, $1.67) · [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy with career changes)
+**Examples and case studies**
+- Simple usage example: [dedupe_example.py](examples/dedupe_example.py)
+- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) (500→124 rows, 2 min, $1.67) · [notebook](case_studies/dedupe/case_01_crm_data.ipynb)
+- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy with career changes)
 
 [Full documentation →](docs/DEDUPE.md)
 
@@ -109,7 +129,11 @@ result = await merge(
 
 Handles subsidiaries, abbreviations (MSD → Merck), regional names, typos, and pseudonyms. Fuzzy matching thresholds always fail somewhere—0.9 misses "Colfi" ↔ "Dr. Ioana Colfescu", 0.7 false-positives on "John Smith" ↔ "Jane Smith".
 
-**Case studies:** [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy, $9) · [HubSpot Contact Merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall) · [CRM Merge Workflow](https://futuresearch.ai/crm-merge-workflow/)
+**Examples and case studies**
+- Simple usage example: [merge_example.py](examples/merge_example.py)
+- [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy, $9)
+- [HubSpot Contact Merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall)
+- [CRM Merge Workflow](https://futuresearch.ai/crm-merge-workflow/)
 
 [Full documentation →](docs/MERGE.md)
 
@@ -137,7 +161,11 @@ result = await screen(
 
 Works for investment theses, geopolitical exposure, vendor risk assessment, job posting filtering, lead qualification—anything requiring judgment. Screening 500 S&P 500 companies takes ~12 min and $3 with >90% precision. Regex gets 68%.
 
-**Case studies:** [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/) (63/502 passed, $3.29) · [Job Posting Screen](https://futuresearch.ai/job-posting-screening/) (>90% vs 68% regex) · [Lead Screening Workflow](https://futuresearch.ai/screening-workflow/)
+**Examples and case studies**
+- Simple usage example: [screen_example.py](examples/screen_example.py)
+- [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/) (63/502 passed, $3.29) · [notebook](case_studies/screen/thematic_stock_screen.ipynb)
+- [Job Posting Screen](https://futuresearch.ai/job-posting-screening/) (>90% vs 68% regex)
+- [Lead Screening Workflow](https://futuresearch.ai/screening-workflow/)
 
 [Full documentation →](docs/SCREEN.md)
 
@@ -163,6 +191,10 @@ result = await agent_map(
 ```
 
 Our agents are tuned on [Deep Research Bench](https://arxiv.org/abs/2506.06287), a benchmark we built for evaluating web research on questions that require extensive searching and cross-referencing.
+
+**Examples**
+- [single_agent_example.py](examples/single_agent_example.py)
+- [agent_map_example.py](examples/agent_map_example.py)
 
 ## Advanced
 
@@ -219,26 +251,6 @@ async with create_session(name="Async Ranking") as session:
 
     # Continue with other work...
     result = await task.await_result()
-```
-
-## Case Studies
-
-More at [futuresearch.ai/solutions](https://futuresearch.ai/solutions/).
-
-**Notebooks:**
-- [CRM Deduplication](case_studies/dedupe/case_01_crm_data.ipynb)
-- [Thematic Stock Screen](case_studies/screen/thematic_stock_screen.ipynb)
-- [Oil Price Margin Screen](case_studies/screen/oil_price_margin_screen.ipynb)
-
-**On futuresearch.ai:**
-- [Lead Scoring with Data Fragmentation](https://futuresearch.ai/lead-scoring-data-fragmentation/)
-- [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/)
-- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/)
-
-To run notebooks:
-
-```bash
-uv sync --group case-studies
 ```
 
 ## Development
