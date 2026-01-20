@@ -20,10 +20,26 @@ async def main():
     # This requires actual research - not just pattern matching on the input data
     vendors = DataFrame(
         [
-            {"company": "Okta", "category": "Identity Management", "website": "okta.com"},
-            {"company": "LastPass", "category": "Password Management", "website": "lastpass.com"},
-            {"company": "Snowflake", "category": "Data Warehouse", "website": "snowflake.com"},
-            {"company": "Cloudflare", "category": "CDN & Security", "website": "cloudflare.com"},
+            {
+                "company": "Okta",
+                "category": "Identity Management",
+                "website": "okta.com",
+            },
+            {
+                "company": "LastPass",
+                "category": "Password Management",
+                "website": "lastpass.com",
+            },
+            {
+                "company": "Snowflake",
+                "category": "Data Warehouse",
+                "website": "snowflake.com",
+            },
+            {
+                "company": "Cloudflare",
+                "category": "CDN & Security",
+                "website": "cloudflare.com",
+            },
             {"company": "MongoDB", "category": "Database", "website": "mongodb.com"},
         ]
     )

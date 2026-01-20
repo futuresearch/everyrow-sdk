@@ -15,13 +15,15 @@ class CompanyFinancials(BaseModel):
 
 async def main():
     # Research financial information for tech companies
-    companies = DataFrame([
-        {"company": "Stripe", "industry": "Payments"},
-        {"company": "Databricks", "industry": "Data & AI"},
-        {"company": "Canva", "industry": "Design"},
-        {"company": "Figma", "industry": "Design"},
-        {"company": "Notion", "industry": "Productivity"},
-    ])
+    companies = DataFrame(
+        [
+            {"company": "Stripe", "industry": "Payments"},
+            {"company": "Databricks", "industry": "Data & AI"},
+            {"company": "Canva", "industry": "Design"},
+            {"company": "Figma", "industry": "Design"},
+            {"company": "Notion", "industry": "Productivity"},
+        ]
+    )
 
     # Example 1: Basic usage with default response
     print("Example 1: Basic agent_map")

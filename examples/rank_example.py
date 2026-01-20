@@ -8,9 +8,7 @@ from everyrow.ops import rank
 
 
 class ContributionRanking(BaseModel):
-    contribution_score: int = Field(
-        description="Total citation count"
-    )
+    contribution_score: int = Field(description="Total citation count")
     most_significant_contribution: str = Field(
         description="Single most important paper authored by a firm leader"
     )
@@ -22,17 +20,33 @@ async def main():
     ai_research_orgs = DataFrame(
         [
             {"organization": "OpenAI", "type": "Private lab", "founded": 2015},
-            {"organization": "Google DeepMind", "type": "Corporate lab", "founded": 2010},
+            {
+                "organization": "Google DeepMind",
+                "type": "Corporate lab",
+                "founded": 2010,
+            },
             {"organization": "Anthropic", "type": "Private lab", "founded": 2021},
             {"organization": "Meta FAIR", "type": "Corporate lab", "founded": 2013},
-            {"organization": "Microsoft Research", "type": "Corporate lab", "founded": 1991},
+            {
+                "organization": "Microsoft Research",
+                "type": "Corporate lab",
+                "founded": 1991,
+            },
             {"organization": "Stanford HAI", "type": "Academic", "founded": 2019},
             {"organization": "MIT CSAIL", "type": "Academic", "founded": 2003},
-            {"organization": "Berkeley AI Research", "type": "Academic", "founded": 2010},
+            {
+                "organization": "Berkeley AI Research",
+                "type": "Academic",
+                "founded": 2010,
+            },
             {"organization": "Mistral AI", "type": "Private lab", "founded": 2023},
             {"organization": "xAI", "type": "Private lab", "founded": 2023},
             {"organization": "Cohere", "type": "Private lab", "founded": 2019},
-            {"organization": "Allen Institute for AI", "type": "Non-profit", "founded": 2014},
+            {
+                "organization": "Allen Institute for AI",
+                "type": "Non-profit",
+                "founded": 2014,
+            },
         ]
     )
 

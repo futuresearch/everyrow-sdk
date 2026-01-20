@@ -7,7 +7,9 @@ from everyrow.ops import single_agent
 
 class Competitor(BaseModel):
     company: str = Field(description="Company name")
-    pricing_tier: str = Field(description="Pricing model, e.g. 'Freemium, $10-50/user/mo'")
+    pricing_tier: str = Field(
+        description="Pricing model, e.g. 'Freemium, $10-50/user/mo'"
+    )
     target_market: str = Field(description="Primary customer segment")
     key_features: str = Field(description="Top 3 features or differentiators")
 
