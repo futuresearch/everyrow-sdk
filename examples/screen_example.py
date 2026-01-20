@@ -5,6 +5,7 @@ from pandas import DataFrame
 from pydantic import BaseModel
 
 from everyrow.ops import screen
+from everyrow.spinner import spinner
 
 
 class VendorRiskAssessment(BaseModel):
@@ -44,24 +45,24 @@ async def main():
         ]
     )
 
-    print("Running vendor risk assessment screening...")
-    result = await screen(
-        task=dedent("""Perform vendor risk assessment for each company. Research and evaluate:
+    async with spinner("Running vendor risk assessment..."):
+        result = await screen(
+            task=dedent("""Perform vendor risk assessment for each company. Research and evaluate:
 
-            1. Security track record: Have they had any significant data breaches or security
-            incidents in the past 3 years? How did they respond?
+                1. Security track record: Have they had any significant data breaches or security
+                incidents in the past 3 years? How did they respond?
 
-            2. Financial stability: Are there signs of financial distress (major layoffs,
-            funding difficulties, declining revenue)?
+                2. Financial stability: Are there signs of financial distress (major layoffs,
+                funding difficulties, declining revenue)?
 
-            3. Overall recommendation: Based on your research, should we proceed with
-            this vendor for enterprise use?
+                3. Overall recommendation: Based on your research, should we proceed with
+                this vendor for enterprise use?
 
-            Only approve vendors with low or medium risk and no unresolved critical security incidents."""),
-        input=vendors,
-        response_model=VendorRiskAssessment,
-        batch_size=5,
-    )
+                Only approve vendors with low or medium risk and no unresolved critical security incidents."""),
+            input=vendors,
+            response_model=VendorRiskAssessment,
+            batch_size=5,
+        )
     print("Vendor Risk Assessment Results:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")

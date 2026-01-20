@@ -12,6 +12,7 @@ import asyncio
 from pandas import DataFrame
 
 from everyrow.ops import derive
+from everyrow.spinner import spinner
 
 
 async def main():
@@ -26,12 +27,13 @@ async def main():
     print("Input data:")
     print(data.to_string())
 
-    result = await derive(
-        input=data,
-        expressions={
-            "total": "price * quantity",
-        },
-    )
+    async with spinner("Deriving columns..."):
+        result = await derive(
+            input=data,
+            expressions={
+                "total": "price * quantity",
+            },
+        )
 
     print("\nWith derived 'total' column:")
     print(result.data.to_string())

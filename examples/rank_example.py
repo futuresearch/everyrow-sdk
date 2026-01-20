@@ -5,6 +5,7 @@ from pandas import DataFrame
 from pydantic import BaseModel, Field
 
 from everyrow.ops import rank
+from everyrow.spinner import spinner
 
 
 class ContributionRanking(BaseModel):
@@ -59,12 +60,13 @@ async def main():
 
     # Example 1: Basic ranking with a single score field
     print("Example 1: Basic ranking")
-    result = await rank(
-        task=task,
-        input=ai_research_orgs,
-        field_name="contribution_score",
-        ascending_order=False,
-    )
+    async with spinner("Ranking organizations..."):
+        result = await rank(
+            task=task,
+            input=ai_research_orgs,
+            field_name="contribution_score",
+            ascending_order=False,
+        )
     print("AI Research Organization Rankings:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")
@@ -72,13 +74,14 @@ async def main():
     # Example 2: Ranking with a custom response model for additional context
     print("\n" + "=" * 80)
     print("Example 2: Ranking with detailed response model")
-    detailed_result = await rank(
-        task=task + "\n\nAlso include their single most significant contribution.",
-        input=ai_research_orgs,
-        field_name="contribution_score",
-        response_model=ContributionRanking,
-        ascending_order=False,
-    )
+    async with spinner("Ranking with detailed model..."):
+        detailed_result = await rank(
+            task=task + "\n\nAlso include their single most significant contribution.",
+            input=ai_research_orgs,
+            field_name="contribution_score",
+            response_model=ContributionRanking,
+            ascending_order=False,
+        )
     print("Detailed Rankings with Context:")
     print(detailed_result.data.to_string())
     print(f"\nArtifact ID: {detailed_result.artifact_id}")

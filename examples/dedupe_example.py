@@ -4,6 +4,7 @@ from textwrap import dedent
 from pandas import DataFrame
 
 from everyrow.ops import dedupe
+from everyrow.spinner import spinner
 
 
 async def main():
@@ -78,23 +79,23 @@ async def main():
         ]
     )
 
-    print("Deduplicating academic papers...")
-    result = await dedupe(
-        input=papers,
-        equivalence_relation=dedent("""
-            Two entries are duplicates if they represent the same research work, which requires
-            verifying through research:
+    async with spinner("Deduplicating academic papers..."):
+        result = await dedupe(
+            input=papers,
+            equivalence_relation=dedent("""
+                Two entries are duplicates if they represent the same research work, which requires
+                verifying through research:
 
-            - An arXiv preprint and its published conference/journal version are duplicates
-            - Papers with slightly different titles but same core contribution are duplicates
-            - Different author list formats (et al. vs full list) don't matter
-            - Papers with different identifiers (arXiv ID vs DOI) may still be duplicates
+                - An arXiv preprint and its published conference/journal version are duplicates
+                - Papers with slightly different titles but same core contribution are duplicates
+                - Different author list formats (et al. vs full list) don't matter
+                - Papers with different identifiers (arXiv ID vs DOI) may still be duplicates
 
-            However, genuinely different papers (e.g., LLaMA 1 vs LLaMA 2) are NOT duplicates,
-            even if authors and topics overlap. Research each paper to determine if they
-            report the same findings or are distinct works.
-        """),
-    )
+                However, genuinely different papers (e.g., LLaMA 1 vs LLaMA 2) are NOT duplicates,
+                even if authors and topics overlap. Research each paper to determine if they
+                report the same findings or are distinct works.
+            """),
+        )
     print("Deduplicated Paper List:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")

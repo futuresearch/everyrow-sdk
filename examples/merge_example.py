@@ -4,6 +4,7 @@ from textwrap import dedent
 from pandas import DataFrame
 
 from everyrow.ops import merge
+from everyrow.spinner import spinner
 
 
 async def main():
@@ -76,23 +77,23 @@ async def main():
         ]
     )
 
-    print("Merging clinical trials with parent company data...")
-    result = await merge(
-        task=dedent("""
-            Merge clinical trial data with parent pharmaceutical company information.
+    async with spinner("Merging clinical trials with parent company data..."):
+        result = await merge(
+            task=dedent("""
+                Merge clinical trial data with parent pharmaceutical company information.
 
-            The sponsor names in the trials table are often subsidiaries or abbreviations:
-            - Research which parent company owns each trial sponsor
-            - Match trials to their parent company's financial data
+                The sponsor names in the trials table are often subsidiaries or abbreviations:
+                - Research which parent company owns each trial sponsor
+                - Match trials to their parent company's financial data
 
-            For example, Genentech is a subsidiary of Roche, Janssen is part of J&J,
-            MSD is Merck's name outside the US, BMS is Bristol-Myers Squibb.
-        """),
-        left_table=clinical_trials,
-        right_table=pharma_companies,
-        merge_on_left="sponsor",
-        merge_on_right="company",
-    )
+                For example, Genentech is a subsidiary of Roche, Janssen is part of J&J,
+                MSD is Merck's name outside the US, BMS is Bristol-Myers Squibb.
+            """),
+            left_table=clinical_trials,
+            right_table=pharma_companies,
+            merge_on_left="sponsor",
+            merge_on_right="company",
+        )
     print("Clinical Trials with Parent Company Data:")
     print(result.data.to_string())
     print(f"\nArtifact ID: {result.artifact_id}")

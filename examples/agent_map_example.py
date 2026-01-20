@@ -5,6 +5,7 @@ from pandas import DataFrame
 from pydantic import BaseModel, Field
 
 from everyrow.ops import agent_map
+from everyrow.spinner import spinner
 
 
 class CompanyFinancials(BaseModel):
@@ -27,10 +28,11 @@ async def main():
 
     # Example 1: Basic usage with default response
     print("Example 1: Basic agent_map")
-    basic_result = await agent_map(
-        task="Find the company's most recent annual revenue in USD",
-        input=companies,
-    )
+    async with spinner("Researching company revenues..."):
+        basic_result = await agent_map(
+            task="Find the company's most recent annual revenue in USD",
+            input=companies,
+        )
     print("Basic Results:")
     print(basic_result.data.to_string())
     print(f"\nArtifact ID: {basic_result.artifact_id}")
@@ -48,11 +50,12 @@ async def main():
         specifically, not the parent company.
     """)
 
-    structured_result = await agent_map(
-        task=task,
-        input=companies,
-        response_model=CompanyFinancials,
-    )
+    async with spinner("Researching company financials..."):
+        structured_result = await agent_map(
+            task=task,
+            input=companies,
+            response_model=CompanyFinancials,
+        )
     print("Structured Results:")
     print(structured_result.data.to_string())
     print(f"\nArtifact ID: {structured_result.artifact_id}")
