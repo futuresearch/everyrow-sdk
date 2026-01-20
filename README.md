@@ -170,11 +170,15 @@ Web research on single inputs or entire dataframes. Agents are tuned on [Deep Re
 ```python
 from everyrow.ops import single_agent, agent_map
 from pandas import DataFrame
+from pydantic import BaseModel
+
+class CompanyInput(BaseModel):
+    company: str
 
 # Single input
 result = await single_agent(
     task="Find this company's latest funding round and lead investors",
-    input={"company": "Anthropic"},
+    input=CompanyInput(company="Anthropic"),
 )
 
 # Batch
