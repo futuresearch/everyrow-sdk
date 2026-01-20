@@ -11,12 +11,12 @@ from ..models.embedding_models import EmbeddingModels
 from ..models.llm_enum import LLMEnum
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="DedupeQueryParams")
+T = TypeVar("T", bound="DedupeFullParams")
 
 
 @_attrs_define
-class DedupeQueryParams:
-    """Service-specific parameters for the deduplication service.
+class DedupeFullParams:
+    """Full parameters for the deduplication service.
 
     Attributes:
         equivalence_relation (str): Description of what makes items equivalent
@@ -29,8 +29,16 @@ class DedupeQueryParams:
             selecting representatives Default: False.
         use_clustering (bool | Unset): When true, cluster items by embedding similarity and only compare neighboring
             clusters. When false, use sequential chunking and compare all chunks (O(n²)) Default: True.
-        early_stop_threshold (int | None | Unset): Stop cross-chunk comparisons for a row after this many consecutive
-            comparisons with no matches. None disables early stopping.
+        use_column_selection (bool | Unset): When true, use LLM to select relevant columns for deduplication, reducing
+            noise from irrelevant fields like IDs or timestamps Default: True.
+        early_stopping_threshold (int | None | Unset): Stop cross-chunk comparisons for a row after this many
+            consecutive comparisons with no matches. None disables early stopping. Default: 5.
+        validation_model (LLMEnum | None | Unset): Model for group validation (defaults to llm if not set) Default:
+            LLMEnum.GEMINI_3_FLASH_MINIMAL.
+        representative_model (LLMEnum | None | Unset): Model for choosing best representative (defaults to llm if not
+            set) Default: LLMEnum.GEMINI_2_5_FLASH.
+        select_representative (bool | Unset): When true, use LLM to select the best representative from each equivalence
+            class. When false, no selection is made. Default: True.
     """
 
     equivalence_relation: str
@@ -41,7 +49,11 @@ class DedupeQueryParams:
     embedding_model: EmbeddingModels | Unset = UNSET
     validate_groups: bool | Unset = False
     use_clustering: bool | Unset = True
-    early_stop_threshold: int | None | Unset = UNSET
+    use_column_selection: bool | Unset = True
+    early_stopping_threshold: int | None | Unset = 5
+    validation_model: LLMEnum | None | Unset = LLMEnum.GEMINI_3_FLASH_MINIMAL
+    representative_model: LLMEnum | None | Unset = LLMEnum.GEMINI_2_5_FLASH
+    select_representative: bool | Unset = True
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -67,11 +79,31 @@ class DedupeQueryParams:
 
         use_clustering = self.use_clustering
 
-        early_stop_threshold: int | None | Unset
-        if isinstance(self.early_stop_threshold, Unset):
-            early_stop_threshold = UNSET
+        use_column_selection = self.use_column_selection
+
+        early_stopping_threshold: int | None | Unset
+        if isinstance(self.early_stopping_threshold, Unset):
+            early_stopping_threshold = UNSET
         else:
-            early_stop_threshold = self.early_stop_threshold
+            early_stopping_threshold = self.early_stopping_threshold
+
+        validation_model: None | str | Unset
+        if isinstance(self.validation_model, Unset):
+            validation_model = UNSET
+        elif isinstance(self.validation_model, LLMEnum):
+            validation_model = self.validation_model.value
+        else:
+            validation_model = self.validation_model
+
+        representative_model: None | str | Unset
+        if isinstance(self.representative_model, Unset):
+            representative_model = UNSET
+        elif isinstance(self.representative_model, LLMEnum):
+            representative_model = self.representative_model.value
+        else:
+            representative_model = self.representative_model
+
+        select_representative = self.select_representative
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -94,8 +126,16 @@ class DedupeQueryParams:
             field_dict["validate_groups"] = validate_groups
         if use_clustering is not UNSET:
             field_dict["use_clustering"] = use_clustering
-        if early_stop_threshold is not UNSET:
-            field_dict["early_stop_threshold"] = early_stop_threshold
+        if use_column_selection is not UNSET:
+            field_dict["use_column_selection"] = use_column_selection
+        if early_stopping_threshold is not UNSET:
+            field_dict["early_stopping_threshold"] = early_stopping_threshold
+        if validation_model is not UNSET:
+            field_dict["validation_model"] = validation_model
+        if representative_model is not UNSET:
+            field_dict["representative_model"] = representative_model
+        if select_representative is not UNSET:
+            field_dict["select_representative"] = select_representative
 
         return field_dict
 
@@ -133,16 +173,54 @@ class DedupeQueryParams:
 
         use_clustering = d.pop("use_clustering", UNSET)
 
-        def _parse_early_stop_threshold(data: object) -> int | None | Unset:
+        use_column_selection = d.pop("use_column_selection", UNSET)
+
+        def _parse_early_stopping_threshold(data: object) -> int | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
             return cast(int | None | Unset, data)
 
-        early_stop_threshold = _parse_early_stop_threshold(d.pop("early_stop_threshold", UNSET))
+        early_stopping_threshold = _parse_early_stopping_threshold(d.pop("early_stopping_threshold", UNSET))
 
-        dedupe_query_params = cls(
+        def _parse_validation_model(data: object) -> LLMEnum | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                validation_model_type_0 = LLMEnum(data)
+
+                return validation_model_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(LLMEnum | None | Unset, data)
+
+        validation_model = _parse_validation_model(d.pop("validation_model", UNSET))
+
+        def _parse_representative_model(data: object) -> LLMEnum | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                representative_model_type_0 = LLMEnum(data)
+
+                return representative_model_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(LLMEnum | None | Unset, data)
+
+        representative_model = _parse_representative_model(d.pop("representative_model", UNSET))
+
+        select_representative = d.pop("select_representative", UNSET)
+
+        dedupe_full_params = cls(
             equivalence_relation=equivalence_relation,
             llm=llm,
             chunk_size=chunk_size,
@@ -151,11 +229,15 @@ class DedupeQueryParams:
             embedding_model=embedding_model,
             validate_groups=validate_groups,
             use_clustering=use_clustering,
-            early_stop_threshold=early_stop_threshold,
+            use_column_selection=use_column_selection,
+            early_stopping_threshold=early_stopping_threshold,
+            validation_model=validation_model,
+            representative_model=representative_model,
+            select_representative=select_representative,
         )
 
-        dedupe_query_params.additional_properties = d
-        return dedupe_query_params
+        dedupe_full_params.additional_properties = d
+        return dedupe_full_params
 
     @property
     def additional_keys(self) -> list[str]:

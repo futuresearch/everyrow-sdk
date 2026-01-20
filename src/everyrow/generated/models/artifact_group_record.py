@@ -11,6 +11,7 @@ from ..models.artifact_status import ArtifactStatus
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
+    from ..models.artifact_group_record_analysis_type_0 import ArtifactGroupRecordAnalysisType0
     from ..models.artifact_group_record_metadata_type_0 import ArtifactGroupRecordMetadataType0
     from ..models.artifact_group_record_trace_mapping_type_0 import ArtifactGroupRecordTraceMappingType0
     from ..models.aux_data import AuxData
@@ -36,10 +37,11 @@ class ArtifactGroupRecord:
             aux_data (AuxData | Unset):
             status (ArtifactStatus | Unset):
             trace_mapping (ArtifactGroupRecordTraceMappingType0 | None | Unset):
-            description (str | Unset):  Default: ''.
             original_id (None | Unset | UUID):
             index_in_group (int | None | Unset):
             current_iteration (int | None | Unset):
+            analysis (ArtifactGroupRecordAnalysisType0 | None | Unset):
+            description (str | Unset):  Default: ''.
     """
 
     uid: UUID
@@ -51,13 +53,15 @@ class ArtifactGroupRecord:
     aux_data: AuxData | Unset = UNSET
     status: ArtifactStatus | Unset = UNSET
     trace_mapping: ArtifactGroupRecordTraceMappingType0 | None | Unset = UNSET
-    description: str | Unset = ""
     original_id: None | Unset | UUID = UNSET
     index_in_group: int | None | Unset = UNSET
     current_iteration: int | None | Unset = UNSET
+    analysis: ArtifactGroupRecordAnalysisType0 | None | Unset = UNSET
+    description: str | Unset = ""
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.artifact_group_record_analysis_type_0 import ArtifactGroupRecordAnalysisType0
         from ..models.artifact_group_record_metadata_type_0 import ArtifactGroupRecordMetadataType0
         from ..models.artifact_group_record_trace_mapping_type_0 import ArtifactGroupRecordTraceMappingType0
         from ..models.standalone_artifact_record import StandaloneArtifactRecord
@@ -108,8 +112,6 @@ class ArtifactGroupRecord:
         else:
             trace_mapping = self.trace_mapping
 
-        description = self.description
-
         original_id: None | str | Unset
         if isinstance(self.original_id, Unset):
             original_id = UNSET
@@ -129,6 +131,16 @@ class ArtifactGroupRecord:
             current_iteration = UNSET
         else:
             current_iteration = self.current_iteration
+
+        analysis: dict[str, Any] | None | Unset
+        if isinstance(self.analysis, Unset):
+            analysis = UNSET
+        elif isinstance(self.analysis, ArtifactGroupRecordAnalysisType0):
+            analysis = self.analysis.to_dict()
+        else:
+            analysis = self.analysis
+
+        description = self.description
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -150,19 +162,22 @@ class ArtifactGroupRecord:
             field_dict["status"] = status
         if trace_mapping is not UNSET:
             field_dict["trace_mapping"] = trace_mapping
-        if description is not UNSET:
-            field_dict["description"] = description
         if original_id is not UNSET:
             field_dict["original_id"] = original_id
         if index_in_group is not UNSET:
             field_dict["index_in_group"] = index_in_group
         if current_iteration is not UNSET:
             field_dict["current_iteration"] = current_iteration
+        if analysis is not UNSET:
+            field_dict["analysis"] = analysis
+        if description is not UNSET:
+            field_dict["description"] = description
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.artifact_group_record_analysis_type_0 import ArtifactGroupRecordAnalysisType0
         from ..models.artifact_group_record_metadata_type_0 import ArtifactGroupRecordMetadataType0
         from ..models.artifact_group_record_trace_mapping_type_0 import ArtifactGroupRecordTraceMappingType0
         from ..models.aux_data import AuxData
@@ -257,8 +272,6 @@ class ArtifactGroupRecord:
 
         trace_mapping = _parse_trace_mapping(d.pop("trace_mapping", UNSET))
 
-        description = d.pop("description", UNSET)
-
         def _parse_original_id(data: object) -> None | Unset | UUID:
             if data is None:
                 return data
@@ -294,6 +307,25 @@ class ArtifactGroupRecord:
 
         current_iteration = _parse_current_iteration(d.pop("current_iteration", UNSET))
 
+        def _parse_analysis(data: object) -> ArtifactGroupRecordAnalysisType0 | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                analysis_type_0 = ArtifactGroupRecordAnalysisType0.from_dict(data)
+
+                return analysis_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(ArtifactGroupRecordAnalysisType0 | None | Unset, data)
+
+        analysis = _parse_analysis(d.pop("analysis", UNSET))
+
+        description = d.pop("description", UNSET)
+
         artifact_group_record = cls(
             uid=uid,
             type_=type_,
@@ -304,10 +336,11 @@ class ArtifactGroupRecord:
             aux_data=aux_data,
             status=status,
             trace_mapping=trace_mapping,
-            description=description,
             original_id=original_id,
             index_in_group=index_in_group,
             current_iteration=current_iteration,
+            analysis=analysis,
+            description=description,
         )
 
         artifact_group_record.additional_properties = d

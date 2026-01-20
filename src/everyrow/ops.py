@@ -11,7 +11,7 @@ from everyrow.generated.models import (
     CreateGroupRequest,
     CreateQueryParams,
     CreateRequest,
-    DedupeQueryParams,
+    DedupeFullParams,
     DedupeRequestParams,
     DeepMergePublicParams,
     DeepMergeRequest,
@@ -644,6 +644,7 @@ async def dedupe(
     llm: LLM | None = None,
     chunk_size: int | None = None,
     use_clustering: bool | None = None,
+    select_representative: bool | None = None,
     early_stopping_threshold: int | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
@@ -656,6 +657,8 @@ async def dedupe(
         chunk_size: Maximum number of items to process in a single LLM call
         use_clustering: When true, cluster items by embedding similarity and only compare
             neighboring clusters. When false, use sequential chunking and compare all chunks.
+        select_representative: When true, use LLM to select the best representative from each
+            equivalence class. When false, no selection is made.
         early_stopping_threshold: Stop cross-chunk comparisons for a row after this many
             consecutive comparisons with no matches. None uses server default.
 
@@ -673,6 +676,7 @@ async def dedupe(
                 llm=llm,
                 chunk_size=chunk_size,
                 use_clustering=use_clustering,
+                select_representative=select_representative,
                 early_stopping_threshold=early_stopping_threshold,
             )
             result = await cohort_task.await_result()
@@ -687,6 +691,7 @@ async def dedupe(
         llm=llm,
         chunk_size=chunk_size,
         use_clustering=use_clustering,
+        select_representative=select_representative,
         early_stopping_threshold=early_stopping_threshold,
     )
     result = await cohort_task.await_result()
@@ -703,17 +708,21 @@ async def dedupe_async(
     llm: LLM | None = None,
     chunk_size: int | None = None,
     use_clustering: bool | None = None,
+    select_representative: bool | None = None,
     early_stopping_threshold: int | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
-    query = DedupeQueryParams(
+    query = DedupeFullParams(
         equivalence_relation=equivalence_relation,
         llm=llm or UNSET,
         chunk_size=chunk_size or UNSET,
         use_clustering=use_clustering if use_clustering is not None else UNSET,
-        early_stop_threshold=early_stopping_threshold
+        select_representative=select_representative
+        if select_representative is not None
+        else UNSET,
+        early_stopping_threshold=early_stopping_threshold
         if early_stopping_threshold is not None
         else UNSET,
     )
@@ -775,7 +784,8 @@ async def derive(
             )
 
             data = await read_table_result(
-                finished_task.artifact_id, internal_session.client
+                finished_task.artifact_id,  # type: ignore
+                internal_session.client,
             )  # type: ignore
             return TableResult(
                 artifact_id=finished_task.artifact_id,  # type: ignore

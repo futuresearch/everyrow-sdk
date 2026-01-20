@@ -12,6 +12,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.aux_data import AuxData
+    from ..models.standalone_artifact_record_analysis_type_0 import StandaloneArtifactRecordAnalysisType0
     from ..models.standalone_artifact_record_metadata_type_0 import StandaloneArtifactRecordMetadataType0
     from ..models.standalone_artifact_record_trace_mapping_type_0 import StandaloneArtifactRecordTraceMappingType0
 
@@ -34,6 +35,7 @@ class StandaloneArtifactRecord:
         original_id (None | Unset | UUID):
         index_in_group (int | None | Unset):
         current_iteration (int | None | Unset):
+        analysis (None | StandaloneArtifactRecordAnalysisType0 | Unset):
     """
 
     uid: UUID
@@ -47,9 +49,11 @@ class StandaloneArtifactRecord:
     original_id: None | Unset | UUID = UNSET
     index_in_group: int | None | Unset = UNSET
     current_iteration: int | None | Unset = UNSET
+    analysis: None | StandaloneArtifactRecordAnalysisType0 | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.standalone_artifact_record_analysis_type_0 import StandaloneArtifactRecordAnalysisType0
         from ..models.standalone_artifact_record_metadata_type_0 import StandaloneArtifactRecordMetadataType0
         from ..models.standalone_artifact_record_trace_mapping_type_0 import StandaloneArtifactRecordTraceMappingType0
 
@@ -109,6 +113,14 @@ class StandaloneArtifactRecord:
         else:
             current_iteration = self.current_iteration
 
+        analysis: dict[str, Any] | None | Unset
+        if isinstance(self.analysis, Unset):
+            analysis = UNSET
+        elif isinstance(self.analysis, StandaloneArtifactRecordAnalysisType0):
+            analysis = self.analysis.to_dict()
+        else:
+            analysis = self.analysis
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -134,12 +146,15 @@ class StandaloneArtifactRecord:
             field_dict["index_in_group"] = index_in_group
         if current_iteration is not UNSET:
             field_dict["current_iteration"] = current_iteration
+        if analysis is not UNSET:
+            field_dict["analysis"] = analysis
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.aux_data import AuxData
+        from ..models.standalone_artifact_record_analysis_type_0 import StandaloneArtifactRecordAnalysisType0
         from ..models.standalone_artifact_record_metadata_type_0 import StandaloneArtifactRecordMetadataType0
         from ..models.standalone_artifact_record_trace_mapping_type_0 import StandaloneArtifactRecordTraceMappingType0
 
@@ -244,6 +259,23 @@ class StandaloneArtifactRecord:
 
         current_iteration = _parse_current_iteration(d.pop("current_iteration", UNSET))
 
+        def _parse_analysis(data: object) -> None | StandaloneArtifactRecordAnalysisType0 | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                analysis_type_0 = StandaloneArtifactRecordAnalysisType0.from_dict(data)
+
+                return analysis_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | StandaloneArtifactRecordAnalysisType0 | Unset, data)
+
+        analysis = _parse_analysis(d.pop("analysis", UNSET))
+
         standalone_artifact_record = cls(
             uid=uid,
             type_=type_,
@@ -256,6 +288,7 @@ class StandaloneArtifactRecord:
             original_id=original_id,
             index_in_group=index_in_group,
             current_iteration=current_iteration,
+            analysis=analysis,
         )
 
         standalone_artifact_record.additional_properties = d
