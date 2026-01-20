@@ -716,8 +716,8 @@ async def dedupe_async(
 
     query = DedupeFullParams(
         equivalence_relation=equivalence_relation,
-        llm=llm or UNSET,
-        chunk_size=chunk_size or UNSET,
+        llm=llm if llm is not None else UNSET,
+        chunk_size=chunk_size if chunk_size is not None else UNSET,
         use_clustering=use_clustering if use_clustering is not None else UNSET,
         select_representative=select_representative
         if select_representative is not None

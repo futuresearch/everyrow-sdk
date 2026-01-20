@@ -32,7 +32,8 @@ class DedupeFullParams:
         use_column_selection (bool | Unset): When true, use LLM to select relevant columns for deduplication, reducing
             noise from irrelevant fields like IDs or timestamps Default: True.
         early_stopping_threshold (int | None | Unset): Stop cross-chunk comparisons for a row after this many
-            consecutive comparisons with no matches. None disables early stopping. Default: 5.
+            consecutive comparisons with no matches. Only applies when use_clustering=True. When use_clustering=False, all
+            chunks are compared exhaustively. None disables early stopping. Default: 5.
         validation_model (LLMEnum | None | Unset): Model for group validation (defaults to llm if not set) Default:
             LLMEnum.GEMINI_3_FLASH_MINIMAL.
         representative_model (LLMEnum | None | Unset): Model for choosing best representative (defaults to llm if not
