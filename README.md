@@ -196,6 +196,8 @@ result = await agent_map(
 
 ---
 
+[Full documentation →](docs/AGENT.md)
+
 ## Advanced
 
 ### Sessions
