@@ -1,74 +1,107 @@
 ![hero](https://github.com/user-attachments/assets/254fa2ed-c1f3-4ee8-b93d-d169edf32f27)
 
-# <picture><img src="images/future-search-logo-128.webp" alt="FutureSearch" height="24" align="bottom"></picture> everyrow SDK
+# everyrow SDK
 
-Python SDK for [everyrow.io](https://everyrow.io). Rank, dedupe, merge, and screen your dataframes using natural language—or run web agents to research every row.
+[![PyPI version](https://img.shields.io/pypi/v/everyrow.svg)](https://pypi.org/project/everyrow/)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=fff)](#claude-code-plugin)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-## About FutureSearch
-
-everyrow is built by [FutureSearch](https://futuresearch.ai), an AI research company focused on web agents and deep research. We built everyrow to solve data problems we kept running into: ranking leads, deduping messy CRM exports, merging tables without clean keys. Tasks that are tedious for humans but require judgment that traditional automation can't handle.
-
-- [everyrow.io](https://everyrow.io) — the app, dashboard, and API key management
-- [Solutions & case studies](https://futuresearch.ai/solutions/)
-- [Research](https://futuresearch.ai/research/)
-
-## Table of Contents
-
-New to everyrow? Head to [Getting Started](#getting-started).
-
-Looking to use our agent-backed utilities? Check out:
-- [Rank](#rank)
-- [Dedupe](#dedupe)
-- [Merge](#merge)
-- [Screen](#screen)
-- [Agent Tasks](#agent-tasks)
-
-## Getting Started
-
-Head to [everyrow.io/api-key](https://everyrow.io/api-key) to sign up and get an API key with $20 in free credits. Then, set this key in your environment:
-
-```bash
-export EVERYROW_API_KEY=your_api_key_here
-```
-
-### Installation
+Screen, rank, dedupe, and merge your dataframes using natural language. Or run web agents to research every row.
 
 ```bash
 pip install everyrow
 ```
 
-For development:
+## Try it
+
+Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit), then:
+
+```python
+import asyncio
+import pandas as pd
+from everyrow.ops import screen
+from pydantic import BaseModel, Field
+
+jobs = pd.DataFrame([
+    {"company": "Airtable",   "post": "Async-first team, 8+ yrs exp, $185-220K base"},
+    {"company": "Vercel",     "post": "Lead our NYC team. Competitive comp, DOE"},
+    {"company": "Notion",     "post": "In-office SF. Staff eng, $200K + equity"},
+    {"company": "Linear",     "post": "Bootcamp grads welcome! $85K, remote-friendly"},
+    {"company": "Descript",   "post": "Work from anywhere. Principal architect, $250K"},
+    {"company": "Retool",     "post": "Flexible location. Building infra. Comp TBD"},
+])
+
+class JobScreenResult(BaseModel):
+    qualifies: bool = Field(description="True if meets ALL criteria")
+
+async def main():
+    result = await screen(
+        task="""
+            Qualifies if ALL THREE are met:
+            1. Remote-friendly (allows remote, hybrid, or distributed)
+            2. Senior-level (5+ yrs exp OR title includes Senior/Staff/Principal)
+            3. Salary disclosed (specific numbers like "$150K", not "competitive" or "DOE")
+        """,
+        input=jobs,
+        response_model=JobScreenResult,
+    )
+    print(result)  # Airtable, Descript pass. Others fail one or more.
+
+asyncio.run(main())
+```
 
 ```bash
-uv pip install -e .
-uv sync
+export EVERYROW_API_KEY=your_key_here
+python example.py
 ```
 
-To run case study notebooks:
+Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary *isn't* disclosed, and "bootcamp grads welcome" means it's *not* senior-level.
 
-```bash
-uv sync --group case-studies
+## Operations
+
+| | |
+|---|---|
+| [**Screen**](#screen) | Filter by criteria that need judgment |
+| [**Rank**](#rank) | Score rows by qualitative factors |
+| [**Dedupe**](#dedupe) | Deduplicate when fuzzy matching fails |
+| [**Merge**](#merge) | Join tables when keys don't match |
+| [**Agent Tasks**](#agent-tasks) | Web research on every row |
+
+---
+
+## Screen
+
+Filter rows based on criteria you can't put in a WHERE clause.
+
+```python
+from everyrow.ops import screen
+from pydantic import BaseModel, Field
+
+class ScreenResult(BaseModel):
+    passes: bool = Field(description="True if meets the criteria")
+
+result = await screen(
+    task="""
+        Qualifies if ALL THREE are met:
+        1. Remote-friendly (allows remote, hybrid, or distributed)
+        2. Senior-level (5+ yrs exp OR title includes Senior/Staff/Principal)
+        3. Salary disclosed (specific numbers, not "competitive" or "DOE")
+    """,
+    input=job_postings,
+    response_model=ScreenResult,
+)
 ```
 
-Requires Python >= 3.12
+"No remote work available" fails even though it contains "remote." Works for investment screening, lead qualification, vendor vetting.
 
-### Claude Code Plugin
+**More:** [docs](docs/SCREEN.md) / [example](examples/screen_example.py) / [job posting screen](https://futuresearch.ai/job-posting-screening/) (>90% precision vs 68% regex) / [stock screen](https://futuresearch.ai/thematic-stock-screening/) ([notebook](case_studies/screen/thematic_stock_screen.ipynb))
 
-There's a plugin for [Claude Code](https://code.claude.com/) that teaches Claude how to use the SDK:
-
-```sh
-# from Claude Code
-/plugin marketplace add futuresearch/everyrow-sdk
-/plugin install everyrow@futuresearch
-
-# from terminal
-claude plugin marketplace add futuresearch/everyrow-sdk
-claude plugin install everyrow@futuresearch
-```
+---
 
 ## Rank
 
-Score rows based on criteria you can't put in a database field. The AI researches each row and assigns scores based on qualitative factors.
+Score rows by things you can't put in a database field.
 
 ```python
 from everyrow.ops import rank
@@ -80,40 +113,37 @@ result = await rank(
 )
 ```
 
-Say you want to rank leads by "likelihood to need data integration tools"—Ultramain Systems (sells software to airlines) looks similar to Ukraine International Airlines (is an airline) by industry code, but their actual needs are completely different. Traditional scoring can't tell them apart.
+Ultramain Systems (sells software *to* airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
 
-**Examples and case studies**
-- Simple usage example: [rank_example.py](examples/rank_example.py)
-- [Lead Scoring with Data Fragmentation](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, 7 min, $13)
-- [Lead Scoring Without CRM](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145 with Clay)
+**More:** [docs](docs/RANK.md) / [example](examples/rank_example.py) / [lead scoring](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, $13) / [vs Clay](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145)
 
-[Full documentation →](docs/RANK.md)
+---
 
-### Dedupe
+## Dedupe
 
-Deduplicate when fuzzy matching falls short. The AI understands that "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are the same company, or that "Big Blue" means IBM.
+Deduplicate when fuzzy matching falls short.
 
 ```python
 from everyrow.ops import dedupe
 
 result = await dedupe(
-    input=crm_data,
-    equivalence_relation="Two entries are duplicates if they represent the same legal entity",
+    input=contacts,
+    equivalence_relation="""
+        Two rows are duplicates if they represent the same person.
+        Account for name abbreviations, typos, and career changes.
+    """,
 )
 ```
 
-The `equivalence_relation` tells the AI what counts as a duplicate—natural language, not regex. Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record in each cluster).
+"A. Butoi" and "Alexandra Butoi" are the same person. "AUTON Lab (Former)" indicates a career change, not a different org. Results include `equivalence_class_id`, `equivalence_class_name`, and `selected` (the canonical record).
 
-**Examples and case studies**
-- Simple usage example: [dedupe_example.py](examples/dedupe_example.py)
-- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) (500→124 rows, 2 min, $1.67) · [notebook](case_studies/dedupe/case_01_crm_data.ipynb)
-- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy with career changes)
+**More:** [docs](docs/DEDUPE.md) / [example](examples/dedupe_example.py) / [CRM dedupe](https://futuresearch.ai/crm-deduplication/) (500→124 rows, $1.67, [notebook](case_studies/dedupe/case_01_crm_data.ipynb)) / [researcher dedupe](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy)
 
-[Full documentation →](docs/DEDUPE.md)
+---
 
-### Merge
+## Merge
 
-Join two tables when the keys don't match exactly—or at all. The AI knows "Photoshop" belongs to "Adobe" and "Genentech" is a Roche subsidiary, even with zero string similarity.
+Join two tables when the keys don't match exactly. Or at all.
 
 ```python
 from everyrow.ops import merge
@@ -127,51 +157,15 @@ result = await merge(
 )
 ```
 
-Handles subsidiaries, abbreviations (MSD → Merck), regional names, typos, and pseudonyms. Fuzzy matching thresholds always fail somewhere—0.9 misses "Colfi" ↔ "Dr. Ioana Colfescu", 0.7 false-positives on "John Smith" ↔ "Jane Smith".
+Knows that Photoshop belongs to Adobe and Genentech is a Roche subsidiary, even with zero string similarity. Fuzzy matching thresholds always fail somewhere: 0.9 misses "Colfi" ↔ "Dr. Ioana Colfescu", 0.7 false-positives on "John Smith" ↔ "Jane Smith".
 
-**Examples and case studies**
-- Simple usage example: [merge_example.py](examples/merge_example.py)
-- [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy, $9)
-- [HubSpot Contact Merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall)
-- [CRM Merge Workflow](https://futuresearch.ai/crm-merge-workflow/)
+**More:** [docs](docs/MERGE.md) / [example](examples/merge_example.py) / [supplier matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy) / [HubSpot merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall)
 
-[Full documentation →](docs/MERGE.md)
+---
 
-### Screen
+## Agent Tasks
 
-Filter rows based on criteria that require research—things you can't express in SQL. The AI actually researches each row (10-Ks, earnings reports, news) before deciding pass/fail.
-
-```python
-from everyrow.ops import screen
-from pydantic import BaseModel, Field
-
-class ScreenResult(BaseModel):
-    passes: bool = Field(description="True if company meets the criteria")
-
-result = await screen(
-    task="""
-        Find companies with >75% recurring revenue that would benefit from
-        Taiwan tensions - CHIPS Act beneficiaries, defense contractors,
-        cybersecurity firms. Exclude companies dependent on Taiwan manufacturing.
-    """,
-    input=sp500_companies,
-    response_model=ScreenResult,
-)
-```
-
-Works for investment theses, geopolitical exposure, vendor risk assessment, job posting filtering, lead qualification—anything requiring judgment. Screening 500 S&P 500 companies takes ~12 min and $3 with >90% precision. Regex gets 68%.
-
-**Examples and case studies**
-- Simple usage example: [screen_example.py](examples/screen_example.py)
-- [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/) (63/502 passed, $3.29) · [notebook](case_studies/screen/thematic_stock_screen.ipynb)
-- [Job Posting Screen](https://futuresearch.ai/job-posting-screening/) (>90% vs 68% regex)
-- [Lead Screening Workflow](https://futuresearch.ai/screening-workflow/)
-
-[Full documentation →](docs/SCREEN.md)
-
-### Agent Tasks
-
-For single-input tasks, use `single_agent`. For batch processing, use `agent_map`.
+Web research on single inputs or entire dataframes. Agents are tuned on [Deep Research Bench](https://arxiv.org/abs/2506.06287), our benchmark for questions that need extensive searching and cross-referencing.
 
 ```python
 from everyrow.ops import single_agent, agent_map
@@ -179,39 +173,30 @@ from pandas import DataFrame
 
 # Single input
 result = await single_agent(
-    task="What is the capital of the given country?",
-    input={"country": "India"},
+    task="Find this company's latest funding round and lead investors",
+    input={"company": "Anthropic"},
 )
 
-# Batch processing
+# Batch
 result = await agent_map(
-    task="What is the capital of the given country?",
-    input=DataFrame([{"country": "India"}, {"country": "USA"}]),
+    task="Find this company's latest funding round and lead investors",
+    input=DataFrame([
+        {"company": "Anthropic"},
+        {"company": "OpenAI"},
+        {"company": "Mistral"},
+    ]),
 )
 ```
 
-Our agents are tuned on [Deep Research Bench](https://arxiv.org/abs/2506.06287), a benchmark we built for evaluating web research on questions that require extensive searching and cross-referencing.
+**Examples:** [single_agent](examples/single_agent_example.py) / [agent_map](examples/agent_map_example.py)
 
-**Examples**
-- [single_agent_example.py](examples/single_agent_example.py)
-- [agent_map_example.py](examples/agent_map_example.py)
+---
 
 ## Advanced
 
 ### Sessions
 
-For quick one-off operations, sessions are created automatically:
-
-```python
-from everyrow.ops import single_agent
-
-result = await single_agent(
-    task="What is the capital of France?",
-    input={"country": "France"},
-)
-```
-
-For multiple operations, use an explicit session:
+Sessions are created automatically for one-off operations. For multiple operations, use an explicit session:
 
 ```python
 from everyrow import create_session
@@ -221,21 +206,11 @@ async with create_session(name="My Session") as session:
     # All operations here share the same session
 ```
 
-If you want more explicit control over the client (for example, to reuse it across sessions or configure custom settings), you can create it directly:
+Sessions show up on the [everyrow.io](https://everyrow.io) dashboard.
 
-```python
-from everyrow import create_client, create_session
+### Async operations
 
-async with create_client() as client:
-    async with create_session(client=client, name="My Session") as session:
-        # ...
-```
-
-Sessions are visible on the [everyrow.io](https://everyrow.io) dashboard.
-
-### Async Operations
-
-All utilities have async variants for background processing. These need an explicit session since the task persists beyond the function call:
+All ops have async variants for background processing:
 
 ```python
 from everyrow import create_session
@@ -248,10 +223,34 @@ async with create_session(name="Async Ranking") as session:
         input=dataframe,
         field_name="score",
     )
-
-    # Continue with other work...
+    # Do other stuff...
     result = await task.await_result()
 ```
+
+### Claude Code plugin
+
+```sh
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
+
+---
+
+## Install
+
+```bash
+pip install everyrow
+```
+
+Development:
+
+```bash
+uv pip install -e .
+uv sync
+uv sync --group case-studies  # for notebooks
+```
+
+Requires Python 3.12+
 
 ## Development
 
@@ -268,8 +267,12 @@ uv run basedpyright        # type check
 ./generate_openapi.sh      # regenerate client
 ```
 
-The `everyrow/generated/` directory is excluded from linting (auto-generated code).
+---
 
-## License
+## About
 
-This project is licensed under the MIT License - see LICENSE.txt file for details.
+Built by [FutureSearch](https://futuresearch.ai). We kept running into the same data problems: ranking leads, deduping messy CRM exports, merging tables without clean keys. Tedious for humans, but needs judgment that automation can't handle. So we built this.
+
+[everyrow.io](https://everyrow.io) (app/dashboard) · [case studies](https://futuresearch.ai/solutions/) · [research](https://futuresearch.ai/research/)
+
+MIT license. See [LICENSE.txt](LICENSE.txt).
