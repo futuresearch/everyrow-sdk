@@ -660,7 +660,7 @@ async def dedupe(
         select_representative: When true, use LLM to select the best representative from each
             equivalence class. When false, no selection is made.
         early_stopping_threshold: Stop cross-chunk comparisons for a row after this many
-            consecutive comparisons with no matches. None uses server default.
+            consecutive comparisons with no matches. None disables early stopping.
 
     Returns:
         TableResult containing the deduped table with duplicates removed
@@ -722,9 +722,7 @@ async def dedupe_async(
         select_representative=select_representative
         if select_representative is not None
         else UNSET,
-        early_stopping_threshold=early_stopping_threshold
-        if early_stopping_threshold is not None
-        else UNSET,
+        early_stopping_threshold=early_stopping_threshold,
     )
     request = DedupeRequestParams(
         query=query,
