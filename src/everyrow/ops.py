@@ -157,7 +157,13 @@ async def agent_map(
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await agent_map_async(
-                task, internal_session, input, effort_level, llm, response_model, return_table_per_row
+                task,
+                internal_session,
+                input,
+                effort_level,
+                llm,
+                response_model,
+                return_table_per_row,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -635,6 +641,10 @@ async def dedupe(
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
     equivalence_relation: str | None = None,
+    llm: LLM | None = None,
+    chunk_size: int | None = None,
+    use_clustering: bool | None = None,
+    early_stopping_threshold: int | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
 
@@ -642,6 +652,12 @@ async def dedupe(
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         equivalence_relation: Description of what makes items equivalent
+        llm: LLM model to use for deduplication
+        chunk_size: Maximum number of items to process in a single LLM call
+        use_clustering: When true, cluster items by embedding similarity and only compare
+            neighboring clusters. When false, use sequential chunking and compare all chunks.
+        early_stopping_threshold: Stop cross-chunk comparisons for a row after this many
+            consecutive comparisons with no matches. None uses server default.
 
     Returns:
         TableResult containing the deduped table with duplicates removed
@@ -654,6 +670,10 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                llm=llm,
+                chunk_size=chunk_size,
+                use_clustering=use_clustering,
+                early_stopping_threshold=early_stopping_threshold,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -664,6 +684,10 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        llm=llm,
+        chunk_size=chunk_size,
+        use_clustering=use_clustering,
+        early_stopping_threshold=early_stopping_threshold,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -676,12 +700,22 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    llm: LLM | None = None,
+    chunk_size: int | None = None,
+    use_clustering: bool | None = None,
+    early_stopping_threshold: int | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
     query = DedupeQueryParams(
         equivalence_relation=equivalence_relation,
+        llm=llm or UNSET,
+        chunk_size=chunk_size or UNSET,
+        use_clustering=use_clustering if use_clustering is not None else UNSET,
+        early_stop_threshold=early_stopping_threshold
+        if early_stopping_threshold is not None
+        else UNSET,
     )
     request = DedupeRequestParams(
         query=query,
@@ -736,9 +770,13 @@ async def derive(
             )
 
             task_id = await submit_task(body, internal_session.client)
-            finished_task = await await_task_completion(task_id, internal_session.client)
+            finished_task = await await_task_completion(
+                task_id, internal_session.client
+            )
 
-            data = await read_table_result(finished_task.artifact_id, internal_session.client)  # type: ignore
+            data = await read_table_result(
+                finished_task.artifact_id, internal_session.client
+            )  # type: ignore
             return TableResult(
                 artifact_id=finished_task.artifact_id,  # type: ignore
                 data=data,
