@@ -8,17 +8,17 @@ from everyrow.ops import rank
 
 
 class ContributionRanking(BaseModel):
-    contribution_score: float = Field(
-        description="Score from 0-100 reflecting contribution"
+    contribution_score: int = Field(
+        description="Total citation count"
     )
     most_significant_contribution: str = Field(
-        description="Single most significant contribution"
+        description="Single most important paper authored by a firm leader"
     )
 
 
 async def main():
-    # Rank AI research organizations by their contributions to the field
-    # This requires researching each org's publications, releases, and impact
+    # Rank AI research organizations by the total citation count of the leadership team
+    # This requires researching each org's leaders and all their publications
     ai_research_orgs = DataFrame(
         [
             {"organization": "OpenAI", "type": "Private lab", "founded": 2015},
@@ -37,18 +37,10 @@ async def main():
     )
 
     task = dedent("""
-        Score the given AI research organization by their overall contribution to
-        advancing large language models and generative AI in the past 2 years.
+        Research the total citation count of all leaders of the given AI research organization.
 
-        Consider factors such as:
-        - Influential model releases (both open and closed source)
-        - Important research papers and technical breakthroughs
-        - Impact on the broader AI ecosystem (open source contributions,
-            techniques that others have adopted)
-        - Novel capabilities introduced
-
-        Assign a score from 0-100 reflecting their relative contribution,
-        where 100 represents the most impactful organization.
+        A leader is defined as a C-Suite or founder of the company.
+        Citation count should count all major publications. Top ten by each person is sufficient.
     """)
 
     # Example 1: Basic ranking with a single score field
