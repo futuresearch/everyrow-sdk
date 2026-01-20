@@ -193,11 +193,7 @@ result = await agent_map(
 )
 ```
 
-**Examples:** [single_agent](examples/single_agent_example.py) / [agent_map](examples/agent_map_example.py)
-
----
-
-[Full documentation →](docs/AGENT.md)
+**More:** [docs](docs/AGENT.md) / [single_agent example](examples/single_agent_example.py) / [agent_map example](examples/agent_map_example.py)
 
 ### Derive
 
@@ -214,8 +210,7 @@ result = await derive(
 
 `derive` is useful for adding simple calculated fields before or after other operations. It's much faster and cheaper than using AI agents to do the computation.
 
-**Examples**
-- Simple usage example: [derive_example.py](examples/derive_example.py)
+**More:** [example](examples/derive_example.py)
 
 
 ## Advanced
