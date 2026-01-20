@@ -67,6 +67,7 @@ Regex can't do this. `"remote" in text` matches "No remote work available." `"$"
 | [**Dedupe**](#dedupe) | Deduplicate when fuzzy matching fails |
 | [**Merge**](#merge) | Join tables when keys don't match |
 | [**Agent Tasks**](#agent-tasks) | Web research on every row |
+| [**Derive**](#derive) | Add computed columns |
 
 ---
 
@@ -170,11 +171,15 @@ Web research on single inputs or entire dataframes. Agents are tuned on [Deep Re
 ```python
 from everyrow.ops import single_agent, agent_map
 from pandas import DataFrame
+from pydantic import BaseModel
+
+class CompanyInput(BaseModel):
+    company: str
 
 # Single input
 result = await single_agent(
     task="Find this company's latest funding round and lead investors",
-    input={"company": "Anthropic"},
+    input=CompanyInput(company="Anthropic"),
 )
 
 # Batch
@@ -188,9 +193,25 @@ result = await agent_map(
 )
 ```
 
-**Examples:** [single_agent](examples/single_agent_example.py) / [agent_map](examples/agent_map_example.py)
+**More:** [docs](docs/AGENT.md) / [single_agent example](examples/single_agent_example.py) / [agent_map example](examples/agent_map_example.py)
 
----
+### Derive
+
+Add computed columns using [`pandas.DataFrame.eval`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.eval.html#pandas.DataFrame.eval), no AI agents needed.
+
+```python
+from everyrow.ops import derive
+
+result = await derive(
+    input=orders_dataframe,
+    expressions={"total": "price * quantity"},
+)
+```
+
+`derive` is useful for adding simple calculated fields before or after other operations. It's much faster and cheaper than using AI agents to do the computation.
+
+**More:** [example](examples/derive_example.py)
+
 
 ## Advanced
 
