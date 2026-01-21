@@ -21,6 +21,8 @@ class DeepRankPublicParams:
             root model of response_schema. Typically has a numeric type but not necessarily.
         ascending_order (bool | Unset): If true, sort the output artifacts in ascending order according to
             field_to_sort_by Default: True.
+        include_provenance_and_notes (bool | Unset): Whether to include an additional provenance and notes field in the
+            output and prompt Default: True.
         preview (bool | Unset): When true, process only the first few inputs Default: False.
     """
 
@@ -28,6 +30,7 @@ class DeepRankPublicParams:
     response_schema: Any
     field_to_sort_by: str
     ascending_order: bool | Unset = True
+    include_provenance_and_notes: bool | Unset = True
     preview: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -39,6 +42,8 @@ class DeepRankPublicParams:
         field_to_sort_by = self.field_to_sort_by
 
         ascending_order = self.ascending_order
+
+        include_provenance_and_notes = self.include_provenance_and_notes
 
         preview = self.preview
 
@@ -53,6 +58,8 @@ class DeepRankPublicParams:
         )
         if ascending_order is not UNSET:
             field_dict["ascending_order"] = ascending_order
+        if include_provenance_and_notes is not UNSET:
+            field_dict["include_provenance_and_notes"] = include_provenance_and_notes
         if preview is not UNSET:
             field_dict["preview"] = preview
 
@@ -69,6 +76,8 @@ class DeepRankPublicParams:
 
         ascending_order = d.pop("ascending_order", UNSET)
 
+        include_provenance_and_notes = d.pop("include_provenance_and_notes", UNSET)
+
         preview = d.pop("preview", UNSET)
 
         deep_rank_public_params = cls(
@@ -76,6 +85,7 @@ class DeepRankPublicParams:
             response_schema=response_schema,
             field_to_sort_by=field_to_sort_by,
             ascending_order=ascending_order,
+            include_provenance_and_notes=include_provenance_and_notes,
             preview=preview,
         )
 
