@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-Screen, rank, dedupe, and merge your dataframes using natural language. Or run web agents to research every row.
+Sort, filter, merge, or dedupe pandas dataframes with the intelligence of LLMs and LLM web agents, at minimum cost. Solve data problems with qualitative criteria or missing data at scale.
 
 ```bash
 pip install everyrow
@@ -56,18 +56,18 @@ export EVERYROW_API_KEY=your_key_here
 python example.py
 ```
 
-Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary *isn't* disclosed, and "bootcamp grads welcome" means it's *not* senior-level.
+Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary _isn't_ disclosed, and "bootcamp grads welcome" means it's _not_ senior-level.
 
 ## Operations
 
-| | |
-|---|---|
-| [**Screen**](#screen) | Filter by criteria that need judgment |
-| [**Rank**](#rank) | Score rows by qualitative factors |
-| [**Dedupe**](#dedupe) | Deduplicate when fuzzy matching fails |
-| [**Merge**](#merge) | Join tables when keys don't match |
-| [**Agent Tasks**](#agent-tasks) | Web research on every row |
-| [**Derive**](#derive) | Add computed columns |
+|                                 |                                       |
+| ------------------------------- | ------------------------------------- |
+| [**Screen**](#screen)           | Filter by criteria that need judgment |
+| [**Rank**](#rank)               | Score rows by qualitative factors     |
+| [**Dedupe**](#dedupe)           | Deduplicate when fuzzy matching fails |
+| [**Merge**](#merge)             | Join tables when keys don't match     |
+| [**Agent Tasks**](#agent-tasks) | Web research on every row             |
+| [**Derive**](#derive)           | Add computed columns                  |
 
 ---
 
@@ -114,7 +114,7 @@ result = await rank(
 )
 ```
 
-Ultramain Systems (sells software *to* airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
+Ultramain Systems (sells software _to_ airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
 
 **More:** [docs](docs/RANK.md) / [example](examples/rank_example.py) / [lead scoring](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, $13) / [vs Clay](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145)
 
@@ -211,7 +211,6 @@ result = await derive(
 `derive` is useful for adding simple calculated fields before or after other operations. It's much faster and cheaper than using AI agents to do the computation.
 
 **More:** [example](examples/derive_example.py)
-
 
 ## Advanced
 

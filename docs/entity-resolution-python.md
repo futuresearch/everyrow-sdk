@@ -1,0 +1,57 @@
+# Entity Resolution in Python Without Training Data
+
+Entity resolution—matching records that represent the same real-world entity across messy data—typically requires labeled training data, manual blocking rules, or extensive threshold tuning. Tools like Splink, dedupe.io, and recordlinkage are powerful but need significant setup before they work.
+
+This guide shows how to resolve entities using LLM-powered semantic matching that works out of the box. You define what makes two records equivalent in plain English, and the SDK handles the matching.
+
+| Metric              | Value        |
+| ------------------- | ------------ |
+| Records processed   | 500          |
+| Unique entities     | 131          |
+| Duplicates resolved | 369          |
+| Cost                | $0.74        |
+| Time                | ~100 seconds |
+
+```bash
+pip install everyrow
+export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
+```
+
+We'll use a messy CRM dataset with 500 company records. The same companies appear multiple times with different spellings, abbreviations, and missing fields. Download [case_01_crm_data.csv](../notebooks/dedupe/case_01_crm_data.csv) to follow along.
+
+```python
+import asyncio
+import pandas as pd
+from everyrow.ops import dedupe
+
+data = pd.read_csv("case_01_crm_data.csv").fillna("")
+
+async def main():
+    result = await dedupe(
+        input=data,
+        equivalence_relation="Two entries are duplicates if they represent the same company.",
+    )
+
+    # Filter to keep only the best record per entity
+    unique = result.data[result.data["selected"] == True]
+    print(f"Reduced {len(data)} records to {len(unique)} unique entities")
+
+asyncio.run(main())
+```
+
+The input data contains variations like these, all representing the same company:
+
+| company_name          | contact_name     | email_address        |
+| --------------------- | ---------------- | -------------------- |
+| AbbVie Inc.           | Richard Gonzales | info@abbvie-bio.com  |
+| AbbVie Pharmaceutical | Richard Gonzales |                      |
+| Abbvie                |                  | info@abbvie-bio.com  |
+| Abvie Inc             | Richard Gonzales |                      |
+
+The SDK clusters these into a single entity and selects the most complete record (the one with both contact name and email). The output DataFrame includes `equivalence_class_id` and `equivalence_class_name` columns showing which records were grouped together, plus a `selected` boolean indicating which record to keep.
+
+This approach handles cases that string similarity misses entirely. "AAPL" matches to "Apple Inc." because the model knows the ticker symbol. "Big Blue" matches to "IBM Corporation" because that's IBM's nickname. "W-Mart" and "Wallmart" match to "Walmart Inc." despite having different typos.
+
+The equivalence relation is flexible. For matching people, you might write "Two entries are duplicates if they refer to the same person, accounting for name variations and nicknames." For products: "Two entries represent the same product if they're the same item sold under different names or SKUs."
+
+See the [full notebook](../notebooks/dedupe/case_01_crm_data.ipynb) for additional examples including how to merge the clustered records into consolidated entries.
