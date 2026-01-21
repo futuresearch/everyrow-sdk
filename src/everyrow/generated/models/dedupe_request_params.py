@@ -11,7 +11,8 @@ from ..models.processing_mode import ProcessingMode
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.dedupe_query_params import DedupeQueryParams
+    from ..models.dedupe_full_params import DedupeFullParams
+    from ..models.dedupe_public_params import DedupePublicParams
 
 
 T = TypeVar("T", bound="DedupeRequestParams")
@@ -22,7 +23,7 @@ class DedupeRequestParams:
     """Request parameters for the deduplication service.
 
     Attributes:
-        query (DedupeQueryParams): Service-specific parameters for the deduplication service.
+        query (DedupeFullParams | DedupePublicParams):
         input_artifacts (list[UUID] | None | Unset):
         context_artifacts (list[UUID] | None | Unset):
         label (None | str | Unset): Short task label for use in the UI
@@ -36,7 +37,7 @@ class DedupeRequestParams:
         processing_mode (ProcessingMode | Unset):
     """
 
-    query: DedupeQueryParams
+    query: DedupeFullParams | DedupePublicParams
     input_artifacts: list[UUID] | None | Unset = UNSET
     context_artifacts: list[UUID] | None | Unset = UNSET
     label: None | str | Unset = UNSET
@@ -49,7 +50,13 @@ class DedupeRequestParams:
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        query = self.query.to_dict()
+        from ..models.dedupe_public_params import DedupePublicParams
+
+        query: dict[str, Any]
+        if isinstance(self.query, DedupePublicParams):
+            query = self.query.to_dict()
+        else:
+            query = self.query.to_dict()
 
         input_artifacts: list[str] | None | Unset
         if isinstance(self.input_artifacts, Unset):
@@ -147,10 +154,27 @@ class DedupeRequestParams:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.dedupe_query_params import DedupeQueryParams
+        from ..models.dedupe_full_params import DedupeFullParams
+        from ..models.dedupe_public_params import DedupePublicParams
 
         d = dict(src_dict)
-        query = DedupeQueryParams.from_dict(d.pop("query"))
+
+        def _parse_query(data: object) -> DedupeFullParams | DedupePublicParams:
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                query_type_0 = DedupePublicParams.from_dict(data)
+
+                return query_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            if not isinstance(data, dict):
+                raise TypeError()
+            query_type_1 = DedupeFullParams.from_dict(data)
+
+            return query_type_1
+
+        query = _parse_query(d.pop("query"))
 
         def _parse_input_artifacts(data: object) -> list[UUID] | None | Unset:
             if data is None:
