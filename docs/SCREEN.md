@@ -88,6 +88,7 @@ class Detailed(BaseModel):
 | `response_model` | BaseModel | Must have a boolean field |
 | `batch_size` | int | Parallel rows (default 10) |
 | `session` | Session | Optional, auto-created if omitted |
+| `return_research_notes` | bool | True = include research notes with explanation and sources ([more info](/docs/AGENT.md#research-notes)) |
 
 ## Performance
 

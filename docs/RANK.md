@@ -90,6 +90,7 @@ When specifying a response model, make sure that it contains `field_name`. Other
 | `field_type` | str | The type of the field (default: "float") |
 | `response_model` | BaseModel | Optional response model for multiple output fields |
 | `ascending_order` | bool | True = lowest first (default) |
+| `return_research_notes` | bool | True = include research notes with explanation and sources ([more info](/docs/AGENT.md#research-notes)) |
 | `preview` | bool | True = process only a few rows |
 
 ## Case studies
