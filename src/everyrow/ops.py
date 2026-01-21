@@ -56,6 +56,7 @@ async def single_agent[T: BaseModel](
     llm: LLM | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: Literal[False] = False,
+    return_research_notes: bool = True,
 ) -> ScalarResult[T]: ...
 
 
@@ -68,6 +69,7 @@ async def single_agent(
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table: Literal[True] = True,
+    return_research_notes: bool = True,
 ) -> TableResult: ...
 
 
@@ -79,6 +81,7 @@ async def single_agent[T: BaseModel](
     llm: LLM | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
+    return_research_notes: bool = True,
 ) -> ScalarResult[T] | TableResult:
     if session is None:
         async with create_session() as internal_session:
@@ -90,6 +93,7 @@ async def single_agent[T: BaseModel](
                 llm=llm,
                 response_model=response_model,
                 return_table=return_table,
+                return_research_notes=return_research_notes,
             )
             return await cohort_task.await_result()
     cohort_task = await single_agent_async(
@@ -100,6 +104,7 @@ async def single_agent[T: BaseModel](
         llm=llm,
         response_model=response_model,
         return_table=return_table,
+        return_research_notes=return_research_notes,
     )
     return await cohort_task.await_result()
 
@@ -112,6 +117,7 @@ async def single_agent_async[T: BaseModel](
     llm: LLM | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
+    return_research_notes: bool = True,
 ) -> EveryrowTask[T]:
     if input is not None:
         input_artifact_ids = [await _process_single_agent_input(input, session)]
@@ -125,7 +131,7 @@ async def single_agent_async[T: BaseModel](
         response_schema=response_model.model_json_schema(),
         response_schema_type=ResponseSchemaType.JSON,
         is_expand=return_table,
-        include_provenance_and_notes=False,
+        include_provenance_and_notes=return_research_notes,
     )
     request = ReduceAgentRequestParams(
         query=query,
@@ -151,19 +157,21 @@ async def agent_map(
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table_per_row: bool = False,
+    return_research_notes: bool = True,
 ) -> TableResult:
     if input is None:
         raise EveryrowError("input is required for agent_map")
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await agent_map_async(
-                task,
-                internal_session,
-                input,
-                effort_level,
-                llm,
-                response_model,
-                return_table_per_row,
+                task=task,
+                session=internal_session,
+                input=input,
+                effort_level=effort_level,
+                llm=llm,
+                response_model=response_model,
+                return_table_per_row=return_table_per_row,
+                return_research_notes=return_research_notes,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -171,7 +179,14 @@ async def agent_map(
             else:
                 raise EveryrowError("Agent map task did not return a table result")
     cohort_task = await agent_map_async(
-        task, session, input, effort_level, llm, response_model, return_table_per_row
+        task=task,
+        session=session,
+        input=input,
+        effort_level=effort_level,
+        llm=llm,
+        response_model=response_model,
+        return_table_per_row=return_table_per_row,
+        return_research_notes=return_research_notes,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -250,6 +265,7 @@ async def agent_map_async(
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table_per_row: bool = False,
+    return_research_notes: bool = True,
 ) -> EveryrowTask[BaseModel]:
     input_artifact_ids = [await _process_agent_map_input(input, session)]
     query = AgentQueryParams(
@@ -259,7 +275,7 @@ async def agent_map_async(
         response_schema=_convert_pydantic_to_custom_schema(response_model),
         response_schema_type=ResponseSchemaType.CUSTOM,
         is_expand=return_table_per_row,
-        include_provenance_and_notes=False,
+        include_provenance_and_notes=return_research_notes,
     )
     request = MapAgentRequestParams(
         query=query,
@@ -436,6 +452,7 @@ async def rank[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
+    return_research_notes: bool = True,
     preview: bool = False,
 ) -> TableResult:
     """Rank rows in a table using rank operation.
@@ -448,6 +465,7 @@ async def rank[T: BaseModel](
         field_type: The type of the field (default: "float", ignored if response_model is provided)
         response_model: Optional Pydantic model for the response schema
         ascending_order: If True, sort in ascending order
+        return_research_notes: If True, include research notes with explanation and sources
         preview: If True, process only the first few inputs
 
     Returns:
@@ -465,6 +483,7 @@ async def rank[T: BaseModel](
                 field_type=field_type,
                 response_model=response_model,
                 ascending_order=ascending_order,
+                return_research_notes=return_research_notes,
                 preview=preview,
             )
             result = await cohort_task.await_result()
@@ -480,6 +499,7 @@ async def rank[T: BaseModel](
         field_type=field_type,
         response_model=response_model,
         ascending_order=ascending_order,
+        return_research_notes=return_research_notes,
         preview=preview,
     )
     result = await cohort_task.await_result()
@@ -497,6 +517,7 @@ async def rank_async[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
+    return_research_notes: bool = True,
     preview: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a rank task asynchronously."""
@@ -522,6 +543,7 @@ async def rank_async[T: BaseModel](
         response_schema=response_schema,
         field_to_sort_by=field_name,
         ascending_order=ascending_order,
+        include_provenance_and_notes=return_research_notes,
         preview=preview,
     )
     request = DeepRankRequest(
@@ -549,6 +571,7 @@ async def screen[T: BaseModel](
     input: DataFrame | UUID | TableResult | None = None,
     response_model: type[T] | None = None,
     batch_size: int | None = None,
+    return_research_notes: bool = True,
     preview: bool = False,
 ) -> TableResult:
     """Screen rows in a table using screen operation.
@@ -559,6 +582,7 @@ async def screen[T: BaseModel](
         input: The input table (DataFrame, UUID, or TableResult)
         response_model: Optional Pydantic model for the response schema
         batch_size: Optional batch size for processing (default: 10)
+        return_research_notes: If True, include research notes with explanation and sources
         preview: If True, process only the first few inputs
 
     Returns:
@@ -574,6 +598,7 @@ async def screen[T: BaseModel](
                 input=input,
                 response_model=response_model,
                 batch_size=batch_size,
+                return_research_notes=return_research_notes,
                 preview=preview,
             )
             result = await cohort_task.await_result()
@@ -587,6 +612,7 @@ async def screen[T: BaseModel](
         input=input,
         response_model=response_model,
         batch_size=batch_size,
+        return_research_notes=return_research_notes,
         preview=preview,
     )
     result = await cohort_task.await_result()
@@ -602,6 +628,7 @@ async def screen_async[T: BaseModel](
     input: DataFrame | UUID | TableResult,
     response_model: type[T] | None = None,
     batch_size: int | None = None,
+    return_research_notes: bool = True,
     preview: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a screen task asynchronously."""
@@ -619,6 +646,7 @@ async def screen_async[T: BaseModel](
         batch_size=batch_size or UNSET,
         response_schema=response_schema,
         response_schema_type=response_schema_type,
+        include_provenance_and_notes=return_research_notes,
         preview=preview,
     )
     request = DeepScreenRequest(
