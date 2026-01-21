@@ -26,6 +26,7 @@ class DedupePublicParams:
             class. When false, no selection is made. Default: True.
         early_stopping_threshold (int | None | Unset): Stop cross-chunk comparisons for a row after this many
             consecutive comparisons with no matches. None disables early stopping. Default: 5.
+        preview (bool | Unset):  Default: False.
     """
 
     equivalence_relation: str
@@ -34,6 +35,7 @@ class DedupePublicParams:
     use_clustering: bool | Unset = True
     select_representative: bool | Unset = True
     early_stopping_threshold: int | None | Unset = 5
+    preview: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -55,6 +57,8 @@ class DedupePublicParams:
         else:
             early_stopping_threshold = self.early_stopping_threshold
 
+        preview = self.preview
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -72,6 +76,8 @@ class DedupePublicParams:
             field_dict["select_representative"] = select_representative
         if early_stopping_threshold is not UNSET:
             field_dict["early_stopping_threshold"] = early_stopping_threshold
+        if preview is not UNSET:
+            field_dict["preview"] = preview
 
         return field_dict
 
@@ -102,6 +108,8 @@ class DedupePublicParams:
 
         early_stopping_threshold = _parse_early_stopping_threshold(d.pop("early_stopping_threshold", UNSET))
 
+        preview = d.pop("preview", UNSET)
+
         dedupe_public_params = cls(
             equivalence_relation=equivalence_relation,
             llm=llm,
@@ -109,6 +117,7 @@ class DedupePublicParams:
             use_clustering=use_clustering,
             select_representative=select_representative,
             early_stopping_threshold=early_stopping_threshold,
+            preview=preview,
         )
 
         dedupe_public_params.additional_properties = d

@@ -638,14 +638,10 @@ async def screen_async[T: BaseModel](
 
 
 async def dedupe(
+    equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
-    equivalence_relation: str | None = None,
-    llm: LLM | None = None,
-    chunk_size: int | None = None,
-    use_clustering: bool | None = None,
-    select_representative: bool | None = None,
-    early_stopping_threshold: int | None = None,
+    select_representative: bool = True,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
 
@@ -653,14 +649,8 @@ async def dedupe(
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         equivalence_relation: Description of what makes items equivalent
-        llm: LLM model to use for deduplication
-        chunk_size: Maximum number of items to process in a single LLM call
-        use_clustering: When true, cluster items by embedding similarity and only compare
-            neighboring clusters. When false, use sequential chunking and compare all chunks.
         select_representative: When true, use LLM to select the best representative from each
             equivalence class. When false, no selection is made.
-        early_stopping_threshold: Stop cross-chunk comparisons for a row after this many
-            consecutive comparisons with no matches. None disables early stopping.
 
     Returns:
         TableResult containing the deduped table with duplicates removed
@@ -673,11 +663,7 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
-                llm=llm,
-                chunk_size=chunk_size,
-                use_clustering=use_clustering,
                 select_representative=select_representative,
-                early_stopping_threshold=early_stopping_threshold,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -688,11 +674,7 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
-        llm=llm,
-        chunk_size=chunk_size,
-        use_clustering=use_clustering,
         select_representative=select_representative,
-        early_stopping_threshold=early_stopping_threshold,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -705,24 +687,14 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
-    llm: LLM | None = None,
-    chunk_size: int | None = None,
-    use_clustering: bool | None = None,
-    select_representative: bool | None = None,
-    early_stopping_threshold: int | None = None,
+    select_representative: bool = True,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
     query = DedupeFullParams(
         equivalence_relation=equivalence_relation,
-        llm=llm if llm is not None else UNSET,
-        chunk_size=chunk_size if chunk_size is not None else UNSET,
-        use_clustering=use_clustering if use_clustering is not None else UNSET,
-        select_representative=select_representative
-        if select_representative is not None
-        else UNSET,
-        early_stopping_threshold=early_stopping_threshold,
+        select_representative=select_representative,
     )
     request = DedupeRequestParams(
         query=query,
