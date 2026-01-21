@@ -1,3 +1,4 @@
+import json
 from typing import Any, Literal, TypeVar, overload
 from uuid import UUID
 
@@ -157,7 +158,13 @@ async def agent_map(
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await agent_map_async(
-                task, internal_session, input, effort_level, llm, response_model, return_table_per_row
+                task,
+                internal_session,
+                input,
+                effort_level,
+                llm,
+                response_model,
+                return_table_per_row,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -311,9 +318,11 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
 
 
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
-    payload = CreateGroupRequest(
-        query=CreateGroupQueryParams(data_to_create=input.to_dict(orient="records"))
-    )
+    # Use to_json to handle NaN/NaT serialization, then parse back to Python objects
+    json_str = input.to_json(orient="records")
+    assert json_str is not None  # to_json returns str when no path_or_buf provided
+    records = json.loads(json_str)
+    payload = CreateGroupRequest(query=CreateGroupQueryParams(data_to_create=records))
     body = SubmitTaskBody(
         payload=payload,
         session_id=session.session_id,
@@ -736,9 +745,14 @@ async def derive(
             )
 
             task_id = await submit_task(body, internal_session.client)
-            finished_task = await await_task_completion(task_id, internal_session.client)
+            finished_task = await await_task_completion(
+                task_id, internal_session.client
+            )
 
-            data = await read_table_result(finished_task.artifact_id, internal_session.client)  # type: ignore
+            data = await read_table_result(
+                finished_task.artifact_id,  # type: ignore[arg-type]
+                internal_session.client,
+            )
             return TableResult(
                 artifact_id=finished_task.artifact_id,  # type: ignore
                 data=data,
