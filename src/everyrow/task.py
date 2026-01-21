@@ -34,26 +34,42 @@ T = TypeVar("T", bound=BaseModel)
 
 class EveryrowTask[T: BaseModel]:
     def __init__(self, response_model: type[T], is_map: bool, is_expand: bool):
-        self.task_id = None
+        self.task_id: UUID | None = None
+        self.session_id: UUID | None = None
+        self._client: AuthenticatedClient | None = None
         self._is_map = is_map
         self._is_expand = is_expand
         self._response_model = response_model
 
-    async def submit(self, body: SubmitTaskBody, client: AuthenticatedClient) -> UUID:
+    async def submit(
+        self,
+        body: SubmitTaskBody,
+        client: AuthenticatedClient,
+    ) -> UUID:
         task_id = await submit_task(body, client)
         self.task_id = task_id
+        self.session_id = body.session_id
+        self._client = client
         return task_id
 
-    async def get_status(self, client: AuthenticatedClient) -> TaskStatusResponse:
+    async def get_status(
+        self, client: AuthenticatedClient | None = None
+    ) -> TaskStatusResponse:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before fetching status")
+        client = client or self._client
+        if client is None:
+            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
         return await get_task_status(self.task_id, client)
 
     async def await_result(
-        self, client: AuthenticatedClient
+        self, client: AuthenticatedClient | None = None
     ) -> TableResult | ScalarResult[T]:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before awaiting result")
+        client = client or self._client
+        if client is None:
+            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
         final_status_response = await await_task_completion(self.task_id, client)
         artifact_id = cast(
             UUID, final_status_response.artifact_id

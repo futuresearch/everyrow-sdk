@@ -6,9 +6,9 @@ description: Helps write Python code using the everyrow SDK for AI-powered data 
 # everyrow SDK
 
 The everyrow SDK provides intelligent data processing utilities powered by AI agents. Use this skill when writing Python code that needs to:
+- Rank/score rows based on qualitative criteria
 - Deduplicate data using semantic understanding
 - Merge tables using AI-powered matching
-- Rank/score rows based on AI evaluation
 - Screen/filter rows based on research-intensive criteria
 - Run AI agents over dataframe rows
 
@@ -16,117 +16,90 @@ The everyrow SDK provides intelligent data processing utilities powered by AI ag
 
 ```bash
 pip install everyrow
-# or
-uv pip install everyrow
 ```
 
 ## Configuration
 
-Requires an API key from https://everyrow.io:
+Before writing any everyrow code, check if `EVERYROW_API_KEY` is set. If not, prompt the user:
+
+> everyrow requires an API key. Do you have one?
+> - If yes, paste it here
+> - If no, get one at https://everyrow.io/api-key and paste it back
+
+Once the user provides the key, set it:
 
 ```bash
-export EVERYROW_API_KEY=your_api_key_here
-```
-
-## Core Pattern
-
-All operations are async and require a session:
-
-```python
-import asyncio
-from everyrow import create_client, create_session
-
-async def main():
-    async with create_client() as client:
-        async with create_session(client=client, name="My Session") as session:
-            print(f"View session at: {session.get_url()}")
-            # ... use session for operations
-
-asyncio.run(main())
-```
-
-Simplified version (client created automatically):
-
-```python
-from everyrow import create_session
-
-async with create_session(name="My Session") as session:
-    # ... use session
+export EVERYROW_API_KEY=<their_key>
 ```
 
 ## Operations
 
-### dedupe - Deduplicate data
-
-Remove duplicates using AI-powered semantic matching:
-
-```python
-from everyrow.ops import dedupe
-
-result = await dedupe(
-    session=session,
-    input=dataframe,
-    equivalence_relation="Two entries are duplicates if they represent the same research work, even with different titles or authors listed",
-)
-# result.data contains the deduplicated DataFrame
-```
-
-### merge - Merge tables with AI matching
-
-Join tables where the match criteria requires understanding:
-
-```python
-from everyrow.ops import merge
-
-result = await merge(
-    session=session,
-    task="Match clinical trial sponsors with their parent pharmaceutical companies",
-    left_table=trial_data,
-    right_table=company_data,
-    merge_on_left="sponsor",
-    merge_on_right="company",
-)
-```
+For quick one-off operations, sessions are created automatically.
 
 ### rank - Score and rank rows
 
-Add AI-generated scores to rank rows:
+Score rows based on criteria you can't put in a database field:
 
 ```python
 from everyrow.ops import rank
 
 result = await rank(
-    session=session,
-    task="Score this organization by their contribution to open source AI research (0-100)",
-    input=dataframe,
-    field_name="contribution_score",
-    ascending_order=False,
+    task="Score by likelihood to need data integration solutions",
+    input=leads_dataframe,
+    field_name="integration_need_score",
+)
+```
+
+### dedupe - Deduplicate data
+
+Remove duplicates using AI-powered semantic matching. The AI understands that "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are the same company:
+
+```python
+from everyrow.ops import dedupe
+
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Two entries are duplicates if they represent the same legal entity",
+)
+```
+
+Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record in each cluster).
+
+### merge - Merge tables with AI matching
+
+Join two tables when the keys don't match exactly. The AI knows "Photoshop" belongs to "Adobe" and "Genentech" is a Roche subsidiary:
+
+```python
+from everyrow.ops import merge
+
+result = await merge(
+    task="Match each software product to its parent company",
+    left_table=software_products,
+    right_table=approved_suppliers,
+    merge_on_left="software_name",
+    merge_on_right="company_name",
 )
 ```
 
 ### screen - Evaluate and filter rows
 
-Evaluate rows based on criteria that requires research:
+Filter rows based on criteria that require research:
 
 ```python
 from everyrow.ops import screen
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-class VendorAssessment(BaseModel):
-    approved: bool
-    risk_level: str  # "low", "medium", "high"
-    security_concerns: str
-    recommendation: str
+class ScreenResult(BaseModel):
+    passes: bool = Field(description="True if company meets the criteria")
 
 result = await screen(
-    session=session,
-    task="""Evaluate vendor security and financial stability:
-    1. Have they had data breaches in the past 3 years?
-    2. Are there signs of financial distress?
-    Only approve vendors with low/medium risk.""",
-    input=vendors_df,
-    response_model=VendorAssessment,
-    batch_size=5,
+    task="""
+        Find companies with >75% recurring revenue that would benefit from
+        Taiwan tensions - CHIPS Act beneficiaries, defense contractors,
+        cybersecurity firms. Exclude companies dependent on Taiwan manufacturing.
+    """,
+    input=sp500_companies,
+    response_model=ScreenResult,
 )
 ```
 
@@ -136,16 +109,10 @@ Run an AI agent on a single input:
 
 ```python
 from everyrow.ops import single_agent
-from pydantic import BaseModel
-
-class Input(BaseModel):
-    company: str
 
 result = await single_agent(
-    session=session,
-    task="Research this company and summarize their main products",
-    input=Input(company="Anthropic"),
-    return_table=False,  # Set True for table output
+    task="What is the capital of the given country?",
+    input={"country": "India"},
 )
 ```
 
@@ -158,49 +125,41 @@ from everyrow.ops import agent_map
 from pandas import DataFrame
 
 result = await agent_map(
-    session=session,
     task="What is the capital of the given country?",
     input=DataFrame([{"country": "India"}, {"country": "USA"}]),
-    return_table_per_row=False,
 )
 ```
 
-## Async Variants
+## Explicit Sessions
 
-All operations have `_async` variants for background processing:
+For multiple operations or when you need visibility into progress, use an explicit session:
 
 ```python
+from everyrow import create_session
+
+async with create_session(name="My Session") as session:
+    print(f"View session at: {session.get_url()}")
+    # All operations here share the same session
+```
+
+Sessions are visible on the everyrow.io dashboard.
+
+## Async Operations
+
+All operations have `_async` variants for background processing. These need an explicit session since the task persists beyond the function call:
+
+```python
+from everyrow import create_session
 from everyrow.ops import rank_async
 
-task = await rank_async(
-    session=session,
-    task="Score organizations",
-    input=dataframe,
-    field_name="score",
-)
+async with create_session(name="Async Ranking") as session:
+    task = await rank_async(
+        session=session,
+        task="Score this organization",
+        input=dataframe,
+        field_name="score",
+    )
 
-# Do other work...
-
-result = await task.await_result(session.client)
-```
-
-## Result Structure
-
-All operations return a result object with:
-- `result.data` - The output DataFrame
-- `result.artifact_id` - ID for the stored artifact
-
-## Effort Levels
-
-Control processing intensity with `effort_level`:
-
-```python
-from everyrow.generated.models import TaskEffort
-
-result = await single_agent(
-    session=session,
-    task="...",
-    input=input_data,
-    effort_level=TaskEffort.LOW,  # or MEDIUM, HIGH
-)
+    # Continue with other work...
+    result = await task.await_result()
 ```

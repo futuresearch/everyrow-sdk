@@ -1,6 +1,6 @@
 [project]
 name = "everyrow"
-version = "0.1.0"
+version = "0.1.1"
 description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,6 +23,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 case-studies = [
     "ipykernel>=7.1.0",
+    "nbconvert>=7.16.0",
     "pyarrow>=22.0.0",
     "python-dotenv>=1.2.1",
 ]
@@ -38,12 +39,12 @@ dev = [
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"
-include = ["src", "tests", "examples"]
+include = ["src", "tests"]
 exclude = ["src/everyrow/generated"]
 typeCheckingMode = "standard"
 
 [tool.ruff]
-include = ["src/**/*.py", "tests/**/*.py", "examples/**/*.py"]
+include = ["src/**/*.py", "tests/**/*.py"]
 exclude = [".venv", "src/everyrow/generated/**"]
 target-version = "py312"
 
