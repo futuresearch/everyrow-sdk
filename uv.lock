@@ -234,8 +234,10 @@ version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
+    { name = "httpx" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "python-dateutil" },
     { name = "python-dotenv" },
 ]
 
@@ -258,8 +260,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.4.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
 ]
 
