@@ -96,7 +96,7 @@ result = await screen(
 
 "No remote work available" fails even though it contains "remote." Works for investment screening, lead qualification, vendor vetting.
 
-**More:** [docs](docs/SCREEN.md) / [example](examples/screen_example.py) / [job posting screen](https://futuresearch.ai/job-posting-screening/) (>90% precision vs 68% regex) / [stock screen](https://futuresearch.ai/thematic-stock-screening/) ([notebook](case_studies/screen/thematic_stock_screen.ipynb))
+**More:** [docs](docs/SCREEN.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [job posting screen](https://futuresearch.ai/job-posting-screening/) (>90% precision vs 68% regex) / [stock screen](https://futuresearch.ai/thematic-stock-screening/) ([notebook](docs/case_studies/screen-stocks-by-investment-thesis/notebook.ipynb))
 
 ---
 
@@ -116,7 +116,7 @@ result = await rank(
 
 Ultramain Systems (sells software *to* airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
 
-**More:** [docs](docs/RANK.md) / [example](examples/rank_example.py) / [lead scoring](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, $13) / [vs Clay](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145)
+**More:** [docs](docs/RANK.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [lead scoring](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, $13) / [vs Clay](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145)
 
 ---
 
@@ -138,7 +138,7 @@ result = await dedupe(
 
 "A. Butoi" and "Alexandra Butoi" are the same person. "AUTON Lab (Former)" indicates a career change, not a different org. Results include `equivalence_class_id`, `equivalence_class_name`, and `selected` (the canonical record).
 
-**More:** [docs](docs/DEDUPE.md) / [example](examples/dedupe_example.py) / [CRM dedupe](https://futuresearch.ai/crm-deduplication/) (500→124 rows, $1.67, [notebook](case_studies/dedupe/case_01_crm_data.ipynb)) / [researcher dedupe](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy)
+**More:** [docs](docs/DEDUPE.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [CRM dedupe](https://futuresearch.ai/crm-deduplication/) (500→124 rows, $1.67, [notebook](docs/case_studies/dedupe-crm-company-records/notebook.ipynb)) / [researcher dedupe](https://futuresearch.ai/researcher-dedupe-case-study/) (98% accuracy)
 
 ---
 
@@ -160,7 +160,7 @@ result = await merge(
 
 Knows that Photoshop belongs to Adobe and Genentech is a Roche subsidiary, even with zero string similarity. Fuzzy matching thresholds always fail somewhere: 0.9 misses "Colfi" ↔ "Dr. Ioana Colfescu", 0.7 false-positives on "John Smith" ↔ "Jane Smith".
 
-**More:** [docs](docs/MERGE.md) / [example](examples/merge_example.py) / [supplier matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy) / [HubSpot merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall)
+**More:** [docs](docs/MERGE.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [supplier matching](https://futuresearch.ai/software-supplier-matching/) (2,000 products, 91% accuracy) / [HubSpot merge](https://futuresearch.ai/merge-hubspot-contacts/) (99.9% recall)
 
 ---
 
@@ -193,7 +193,7 @@ result = await agent_map(
 )
 ```
 
-**More:** [docs](docs/AGENT.md) / [single_agent example](examples/single_agent_example.py) / [agent_map example](examples/agent_map_example.py)
+**More:** [docs](docs/AGENT.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
 
 ### Derive
 
@@ -210,7 +210,7 @@ result = await derive(
 
 `derive` is useful for adding simple calculated fields before or after other operations. It's much faster and cheaper than using AI agents to do the computation.
 
-**More:** [example](examples/derive_example.py)
+**More:** [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
 
 
 ## Advanced
