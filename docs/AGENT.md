@@ -33,7 +33,7 @@ result = await single_agent(
     task="Find the company's most recent annual revenue and employee count",
     input=CompanyInput(company="Stripe"),
 )
-print(result.data)
+print(result.data.head())
 ```
 
 ### No input required
@@ -47,6 +47,7 @@ result = await single_agent(
         due to internal AI usage over the past 12 months?
     """,
 )
+print(result.data.head())
 ```
 
 ## `agent_map`
@@ -67,7 +68,7 @@ result = await agent_map(
     task="Find the company's most recent annual revenue",
     input=companies,
 )
-print(result.data)
+print(result.data.head())
 ```
 
 Each row gets its own agent that researches independently.
@@ -119,6 +120,7 @@ result = await agent_map(
     input=companies,
     response_model=CompanyFinancials,
 )
+print(result.data.head())
 ```
 
 Now the output has `annual_revenue_usd`, `employee_count`, and `last_funding_round` columns.
@@ -143,6 +145,7 @@ companies = await single_agent(
     response_model=CompanyInfo,
     return_table=True,  # Return a table of companies
 )
+print(companies.data.head())
 
 class ExecutiveInfo(BaseModel):
     name: str = Field(description="Executive's full name")
@@ -154,4 +157,5 @@ result = await agent_map(
     response_model=ExecutiveInfo,
     return_table_per_row=True,  # For each company, return a list of executives
 )
+print(result.data.head())
 ```
