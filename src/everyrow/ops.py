@@ -157,7 +157,13 @@ async def agent_map(
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await agent_map_async(
-                task, internal_session, input, effort_level, llm, response_model, return_table_per_row
+                task,
+                internal_session,
+                input,
+                effort_level,
+                llm,
+                response_model,
+                return_table_per_row,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -736,9 +742,14 @@ async def derive(
             )
 
             task_id = await submit_task(body, internal_session.client)
-            finished_task = await await_task_completion(task_id, internal_session.client)
+            finished_task = await await_task_completion(
+                task_id, internal_session.client
+            )
 
-            data = await read_table_result(finished_task.artifact_id, internal_session.client)  # type: ignore
+            data = await read_table_result(
+                finished_task.artifact_id,  # type: ignore
+                internal_session.client,
+            )
             return TableResult(
                 artifact_id=finished_task.artifact_id,  # type: ignore
                 data=data,
