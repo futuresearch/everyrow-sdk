@@ -85,6 +85,7 @@ Each row gets its own agent that researches independently.
 | `effort_level` | EffortLevel | LOW, MEDIUM, or HIGH (default: LOW) |
 | `llm` | LLM | Optional agent LLM override |
 | `response_model` | BaseModel | Optional schema for structured output |
+| `return_research_notes` | bool | If True, include research notes with explanation and sources |
 | `return_table(_per_row)` | bool | If True, each agent returns a table instead of a scalar result |
 
 ### Effort levels
@@ -124,6 +125,21 @@ print(result.data.head())
 ```
 
 Now the output has `annual_revenue_usd`, `employee_count`, and `last_funding_round` columns.
+
+### Research notes
+
+By default, the agent will return research notes alongside the result. These notes include an explanation of how the agent arrived at its answer, along with citations for the sources it used.
+
+If you wish, you can disable research notes by setting `return_research_notes=False`. Disabling them will tend to reduce cost and run time.
+
+Research notes are structured as follows:
+
+- For `ScalarResult`:
+  - Notes are available via `result.research` as a dict keyed by field name.
+  - For instance, if your response model has an `answer` field, you can access the notes via `result.research["answer"]`.
+- For `TableResult`:
+  - Notes appear as `{field}_research` columns in the DataFrame.
+  - For instance, if your response model has an `answer` field, the DataFrame will include an `answer_research` column.
 
 ### Returning a table
 
