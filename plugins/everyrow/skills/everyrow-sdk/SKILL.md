@@ -174,7 +174,17 @@ async with create_session(name="Async Ranking") as session:
         input=dataframe,
         field_name="score",
     )
+    print(f"Task ID: {task.task_id}")  # Print this! Useful if your script crashes.
 
     # Continue with other work...
     result = await task.await_result()
+```
+
+**Tip:** Always print the task ID after submitting. If your script crashes, you can fetch the result later using `fetch_task_data`:
+
+```python
+from everyrow import fetch_task_data
+
+# Recover results from a crashed script
+df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
