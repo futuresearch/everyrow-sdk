@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "attrs>=25.4.0",
+    "httpx>=0.28.1",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
+    "python-dateutil>=2.9.0.post0",
     "python-dotenv>=1.2.1",
 ]
 
