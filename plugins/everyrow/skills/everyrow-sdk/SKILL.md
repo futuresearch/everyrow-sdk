@@ -32,6 +32,15 @@ Once the user provides the key, set it:
 export EVERYROW_API_KEY=<their_key>
 ```
 
+## Results
+
+All operations return a result object. The data is available as a pandas DataFrame in `result.data`:
+
+```python
+result = await rank(...)
+print(result.data.head())  # pandas DataFrame
+```
+
 ## Operations
 
 For quick one-off operations, sessions are created automatically.
@@ -48,6 +57,7 @@ result = await rank(
     input=leads_dataframe,
     field_name="integration_need_score",
 )
+print(result.data.head())
 ```
 
 ### dedupe - Deduplicate data
@@ -61,6 +71,7 @@ result = await dedupe(
     input=crm_data,
     equivalence_relation="Two entries are duplicates if they represent the same legal entity",
 )
+print(result.data.head())
 ```
 
 Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record in each cluster).
@@ -79,6 +90,7 @@ result = await merge(
     merge_on_left="software_name",
     merge_on_right="company_name",
 )
+print(result.data.head())
 ```
 
 ### screen - Evaluate and filter rows
@@ -101,6 +113,7 @@ result = await screen(
     input=sp500_companies,
     response_model=ScreenResult,
 )
+print(result.data.head())
 ```
 
 ### single_agent - Single input task
@@ -114,6 +127,7 @@ result = await single_agent(
     task="What is the capital of the given country?",
     input={"country": "India"},
 )
+print(result.data.head())
 ```
 
 ### agent_map - Batch processing
@@ -128,6 +142,7 @@ result = await agent_map(
     task="What is the capital of the given country?",
     input=DataFrame([{"country": "India"}, {"country": "USA"}]),
 )
+print(result.data.head())
 ```
 
 ## Explicit Sessions

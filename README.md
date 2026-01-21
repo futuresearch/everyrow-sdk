@@ -46,7 +46,7 @@ async def main():
         input=jobs,
         response_model=JobScreenResult,
     )
-    print(result)  # Airtable, Descript pass. Others fail one or more.
+    print(result.data.head())  # Airtable, Descript pass. Others fail one or more.
 
 asyncio.run(main())
 ```
@@ -92,6 +92,7 @@ result = await screen(
     input=job_postings,
     response_model=ScreenResult,
 )
+print(result.data.head())
 ```
 
 "No remote work available" fails even though it contains "remote." Works for investment screening, lead qualification, vendor vetting.
@@ -112,6 +113,7 @@ result = await rank(
     input=leads_dataframe,
     field_name="integration_need_score",
 )
+print(result.data.head())
 ```
 
 Ultramain Systems (sells software *to* airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
@@ -134,6 +136,7 @@ result = await dedupe(
         Account for name abbreviations, typos, and career changes.
     """,
 )
+print(result.data.head())
 ```
 
 "A. Butoi" and "Alexandra Butoi" are the same person. "AUTON Lab (Former)" indicates a career change, not a different org. Results include `equivalence_class_id`, `equivalence_class_name`, and `selected` (the canonical record).
@@ -156,6 +159,7 @@ result = await merge(
     merge_on_left="software_name",
     merge_on_right="company_name",
 )
+print(result.data.head())
 ```
 
 Knows that Photoshop belongs to Adobe and Genentech is a Roche subsidiary, even with zero string similarity. Fuzzy matching thresholds always fail somewhere: 0.9 misses "Colfi" ↔ "Dr. Ioana Colfescu", 0.7 false-positives on "John Smith" ↔ "Jane Smith".
@@ -181,6 +185,7 @@ result = await single_agent(
     task="Find this company's latest funding round and lead investors",
     input=CompanyInput(company="Anthropic"),
 )
+print(result.data.head())
 
 # Batch
 result = await agent_map(
@@ -191,6 +196,7 @@ result = await agent_map(
         {"company": "Mistral"},
     ]),
 )
+print(result.data.head())
 ```
 
 **More:** [docs](docs/AGENT.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
@@ -206,6 +212,7 @@ result = await derive(
     input=orders_dataframe,
     expressions={"total": "price * quantity"},
 )
+print(result.data.head())
 ```
 
 `derive` is useful for adding simple calculated fields before or after other operations. It's much faster and cheaper than using AI agents to do the computation.
