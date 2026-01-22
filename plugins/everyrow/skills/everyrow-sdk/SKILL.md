@@ -188,3 +188,12 @@ from everyrow import fetch_task_data
 # Recover results from a crashed script
 df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
+
+## Best Practices
+
+Everyrow operations have associated costs. To avoid re-running them unnecessarily:
+
+- **Separate data processing from analysis**: Save everyrow results to a file (CSV, Parquet, etc.), then do analysis in a separate script. This way, if analysis code has bugs, you don't re-trigger the everyrow step.
+- **Use intermediate checkpoints**: For multi-step pipelines, consider saving results after each everyrow operation.
+    - You are able to chain multiple operations together without needing to download and re-upload intermediate results via the SDK. However for most control, implement each step as a dedicated job, possibly orchestrated by tools such as Apache Airflow or Prefect.
+- **Test with `preview=True`**: Operations like `rank`, `screen`, and `merge` support `preview=True` to process only a few rows first.
