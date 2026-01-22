@@ -9,6 +9,7 @@ from .allowed_suggestions import AllowedSuggestions
 from .api_key_info import APIKeyInfo
 from .artifact_changed_payload import ArtifactChangedPayload
 from .artifact_group_record import ArtifactGroupRecord
+from .artifact_group_record_analysis_type_0 import ArtifactGroupRecordAnalysisType0
 from .artifact_group_record_metadata_type_0 import ArtifactGroupRecordMetadataType0
 from .artifact_group_record_trace_mapping_type_0 import ArtifactGroupRecordTraceMappingType0
 from .artifact_status import ArtifactStatus
@@ -39,8 +40,7 @@ from .create_workflow_from_artifact_request import CreateWorkflowFromArtifactReq
 from .create_workflow_from_artifact_response import CreateWorkflowFromArtifactResponse
 from .data_frame_method import DataFrameMethod
 from .date_cutoffs import DateCutoffs
-from .dedupe_mode import DedupeMode
-from .dedupe_query_params import DedupeQueryParams
+from .dedupe_public_params import DedupePublicParams
 from .dedupe_request_params import DedupeRequestParams
 from .deep_merge_public_params import DeepMergePublicParams
 from .deep_merge_request import DeepMergeRequest
@@ -54,7 +54,6 @@ from .derive_request import DeriveRequest
 from .document_query_tool import DocumentQueryTool
 from .drop_columns_query_params import DropColumnsQueryParams
 from .drop_columns_request import DropColumnsRequest
-from .embedding_models import EmbeddingModels
 from .event_type import EventType
 from .execution_metadata import ExecutionMetadata
 from .export_request import ExportRequest
@@ -106,6 +105,7 @@ from .simple_chat_message_role import SimpleChatMessageRole
 from .simple_chat_message_with_tool_calls import SimpleChatMessageWithToolCalls
 from .source_database_entry import SourceDatabaseEntry
 from .standalone_artifact_record import StandaloneArtifactRecord
+from .standalone_artifact_record_analysis_type_0 import StandaloneArtifactRecordAnalysisType0
 from .standalone_artifact_record_metadata_type_0 import StandaloneArtifactRecordMetadataType0
 from .standalone_artifact_record_trace_mapping_type_0 import StandaloneArtifactRecordTraceMappingType0
 from .status_count import StatusCount
@@ -152,6 +152,7 @@ __all__ = (
     "APIKeyInfo",
     "ArtifactChangedPayload",
     "ArtifactGroupRecord",
+    "ArtifactGroupRecordAnalysisType0",
     "ArtifactGroupRecordMetadataType0",
     "ArtifactGroupRecordTraceMappingType0",
     "ArtifactStatus",
@@ -182,8 +183,7 @@ __all__ = (
     "CreateWorkflowFromArtifactResponse",
     "DataFrameMethod",
     "DateCutoffs",
-    "DedupeMode",
-    "DedupeQueryParams",
+    "DedupePublicParams",
     "DedupeRequestParams",
     "DeepMergePublicParams",
     "DeepMergeRequest",
@@ -197,7 +197,6 @@ __all__ = (
     "DocumentQueryTool",
     "DropColumnsQueryParams",
     "DropColumnsRequest",
-    "EmbeddingModels",
     "EventType",
     "ExecutionMetadata",
     "ExportRequest",
@@ -245,6 +244,7 @@ __all__ = (
     "SimpleChatMessageWithToolCalls",
     "SourceDatabaseEntry",
     "StandaloneArtifactRecord",
+    "StandaloneArtifactRecordAnalysisType0",
     "StandaloneArtifactRecordMetadataType0",
     "StandaloneArtifactRecordTraceMappingType0",
     "StatusCount",
