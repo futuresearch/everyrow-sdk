@@ -18,7 +18,7 @@ def test_version_consistency(pytestconfig: pytest.Config):
         plugin_json = json.load(f)
     plugin_version = plugin_json["version"]
 
-    gemini_json_path = root / "plugins" / "everyrow" / "gemini-extension.json"
+    gemini_json_path = root / "gemini-extension.json"
     with open(gemini_json_path) as f:
         gemini_json = json.load(f)
     gemini_version = gemini_json["version"]
