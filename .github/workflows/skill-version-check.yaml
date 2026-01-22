@@ -25,3 +25,17 @@ jobs:
             echo "Please update the version in plugins/everyrow/.claude-plugin/plugin.json"
             exit 1
           fi
+
+      - name: Check skills directories are in sync
+        run: |
+          # Skills exist in two places - root skills/ (for Gemini) and plugins/everyrow/skills/ (for Claude)
+          # They must stay in sync
+          if diff -r skills/ plugins/everyrow/skills/ > /dev/null 2>&1; then
+            echo "✅ skills/ and plugins/everyrow/skills/ are in sync"
+          else
+            echo "❌ skills/ and plugins/everyrow/skills/ are out of sync"
+            echo ""
+            echo "Both directories must contain identical content:"
+            diff -r skills/ plugins/everyrow/skills/ || true
+            exit 1
+          fi
