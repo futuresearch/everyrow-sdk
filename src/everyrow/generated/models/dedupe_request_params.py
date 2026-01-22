@@ -11,7 +11,7 @@ from ..models.processing_mode import ProcessingMode
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.dedupe_query_params import DedupeQueryParams
+    from ..models.dedupe_public_params import DedupePublicParams
 
 
 T = TypeVar("T", bound="DedupeRequestParams")
@@ -22,7 +22,7 @@ class DedupeRequestParams:
     """Request parameters for the deduplication service.
 
     Attributes:
-        query (DedupeQueryParams): Service-specific parameters for the deduplication service.
+        query (DedupePublicParams): Public-facing parameters for the deduplication service.
         input_artifacts (list[UUID] | None | Unset):
         context_artifacts (list[UUID] | None | Unset):
         label (None | str | Unset): Short task label for use in the UI
@@ -36,7 +36,7 @@ class DedupeRequestParams:
         processing_mode (ProcessingMode | Unset):
     """
 
-    query: DedupeQueryParams
+    query: DedupePublicParams
     input_artifacts: list[UUID] | None | Unset = UNSET
     context_artifacts: list[UUID] | None | Unset = UNSET
     label: None | str | Unset = UNSET
@@ -147,10 +147,10 @@ class DedupeRequestParams:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.dedupe_query_params import DedupeQueryParams
+        from ..models.dedupe_public_params import DedupePublicParams
 
         d = dict(src_dict)
-        query = DedupeQueryParams.from_dict(d.pop("query"))
+        query = DedupePublicParams.from_dict(d.pop("query"))
 
         def _parse_input_artifacts(data: object) -> list[UUID] | None | Unset:
             if data is None:

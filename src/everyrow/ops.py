@@ -12,7 +12,7 @@ from everyrow.generated.models import (
     CreateGroupRequest,
     CreateQueryParams,
     CreateRequest,
-    DedupeQueryParams,
+    DedupePublicParams,
     DedupeRequestParams,
     DeepMergePublicParams,
     DeepMergeRequest,
@@ -609,9 +609,10 @@ async def screen_async[T: BaseModel](
 
 
 async def dedupe(
+    equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
-    equivalence_relation: str | None = None,
+    select_representative: bool = True,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using dedupe operation.
 
@@ -631,6 +632,7 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                select_representative=select_representative,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -641,6 +643,7 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        select_representative=select_representative,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -653,12 +656,14 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    select_representative: bool = True,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
-    query = DedupeQueryParams(
+    query = DedupePublicParams(
         equivalence_relation=equivalence_relation,
+        select_representative=select_representative,
     )
     request = DedupeRequestParams(
         query=query,

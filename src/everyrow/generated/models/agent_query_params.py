@@ -51,6 +51,8 @@ class AgentQueryParams:
             specified, defaults based on effort_level (speed_focused for LOW, persistent for HIGH)
         batch_size (int | None | Unset): The number of artifacts to process in a single batch. If set, enables batched
             agent processing.
+        minimal_llm_system_prompt (None | str | Unset): Custom system prompt for minimal LLM calls (number_of_steps=0).
+            If not provided, a default prompt with today's date is used.
     """
 
     task: str
@@ -78,6 +80,7 @@ class AgentQueryParams:
     effort_level: TaskEffort | Unset = UNSET
     system_prompt_kind: AgentQueryParamsSystemPromptKindType0 | None | Unset = UNSET
     batch_size: int | None | Unset = UNSET
+    minimal_llm_system_prompt: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -154,6 +157,12 @@ class AgentQueryParams:
         else:
             batch_size = self.batch_size
 
+        minimal_llm_system_prompt: None | str | Unset
+        if isinstance(self.minimal_llm_system_prompt, Unset):
+            minimal_llm_system_prompt = UNSET
+        else:
+            minimal_llm_system_prompt = self.minimal_llm_system_prompt
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -203,6 +212,8 @@ class AgentQueryParams:
             field_dict["system_prompt_kind"] = system_prompt_kind
         if batch_size is not UNSET:
             field_dict["batch_size"] = batch_size
+        if minimal_llm_system_prompt is not UNSET:
+            field_dict["minimal_llm_system_prompt"] = minimal_llm_system_prompt
 
         return field_dict
 
@@ -317,6 +328,15 @@ class AgentQueryParams:
 
         batch_size = _parse_batch_size(d.pop("batch_size", UNSET))
 
+        def _parse_minimal_llm_system_prompt(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        minimal_llm_system_prompt = _parse_minimal_llm_system_prompt(d.pop("minimal_llm_system_prompt", UNSET))
+
         agent_query_params = cls(
             task=task,
             llm=llm,
@@ -340,6 +360,7 @@ class AgentQueryParams:
             effort_level=effort_level,
             system_prompt_kind=system_prompt_kind,
             batch_size=batch_size,
+            minimal_llm_system_prompt=minimal_llm_system_prompt,
         )
 
         agent_query_params.additional_properties = d

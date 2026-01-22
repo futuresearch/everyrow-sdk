@@ -21,6 +21,8 @@ class DeepScreenPublicParams:
         response_schema (Any | Unset):  Default: {'_model_name': 'Root', 'answer': {'description': 'The response
             answer', 'optional': False, 'type': 'str'}}.
         response_schema_type (ResponseSchemaType | Unset): Type of response schema format.
+        include_provenance_and_notes (bool | Unset): Whether to include an additional provenance and notes field in the
+            output and prompt Default: True.
         preview (bool | Unset): When true, process only the first few inputs Default: False.
     """
 
@@ -31,6 +33,7 @@ class DeepScreenPublicParams:
         "answer": {"description": "The response answer", "optional": False, "type": "str"},
     }
     response_schema_type: ResponseSchemaType | Unset = UNSET
+    include_provenance_and_notes: bool | Unset = True
     preview: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -49,6 +52,8 @@ class DeepScreenPublicParams:
         if not isinstance(self.response_schema_type, Unset):
             response_schema_type = self.response_schema_type.value
 
+        include_provenance_and_notes = self.include_provenance_and_notes
+
         preview = self.preview
 
         field_dict: dict[str, Any] = {}
@@ -64,6 +69,8 @@ class DeepScreenPublicParams:
             field_dict["response_schema"] = response_schema
         if response_schema_type is not UNSET:
             field_dict["response_schema_type"] = response_schema_type
+        if include_provenance_and_notes is not UNSET:
+            field_dict["include_provenance_and_notes"] = include_provenance_and_notes
         if preview is not UNSET:
             field_dict["preview"] = preview
 
@@ -92,6 +99,8 @@ class DeepScreenPublicParams:
         else:
             response_schema_type = ResponseSchemaType(_response_schema_type)
 
+        include_provenance_and_notes = d.pop("include_provenance_and_notes", UNSET)
+
         preview = d.pop("preview", UNSET)
 
         deep_screen_public_params = cls(
@@ -99,6 +108,7 @@ class DeepScreenPublicParams:
             batch_size=batch_size,
             response_schema=response_schema,
             response_schema_type=response_schema_type,
+            include_provenance_and_notes=include_provenance_and_notes,
             preview=preview,
         )
 
