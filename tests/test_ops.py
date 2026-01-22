@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+import numpy as np
 import pandas as pd
 import pytest
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ from everyrow.generated.models import (
 from everyrow.ops import (
     agent_map,
     create_scalar_artifact,
+    create_table_artifact,
     rank_async,
     single_agent,
 )
@@ -352,3 +354,64 @@ async def test_rank_model_validation(mocker, mock_session) -> None:
             field_name="population",
             response_model=ResponseModel,
         )
+
+
+@pytest.mark.asyncio
+async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
+    """NaN values should be converted to None for JSON compatibility."""
+
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+    )
+    mock_submit.return_value = TaskResponse(task_id=task_id)
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = TaskStatusResponse(
+        status=TaskStatus.COMPLETED,
+        artifact_id=artifact_id,
+        task_id=task_id,
+        error=None,
+    )
+
+    df_with_nan = pd.DataFrame([{"name": "Alice", "age": np.nan}])
+    await create_table_artifact(df_with_nan, mock_session)
+
+    call_args = mock_submit.call_args
+    data_to_create = call_args.kwargs["body"].payload.query.data_to_create
+    assert data_to_create == [{"name": "Alice", "age": None}]
+
+
+@pytest.mark.asyncio
+async def test_create_table_artifact_preserves_valid_values(mocker, mock_session):
+    """Non-NaN values should be passed through unchanged."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+    )
+    mock_submit.return_value = TaskResponse(task_id=task_id)
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = TaskStatusResponse(
+        status=TaskStatus.COMPLETED,
+        artifact_id=artifact_id,
+        task_id=task_id,
+        error=None,
+    )
+
+    df = pd.DataFrame([{"name": "Alice", "age": 30}])
+    await create_table_artifact(df, mock_session)
+
+    call_args = mock_submit.call_args
+    data_to_create = call_args.kwargs["body"].payload.query.data_to_create
+    assert data_to_create == [{"name": "Alice", "age": 30}]
