@@ -160,7 +160,14 @@ async def read_table_result(
 
     artifact = render_citations_group(artifact)
 
-    return DataFrame([a.data for a in artifact.artifacts])
+    rows = []
+    for a in artifact.artifacts:
+        row = dict(a.data)
+        research: dict[str, str] = row.pop("research", {})
+        for key, value in research.items():
+            row[f"{key}_research"] = value
+        rows.append(row)
+    return DataFrame(rows)
 
 
 async def read_scalar_result[T: BaseModel](
