@@ -13,7 +13,7 @@ def test_version_consistency(pytestconfig: pytest.Config):
         pyproject = tomllib.load(f)
     pyproject_version = pyproject["project"]["version"]
 
-    plugin_json_path = root / "plugins" / "everyrow" / ".claude-plugin" / "plugin.json"
+    plugin_json_path = root / ".claude-plugin" / "plugin.json"
     with open(plugin_json_path) as f:
         plugin_json = json.load(f)
     plugin_version = plugin_json["version"]

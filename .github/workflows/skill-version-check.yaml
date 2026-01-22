@@ -17,11 +17,11 @@ jobs:
       - name: Check for plugin.json version bump
         run: |
           # Get the diff of plugin.json against the base branch
-          if git diff origin/${{ github.base_ref }}...HEAD -- plugins/everyrow/.claude-plugin/plugin.json | grep -q '"version"'; then
+          if git diff origin/${{ github.base_ref }}...HEAD -- .claude-plugin/plugin.json | grep -q '"version"'; then
             echo "✅ plugin.json version was updated"
           else
             echo "❌ Skills were modified but plugin.json version was not bumped"
             echo ""
-            echo "Please update the version in plugins/everyrow/.claude-plugin/plugin.json"
+            echo "Please update the version in .claude-plugin/plugin.json"
             exit 1
           fi
