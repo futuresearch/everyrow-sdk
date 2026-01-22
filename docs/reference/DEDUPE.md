@@ -19,7 +19,6 @@ result = await dedupe(
     input=crm_data,
     equivalence_relation="Two entries are duplicates if they represent the same legal entity",
 )
-print(result.data.head())
 ```
 
 The `equivalence_relation` is natural language. Be as specific as you need:
@@ -35,7 +34,6 @@ result = await dedupe(
         - They use a nickname (Bob vs Robert)
     """,
 )
-print(result.data.head())
 ```
 
 ## What you get back

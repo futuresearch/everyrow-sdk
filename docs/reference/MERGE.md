@@ -27,7 +27,6 @@ result = await merge(
     merge_on_left="product_name",
     merge_on_right="company_name",
 )
-print(result.data.head())
 ```
 
 For ambiguous cases, add context:
@@ -47,7 +46,6 @@ result = await merge(
     merge_on_left="sponsor",
     merge_on_right="company",
 )
-print(result.data.head())
 ```
 
 ## What you get back

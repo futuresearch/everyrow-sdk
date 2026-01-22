@@ -29,7 +29,6 @@ result = await rank(
     field_name="integration_need_score",
     ascending_order=False,  # highest first
 )
-print(result.data.head())
 ```
 
 The task can be as specific as you want. You can describe the metric in detail, list which sources to use, and explain how to resolve ambiguities.
@@ -49,7 +48,6 @@ result = await rank(
     field_name="research_adoption_score",
     ascending_order=False,  # highest first
 )
-print(result.data.head())
 ```
 
 ### Structured output
@@ -72,7 +70,6 @@ result = await rank(
     response_model=AcquisitionScore,
     ascending_order=False,  # highest first
 )
-print(result.data.head())
 ```
 
 Now every row has both `fit_score` and `annual_revenue_usd` fields, each of which includes its own explanation.

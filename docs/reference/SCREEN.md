@@ -33,7 +33,6 @@ result = await screen(
     input=sp500,
     response_model=ScreenResult,
 )
-print(result.data.head())
 ```
 
 Only passing rows come back.
@@ -60,7 +59,6 @@ result = await screen(
     input=vendors,
     response_model=VendorRisk,
 )
-print(result.data.head())
 ```
 
 Now you get `risk_level`, `security_issues`, and `recommendation` for every row that passed.
