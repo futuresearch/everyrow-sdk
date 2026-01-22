@@ -87,14 +87,11 @@ class EveryrowTask[T: BaseModel]:
                 error=final_status_response.error,
             )
         else:
-            data = await read_scalar_result(
+            scalar_result = await read_scalar_result(
                 artifact_id, self._response_model, client=client
             )
-            return ScalarResult(
-                artifact_id=artifact_id,
-                data=data,
-                error=final_status_response.error,
-            )
+            scalar_result.error = final_status_response.error
+            return scalar_result
 
 
 async def submit_task(body: SubmitTaskBody, client: AuthenticatedClient) -> UUID:
@@ -170,7 +167,7 @@ async def read_scalar_result[T: BaseModel](
     artifact_id: UUID,
     response_model: type[T],
     client: AuthenticatedClient,
-) -> T:
+) -> ScalarResult[T]:
     response = await get_artifacts_artifacts_get.asyncio(
         client=client, artifact_ids=[artifact_id]
     )
@@ -183,7 +180,11 @@ async def read_scalar_result[T: BaseModel](
 
     artifact = render_citations_standalone(artifact)
 
-    return response_model(**artifact.data)
+    return ScalarResult(
+        artifact_id=artifact_id,
+        data=response_model(**artifact.data),
+        error=None,
+    )
 
 
 async def fetch_task_data(
