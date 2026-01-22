@@ -1,8 +1,8 @@
-# Filter a DataFrame by Natural Language in Python
+# How to Filter a DataFrame with an LLM
 
 Here we show how to filter a pandas dataframe by qualitative criteria, when normal filtering like df[df['column'] == value] won't work.
 
-LLMs, and LLM-web-agents, can evaluate qualitative criteria at high accuracy. But they can be be very expensive and difficult to orchestrate at scale. We provide a low cost solution by handling the orchestration, batching, and consistency checking.
+LLMs, and LLM-web-agents, can evaluate qualitative criteria at high accuracy. But they can be very expensive and difficult to orchestrate at scale. We provide a low cost solution by handling the orchestration, batching, and consistency checking.
 
 This guide shows how to filter 3,616 job postings for "remote-friendly, senior-level roles with disclosed salary" in 10 minutes for $4.24.
 
@@ -29,7 +29,7 @@ df[df['posting'].str.contains('remote', case=False)]
 
 What you need is a filter that understands: this posting explicitly allows remote work, requires senior experience, and states a specific salary number.
 
-We use a dataset is 3,616 job postings from Hacker News "Who's Hiring" threads, 10% of all posts every month since March 2020 through January 2026.
+We use a dataset of 3,616 job postings from Hacker News "Who's Hiring" threads, 10% of all posts every month since March 2020 through January 2026. Download [hn_jobs.csv](data/natural-language-filter/hn_jobs.csv) to follow along.
 
 ```bash
 pip install everyrow
@@ -99,4 +99,4 @@ Gladly | Staff Software Engineer | Remote (US, Colombia) | $60k–$215k + Equity
 
 ---
 
-Built with [everyrow](https://github.com/futuresearch/everyrow-sdk). See the [screen documentation](SCREEN.md) for more options including batch size tuning and async execution.
+Built with [everyrow](https://github.com/futuresearch/everyrow-sdk). See the [screen documentation](reference/SCREEN.md) for more options including batch size tuning and async execution.

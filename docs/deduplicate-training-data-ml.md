@@ -1,14 +1,15 @@
-# Deduplicate Training Data in Python
+# How to Deduplicate Training Data in Python
 
 Near-duplicates in ML training data cause data leakage, overfitting, and memorization. This guide shows how to find and remove semantically similar examples that aren't exact matches—paraphrases, reformatted text, or records conveying the same information with different words.
 
-| Metric | Value |
-|--------|-------|
-| Input rows | 3,000 |
-| Unique after dedupe | 1,928 |
-| Duplicates removed | 1,072 (35.7%) |
-| Time | 5.3 minutes |
-| Cost | $4.21 |
+| Metric             | Value                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| Input rows         | 3,000                                                                     |
+| Unique after dedupe| 1,928                                                                     |
+| Duplicates removed | 1,072 (35.7%)                                                             |
+| Time               | 5.3 minutes                                                               |
+| Cost               | $4.21                                                                     |
+| Session            | [view](https://everyrow.io/sessions/ccaa306d-ef68-499b-a684-c0b08f9bfef3) |
 
 Standard deduplication with `pandas.drop_duplicates()` only catches exact matches. MinHash/LSH (datasketch) works for near-exact text but not semantic similarity. Libraries like dedupe.io require labeled training data. None handle "same meaning, different words" without manual setup.
 

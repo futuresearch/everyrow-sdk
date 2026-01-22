@@ -1,6 +1,6 @@
-# Classify Each Row in a DataFrame with an LLM
+# How to Classify DataFrame Rows with an LLM
 
-Labeling data with an LLM at scale requires orchestration and can get very expensive. EveryRow can add a new column to a dataframe using LLMs or LLM web agents at low cost, by handling the batching, parallelism, task queues, error handling, and consistency, in a single function call.
+Labeling data with an LLM at scale requires orchestration and can get very expensive. EveryRow can classify each row of a dataframe using LLMs or LLM web agents at low cost, by handling the batching, parallelism, task queues, error handling, and consistency, in a single function call.
 
 We run [evals](https://evals.futuresearch.ai/) to find the pareto frontier for classification tasks, getting you the most accuracy for your dollar.
 
@@ -19,7 +19,7 @@ If you're categorizing support tickets, labeling training data, or tagging conte
 
 ## Walkthrough
 
-The `agent_map` function processes each row in parallel with structured output via Pydantic models. You define the schema, describe the task, and get back a DataFrame with your new columns.
+The `agent_map` function processes each row in parallel with structured output via Pydantic models. You define the schema, describe the task, and get back a DataFrame with your new columns. Download [hn_jobs.csv](data/natural-language-filter/hn_jobs.csv) to follow along.
 
 ```bash
 pip install everyrow
@@ -119,7 +119,7 @@ Choosing the right LLM, and handling the batching, parallelism, and retries is n
 
 EveryRow supports this natively. And we tune our web research to be as efficient as possible, classifying rows for as little as $0.05/row, though it can cost more if the research is more involved.
 
-And without web rsearch agents, as in the example at the top, we can classify data for ~$0.009 per row, or 10,000 rows for ~$90. The exact cost depends on input length and the complexity of your response model. Short inputs with simple schemas cost less; long documents with detailed reasoning cost more.
+And without web research agents, as in the example at the top, we can classify data for ~$0.009 per row, or 10,000 rows for ~$90. The exact cost depends on input length and the complexity of your response model. Short inputs with simple schemas cost less; long documents with detailed reasoning cost more.
 
 | Rows   | Estimated Cost | Estimated Time |
 | ------ | -------------- | -------------- |

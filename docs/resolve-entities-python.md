@@ -1,16 +1,17 @@
-# Entity Resolution in Python Without Training Data
+# How to Resolve Entities Across Datasets in Python
 
-Entity resolution—matching records that represent the same real-world entity across messy data—typically requires labeled training data, manual blocking rules, or extensive threshold tuning. Tools like Splink, dedupe.io, and recordlinkage are powerful but need significant setup before they work.
+Matching records that represent the same real-world entity across messy data typically requires labeled training data, manual blocking rules, or extensive threshold tuning. Tools like Splink, dedupe.io, and recordlinkage are powerful but need significant setup before they work.
 
 This guide shows how to resolve entities using LLM-powered semantic matching that works out of the box. You define what makes two records equivalent in plain English, and the SDK handles the matching.
 
-| Metric              | Value        |
-| ------------------- | ------------ |
-| Records processed   | 500          |
-| Unique entities     | 131          |
-| Duplicates resolved | 369          |
-| Cost                | $0.74        |
-| Time                | ~100 seconds |
+| Metric              | Value                                                                     |
+| ------------------- | ------------------------------------------------------------------------- |
+| Records processed   | 500                                                                       |
+| Unique entities     | 131                                                                       |
+| Duplicates resolved | 369                                                                       |
+| Cost                | $0.74                                                                     |
+| Time                | ~100 seconds                                                              |
+| Session             | [view](https://everyrow.io/sessions/d073ee5a-b25b-4129-8b43-b97347b50459) |
 
 ```bash
 pip install everyrow
