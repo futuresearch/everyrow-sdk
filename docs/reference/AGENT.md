@@ -85,7 +85,7 @@ Each row gets its own agent that researches independently.
 | `effort_level` | EffortLevel | LOW, MEDIUM, or HIGH (default: LOW) |
 | `llm` | LLM | Optional agent LLM override |
 | `response_model` | BaseModel | Optional schema for structured output |
-| `return_table(_per_row)` | bool | If True, each agent returns a table instead of a scalar result |
+| `return_table` | bool | (`single_agent` only) If True, returns a table instead of a scalar result |
 
 ### Effort levels
 
@@ -127,14 +127,11 @@ Now the output has `annual_revenue_usd`, `employee_count`, and `last_funding_rou
 
 ### Returning a table
 
-If you want each agent to return multiple rows, set `return_table_per_row=True`.
-
-When using `single_agent`, this lets you generate a dataset from scratch. And when using `agent_map`, it lets you expand each input row into multiple output rows.
+With `single_agent`, you can generate a dataset from scratch by setting `return_table=True`.
 
 ```python
-from pandas import DataFrame
 from pydantic import BaseModel, Field
-from everyrow.ops import agent_map, single_agent
+from everyrow.ops import single_agent
 
 class CompanyInfo(BaseModel):
     company: str = Field(description="Company name")
@@ -145,17 +142,4 @@ companies = await single_agent(
     response_model=CompanyInfo,
     return_table=True,  # Return a table of companies
 )
-print(companies.data.head())
-
-class ExecutiveInfo(BaseModel):
-    name: str = Field(description="Executive's full name")
-    title: str = Field(description="Their job title")
-
-result = await agent_map(
-    task="Find all C-suite executives at this company",
-    input=companies,
-    response_model=ExecutiveInfo,
-    return_table_per_row=True,  # For each company, return a list of executives
-)
-print(result.data.head())
 ```
