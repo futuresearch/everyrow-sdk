@@ -313,7 +313,6 @@ async def test_agent_map_with_table_output(mocker, mock_session):
         task="What are the three largest cities in the given country?",
         session=mock_session,
         input=input_df,
-        return_table_per_row=True,
     )
 
     assert isinstance(result, TableResult)

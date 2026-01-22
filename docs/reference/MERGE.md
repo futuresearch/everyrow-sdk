@@ -64,7 +64,6 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 | `merge_on_left` | Optional[str] | Column in left table. Model will try to guess if not specified. |
 | `merge_on_right` | Optional[str] | Column in right table. Model will try to guess if not specified. |
 | `session` | Session | Optional, auto-created if omitted |
-| `merge_model` | Optional[str] | LLM Model to use for the merging |
 
 ## Performance
 

@@ -48,6 +48,10 @@ class DefaultAgentResponse(BaseModel):
     answer: str
 
 
+class DefaultScreenResult(BaseModel):
+    passes: bool
+
+
 @overload
 async def single_agent[T: BaseModel](
     task: str,
@@ -151,7 +155,6 @@ async def agent_map(
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
-    return_table_per_row: bool = False,
 ) -> TableResult:
     if input is None:
         raise EveryrowError("input is required for agent_map")
@@ -164,7 +167,6 @@ async def agent_map(
                 effort_level,
                 llm,
                 response_model,
-                return_table_per_row,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -172,7 +174,7 @@ async def agent_map(
             else:
                 raise EveryrowError("Agent map task did not return a table result")
     cohort_task = await agent_map_async(
-        task, session, input, effort_level, llm, response_model, return_table_per_row
+        task, session, input, effort_level, llm, response_model
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -250,7 +252,6 @@ async def agent_map_async(
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
-    return_table_per_row: bool = False,
 ) -> EveryrowTask[BaseModel]:
     input_artifact_ids = [await _process_agent_map_input(input, session)]
     query = AgentQueryParams(
@@ -259,7 +260,7 @@ async def agent_map_async(
         llm=llm or UNSET,
         response_schema=_convert_pydantic_to_custom_schema(response_model),
         response_schema_type=ResponseSchemaType.CUSTOM,
-        is_expand=return_table_per_row,
+        is_expand=False,
         include_provenance_and_notes=False,
     )
     request = MapAgentRequestParams(
@@ -274,7 +275,7 @@ async def agent_map_async(
     )
 
     cohort_task = EveryrowTask(
-        response_model=response_model, is_map=True, is_expand=return_table_per_row
+        response_model=response_model, is_map=True, is_expand=False
     )
     await cohort_task.submit(body, session.client)
     return cohort_task
@@ -339,8 +340,6 @@ async def merge(
     right_table: DataFrame | UUID | TableResult | None = None,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    merge_model: LLM | None = None,
-    preview: bool = False,
 ) -> TableResult:
     """Merge two tables using merge operation.
 
@@ -351,8 +350,6 @@ async def merge(
         right_table: The right table to merge (DataFrame, UUID, or TableResult)
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
-        merge_model: Optional LLM model to use for merge operation
-        preview: If True, process only the first few inputs
 
     Returns:
         TableResult containing the merged table
@@ -368,8 +365,6 @@ async def merge(
                 right_table=right_table,
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
-                merge_model=merge_model,
-                preview=preview,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -383,8 +378,6 @@ async def merge(
         right_table=right_table,
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
-        merge_model=merge_model,
-        preview=preview,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -400,8 +393,6 @@ async def merge_async(
     right_table: DataFrame | UUID | TableResult,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    merge_model: LLM | None = None,
-    preview: bool = False,
 ) -> EveryrowTask[BaseModel]:
     """Submit a merge task asynchronously."""
     left_artifact_id = await _process_agent_map_input(left_table, session)
@@ -411,8 +402,6 @@ async def merge_async(
         task=task,
         merge_on_left=merge_on_left or UNSET,
         merge_on_right=merge_on_right or UNSET,
-        merge_model=merge_model or UNSET,
-        preview=preview,
     )
     request = DeepMergeRequest(
         query=query,
@@ -437,7 +426,6 @@ async def rank[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
-    preview: bool = False,
 ) -> TableResult:
     """Rank rows in a table using rank operation.
 
@@ -449,7 +437,6 @@ async def rank[T: BaseModel](
         field_type: The type of the field (default: "float", ignored if response_model is provided)
         response_model: Optional Pydantic model for the response schema
         ascending_order: If True, sort in ascending order
-        preview: If True, process only the first few inputs
 
     Returns:
         TableResult containing the ranked table
@@ -466,7 +453,6 @@ async def rank[T: BaseModel](
                 field_type=field_type,
                 response_model=response_model,
                 ascending_order=ascending_order,
-                preview=preview,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -481,7 +467,6 @@ async def rank[T: BaseModel](
         field_type=field_type,
         response_model=response_model,
         ascending_order=ascending_order,
-        preview=preview,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -498,7 +483,6 @@ async def rank_async[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
-    preview: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a rank task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
@@ -523,7 +507,6 @@ async def rank_async[T: BaseModel](
         response_schema=response_schema,
         field_to_sort_by=field_name,
         ascending_order=ascending_order,
-        preview=preview,
     )
     request = DeepRankRequest(
         query=query,
@@ -549,8 +532,6 @@ async def screen[T: BaseModel](
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
     response_model: type[T] | None = None,
-    batch_size: int | None = None,
-    preview: bool = False,
 ) -> TableResult:
     """Screen rows in a table using screen operation.
 
@@ -558,9 +539,8 @@ async def screen[T: BaseModel](
         task: The task description for screening
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
-        response_model: Optional Pydantic model for the response schema
-        batch_size: Optional batch size for processing (default: 10)
-        preview: If True, process only the first few inputs
+        response_model: Optional Pydantic model for the response schema.
+            If not provided, defaults to a result with just a "passes" boolean.
 
     Returns:
         TableResult containing the screened table
@@ -574,8 +554,6 @@ async def screen[T: BaseModel](
                 session=internal_session,
                 input=input,
                 response_model=response_model,
-                batch_size=batch_size,
-                preview=preview,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -587,8 +565,6 @@ async def screen[T: BaseModel](
         session=session,
         input=input,
         response_model=response_model,
-        batch_size=batch_size,
-        preview=preview,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -602,25 +578,17 @@ async def screen_async[T: BaseModel](
     session: Session,
     input: DataFrame | UUID | TableResult,
     response_model: type[T] | None = None,
-    batch_size: int | None = None,
-    preview: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a screen task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
-    if response_model is not None:
-        response_schema = response_model.model_json_schema()
-        response_schema_type = ResponseSchemaType.JSON
-    else:
-        response_schema = UNSET
-        response_schema_type = UNSET
+    actual_response_model = response_model or DefaultScreenResult
+    response_schema = actual_response_model.model_json_schema()
 
     query = DeepScreenPublicParams(
         task=task,
-        batch_size=batch_size or UNSET,
         response_schema=response_schema,
-        response_schema_type=response_schema_type,
-        preview=preview,
+        response_schema_type=ResponseSchemaType.JSON,
     )
     request = DeepScreenRequest(
         query=query,
@@ -632,7 +600,7 @@ async def screen_async[T: BaseModel](
     )
 
     cohort_task: EveryrowTask[T] = EveryrowTask(
-        response_model=response_model or DefaultAgentResponse,  # type: ignore[arg-type]
+        response_model=actual_response_model,  # type: ignore[arg-type]
         is_map=True,
         is_expand=False,
     )

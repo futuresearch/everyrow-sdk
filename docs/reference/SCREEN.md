@@ -85,8 +85,7 @@ class Detailed(BaseModel):
 |------|------|-------------|
 | `task` | str | What should pass |
 | `input` | DataFrame | Rows to screen |
-| `response_model` | BaseModel | Must have a boolean field |
-| `batch_size` | int | Parallel rows (default 10) |
+| `response_model` | BaseModel | Optional. Must have a boolean field. Defaults to `passes: bool` |
 | `session` | Session | Optional, auto-created if omitted |
 
 ## Performance
