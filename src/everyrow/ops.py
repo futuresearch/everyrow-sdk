@@ -11,7 +11,7 @@ from everyrow.generated.models import (
     CreateGroupRequest,
     CreateQueryParams,
     CreateRequest,
-    DedupeQueryParams,
+    DedupePublicParams,
     DedupeRequestParams,
     DeepMergePublicParams,
     DeepMergeRequest,
@@ -688,7 +688,7 @@ async def dedupe_async(
     """Submit a dedupe task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
-    query = DedupeQueryParams(
+    query = DedupePublicParams(
         equivalence_relation=equivalence_relation,
     )
     request = DedupeRequestParams(

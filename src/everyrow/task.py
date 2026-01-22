@@ -221,8 +221,7 @@ async def fetch_task_data(
 
     if status_response.status not in (TaskStatus.COMPLETED,):
         raise EveryrowError(
-            f"Task {task_id} is not completed (status: {status_response.status.value}). "
-            f"Error: {status_response.error}"
+            f"Task {task_id} is not completed (status: {status_response.status.value}). Error: {status_response.error}"
         )
 
     if status_response.artifact_id is None:
