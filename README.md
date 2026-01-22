@@ -257,7 +257,7 @@ async with create_session(name="Async Ranking") as session:
     result = await task.await_result()
 ```
 
-**Tip:** Always print the task ID after submitting. If your script crashes, you can fetch the result later using `fetch_task_data`:
+**Tip:** Print the task ID after submitting. If your script crashes, you can fetch the result later using `fetch_task_data`:
 
 ```python
 from everyrow import fetch_task_data
