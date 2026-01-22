@@ -59,7 +59,9 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError("Task must be submitted before fetching status")
         client = client or self._client
         if client is None:
-            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
         return await get_task_status(self.task_id, client)
 
     async def await_result(
@@ -69,7 +71,9 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError("Task must be submitted before awaiting result")
         client = client or self._client
         if client is None:
-            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
         final_status_response = await await_task_completion(self.task_id, client)
         artifact_id = cast(
             UUID, final_status_response.artifact_id
