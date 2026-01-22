@@ -1,8 +1,8 @@
-# How to Resolve Entities Across Datasets in Python
+# How to Resolve Duplicate Entities in Python
 
-Matching records that represent the same real-world entity across messy data typically requires labeled training data, manual blocking rules, or extensive threshold tuning. Tools like Splink, dedupe.io, and recordlinkage are powerful but need significant setup before they work.
+Identifying matching records that represent the same entity across messy data typically requires labeled training data, manual blocking rules, or extensive threshold tuning.
 
-This guide shows how to resolve entities using LLM-powered semantic matching that works out of the box. You define what makes two records equivalent in plain English, and the SDK handles the matching.
+LLMs can solve this at high accuracy. But they can be expensive to run at scale, and require a lot of orchestration. EveryRow is designed to do this as cheaply as possible while still having high accuracy, in a single method with almost no setup.
 
 | Metric              | Value                                                                     |
 | ------------------- | ------------------------------------------------------------------------- |
@@ -42,12 +42,12 @@ asyncio.run(main())
 
 The input data contains variations like these, all representing the same company:
 
-| company_name          | contact_name     | email_address        |
-| --------------------- | ---------------- | -------------------- |
-| AbbVie Inc.           | Richard Gonzales | info@abbvie-bio.com  |
-| AbbVie Pharmaceutical | Richard Gonzales |                      |
-| Abbvie                |                  | info@abbvie-bio.com  |
-| Abvie Inc             | Richard Gonzales |                      |
+| company_name          | contact_name     | email_address       |
+| --------------------- | ---------------- | ------------------- |
+| AbbVie Inc.           | Richard Gonzales | info@abbvie-bio.com |
+| AbbVie Pharmaceutical | Richard Gonzales |                     |
+| Abbvie                |                  | info@abbvie-bio.com |
+| Abvie Inc             | Richard Gonzales |                     |
 
 The SDK clusters these into a single entity and selects the most complete record (the one with both contact name and email). The output DataFrame includes `equivalence_class_id` and `equivalence_class_name` columns showing which records were grouped together, plus a `selected` boolean indicating which record to keep.
 
