@@ -184,6 +184,7 @@ async def read_scalar_result[T: BaseModel](
         artifact_id=artifact_id,
         data=response_model(**artifact.data),
         error=None,
+        research=artifact.data.get("research"),
     )
 
 
