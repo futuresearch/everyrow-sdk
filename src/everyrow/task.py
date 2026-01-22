@@ -163,9 +163,10 @@ async def read_table_result(
     rows = []
     for a in artifact.artifacts:
         row = dict(a.data)
-        research: dict[str, str] = row.pop("research", {})
-        for key, value in research.items():
-            row[f"{key}_research"] = value
+        research: dict[str, str] | None = row.pop("research", None)
+        if research:
+            for key, value in research.items():
+                row[f"{key}_research"] = value
         rows.append(row)
     return DataFrame(rows)
 
