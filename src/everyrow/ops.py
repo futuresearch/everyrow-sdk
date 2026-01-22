@@ -617,9 +617,10 @@ async def dedupe(
     """Dedupe a table by removing duplicates using dedupe operation.
 
     Args:
+        equivalence_relation: Description of what makes items equivalent
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
-        equivalence_relation: Description of what makes items equivalent
+        select_representative: If True, select a representative for each group of duplicates
 
     Returns:
         TableResult containing the deduped table with duplicates removed
