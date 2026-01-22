@@ -13,6 +13,7 @@ class ScalarResult[T: str | BaseModel]:
     artifact_id: UUID
     data: T
     error: str | None
+    research: dict[str, str] | None
 
 
 @attrs.define
