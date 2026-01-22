@@ -17,25 +17,11 @@ jobs:
       - name: Check for plugin.json version bump
         run: |
           # Get the diff of plugin.json against the base branch
-          if git diff origin/${{ github.base_ref }}...HEAD -- plugins/everyrow/.claude-plugin/plugin.json | grep -q '"version"'; then
+          if git diff origin/${{ github.base_ref }}...HEAD -- .claude-plugin/plugin.json | grep -q '"version"'; then
             echo "✅ plugin.json version was updated"
           else
             echo "❌ Skills were modified but plugin.json version was not bumped"
             echo ""
-            echo "Please update the version in plugins/everyrow/.claude-plugin/plugin.json"
-            exit 1
-          fi
-
-      - name: Check skills directories are in sync
-        run: |
-          # Skills exist in two places - root skills/ (for Gemini) and plugins/everyrow/skills/ (for Claude)
-          # They must stay in sync
-          if diff -r skills/ plugins/everyrow/skills/ > /dev/null 2>&1; then
-            echo "✅ skills/ and plugins/everyrow/skills/ are in sync"
-          else
-            echo "❌ skills/ and plugins/everyrow/skills/ are out of sync"
-            echo ""
-            echo "Both directories must contain identical content:"
-            diff -r skills/ plugins/everyrow/skills/ || true
+            echo "Please update the version in .claude-plugin/plugin.json"
             exit 1
           fi
