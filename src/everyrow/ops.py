@@ -313,7 +313,8 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
     )
     task_id = await submit_task(body, session.client)
     finished_create_artifact_task = await await_task_completion(task_id, session.client)
-    return finished_create_artifact_task.artifact_id  # type: ignore (we check artifact_id in await_task_completion)
+    assert finished_create_artifact_task.artifact_id is not None
+    return finished_create_artifact_task.artifact_id
 
 
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
@@ -326,7 +327,8 @@ async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
     )
     task_id = await submit_task(body, session.client)
     finished_create_artifact_task = await await_task_completion(task_id, session.client)
-    return finished_create_artifact_task.artifact_id  # type: ignore (we check artifact_id in await_task_completion)
+    assert finished_create_artifact_task.artifact_id is not None
+    return finished_create_artifact_task.artifact_id
 
 
 async def merge(
@@ -745,13 +747,14 @@ async def derive(
             finished_task = await await_task_completion(
                 task_id, internal_session.client
             )
+            assert finished_task.artifact_id is not None
 
             data = await read_table_result(
-                finished_task.artifact_id,  # type: ignore
+                finished_task.artifact_id,
                 internal_session.client,
             )
             return TableResult(
-                artifact_id=finished_task.artifact_id,  # type: ignore
+                artifact_id=finished_task.artifact_id,
                 data=data,
                 error=finished_task.error,
             )
@@ -774,10 +777,11 @@ async def derive(
 
     task_id = await submit_task(body, session.client)
     finished_task = await await_task_completion(task_id, session.client)
+    assert finished_task.artifact_id is not None
 
-    data = await read_table_result(finished_task.artifact_id, session.client)  # type: ignore
+    data = await read_table_result(finished_task.artifact_id, session.client)
     return TableResult(
-        artifact_id=finished_task.artifact_id,  # type: ignore
+        artifact_id=finished_task.artifact_id,
         data=data,
         error=finished_task.error,
     )
