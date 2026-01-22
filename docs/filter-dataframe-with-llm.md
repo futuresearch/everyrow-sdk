@@ -29,7 +29,7 @@ df[df['posting'].str.contains('remote', case=False)]
 
 What you need is a filter that understands: this posting explicitly allows remote work, requires senior experience, and states a specific salary number.
 
-We use a dataset of 3,616 job postings from Hacker News "Who's Hiring" threads, 10% of all posts every month since March 2020 through January 2026. Download [hn_jobs.csv](data/natural-language-filter/hn_jobs.csv) to follow along.
+We use a dataset of 3,616 job postings from Hacker News "Who's Hiring" threads, 10% of all posts every month since March 2020 through January 2026. Download [hn_jobs.csv](data/hn_jobs.csv) to follow along.
 
 ```bash
 pip install everyrow

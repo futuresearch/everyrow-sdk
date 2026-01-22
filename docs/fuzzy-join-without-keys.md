@@ -18,7 +18,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
 ```
 
-We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](../case_studies/merge/company_info.csv) and [valuations.csv](../case_studies/merge/valuations.csv), or run the [full notebook](../case_studies/merge/deep_merge_tutorial.ipynb).
+We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](data/company_info.csv) and [valuations.csv](data/valuations.csv), or run the [full notebook](case_studies/match-software-vendors-to-requirements/notebook.ipynb).
 
 ```python
 import asyncio
@@ -66,4 +66,4 @@ This approach works well when your tables represent the same entities but use di
 
 ---
 
-See the full analysis with multiple experiments in the [merge tutorial notebook](../case_studies/merge/deep_merge_tutorial.ipynb).
+See the full analysis with multiple experiments in the [merge tutorial notebook](case_studies/match-software-vendors-to-requirements/notebook.ipynb).

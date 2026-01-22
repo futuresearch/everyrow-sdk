@@ -18,7 +18,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
 ```
 
-We'll use a messy CRM dataset with 500 company records. The same companies appear multiple times with different spellings, abbreviations, and missing fields. Download [case_01_crm_data.csv](../case_studies/dedupe/case_01_crm_data.csv) to follow along.
+We'll use a messy CRM dataset with 500 company records. The same companies appear multiple times with different spellings, abbreviations, and missing fields. Download [case_01_crm_data.csv](data/case_01_crm_data.csv) to follow along.
 
 ```python
 import asyncio
@@ -55,4 +55,4 @@ This approach handles cases that string similarity misses entirely. "AAPL" match
 
 The equivalence relation is flexible. For matching people, you might write "Two entries are duplicates if they refer to the same person, accounting for name variations and nicknames." For products: "Two entries represent the same product if they're the same item sold under different names or SKUs."
 
-See the [full notebook](../case_studies/dedupe/case_01_crm_data.ipynb) for additional examples including how to merge the clustered records into consolidated entries.
+See the [full notebook](case_studies/dedupe-crm-company-records/notebook.ipynb) for additional examples including how to merge the clustered records into consolidated entries.
