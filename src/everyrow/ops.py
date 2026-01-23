@@ -1,9 +1,8 @@
 import json
-from typing import Any, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 from uuid import UUID
 
 from pandas import DataFrame
-from pydantic import BaseModel
 
 from everyrow.constants import EveryrowError
 from everyrow.generated.models import (
@@ -41,14 +40,165 @@ from everyrow.task import (
     submit_task,
 )
 
+try:
+    from pydantic import BaseModel
+
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    if TYPE_CHECKING:
+        from pydantic import BaseModel
+
 T = TypeVar("T", bound=BaseModel)
 
 
+def _ensure_pydantic() -> None:
+    """Raise ImportError if Pydantic is not available."""
+    if not PYDANTIC_AVAILABLE:
+        raise ImportError(
+            "Pydantic is required when using response_model. "
+            "Install with: pip install everyrow[pydantic]"
+        )
+
+
+# Default JSON Schema constants for users who want the old default behavior
+DEFAULT_AGENT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "title": "DefaultAgentResponse",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+}
+
+DEFAULT_SCREEN_RESULT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "title": "DefaultScreenResult",
+    "properties": {"passes": {"type": "boolean"}},
+    "required": ["passes"],
+}
+
+
+def _validate_response_params(
+    response_model: type[BaseModel] | None,
+    response_schema: dict[str, Any] | None,
+) -> tuple[dict[str, Any], type[BaseModel] | None]:
+    """Validate XOR and return (schema_dict, model_or_none).
+
+    Args:
+        response_model: A Pydantic model class, or None
+        response_schema: A JSON schema dict, or None
+
+    Returns:
+        A tuple of (schema_dict, response_model_or_none)
+
+    Raises:
+        EveryrowError: If both or neither of response_model/response_schema are provided
+    """
+    if response_model is not None and response_schema is not None:
+        raise EveryrowError(
+            "Cannot specify both response_model and response_schema. "
+            "Use response_model for Pydantic models or response_schema for JSON schema dicts."
+        )
+    if response_model is None and response_schema is None:
+        raise EveryrowError(
+            "Must specify either response_model (Pydantic) or response_schema (JSON schema dict)."
+        )
+
+    if response_model is not None:
+        _ensure_pydantic()
+        return response_model.model_json_schema(), response_model
+
+    assert response_schema is not None  # for type narrowing
+    return response_schema, None
+
+
+def _convert_json_schema_to_custom_schema(
+    json_schema: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert a JSON schema dict to the custom response schema format expected by rank/agent_map.
+
+    The custom format uses _model_name instead of type: object, and uses optional: bool
+    instead of required arrays.
+
+    Example input (JSON Schema):
+        {
+            "type": "object",
+            "title": "ScreeningResult",
+            "properties": {
+                "screening_result": {"type": "string", "description": "..."}
+            },
+            "required": ["screening_result"]
+        }
+
+    Example output (Custom Schema):
+        {
+            "_model_name": "ScreeningResult",
+            "screening_result": {
+                "type": "str",
+                "optional": False,
+                "description": "..."
+            }
+        }
+    """
+    # Extract model name from title or use a default
+    model_name = json_schema.get("title", "Response")
+
+    # Build the custom schema format
+    custom_schema: dict[str, Any] = {"_model_name": model_name}
+
+    # Convert properties
+    properties = json_schema.get("properties", {})
+    required = set(json_schema.get("required", []))
+
+    # Map JSON schema types to custom format types
+    type_mapping = {
+        "string": "str",
+        "integer": "int",
+        "number": "float",
+        "boolean": "bool",
+    }
+
+    for field_name, field_schema in properties.items():
+        custom_field: dict[str, Any] = {}
+
+        # Map type from JSON schema format to custom format
+        field_type = field_schema.get("type")
+        if field_type:
+            custom_field["type"] = type_mapping.get(field_type, field_type)
+
+        # Add description if present
+        if "description" in field_schema:
+            custom_field["description"] = field_schema["description"]
+
+        # Set optional flag (opposite of required)
+        custom_field["optional"] = field_name not in required
+
+        custom_schema[field_name] = custom_field
+
+    return custom_schema
+
+
+def _ensure_custom_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Convert JSON schema to custom format if needed.
+
+    If the schema already has _model_name, it's already in custom format.
+    If it has type: object, convert from JSON schema to custom format.
+    """
+    if "_model_name" in schema:
+        return schema  # Already custom format
+    if schema.get("type") == "object":
+        return _convert_json_schema_to_custom_schema(schema)
+    return schema
+
+
 class DefaultAgentResponse(BaseModel):
+    """Default response model for single_agent (kept for backwards compatibility reference)."""
+
     answer: str
 
 
 class DefaultScreenResult(BaseModel):
+    """Default response model for screen (kept for backwards compatibility reference)."""
+
     passes: bool
 
 
@@ -56,10 +206,11 @@ class DefaultScreenResult(BaseModel):
 async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
-    input: BaseModel | UUID | Result | None = None,
+    input: dict[str, Any] | BaseModel | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[T] = DefaultAgentResponse,
+    response_model: type[T] = ...,
+    response_schema: None = None,
     return_table: Literal[False] = False,
 ) -> ScalarResult[T]: ...
 
@@ -68,23 +219,38 @@ async def single_agent[T: BaseModel](
 async def single_agent(
     task: str,
     session: Session | None = None,
-    input: BaseModel | UUID | Result | None = None,
+    input: dict[str, Any] | BaseModel | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[BaseModel] = DefaultAgentResponse,
-    return_table: Literal[True] = True,
+    response_model: None = None,
+    response_schema: dict[str, Any] = ...,
+    return_table: Literal[False] = False,
+) -> ScalarResult[dict[str, Any]]: ...
+
+
+@overload
+async def single_agent(
+    task: str,
+    session: Session | None = None,
+    input: dict[str, Any] | BaseModel | UUID | Result | None = None,
+    effort_level: EffortLevel = EffortLevel.LOW,
+    llm: LLM | None = None,
+    response_model: type[BaseModel] | None = None,
+    response_schema: dict[str, Any] | None = None,
+    return_table: Literal[True] = ...,
 ) -> TableResult: ...
 
 
 async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
-    input: BaseModel | DataFrame | UUID | Result | None = None,
+    input: dict[str, Any] | BaseModel | DataFrame | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[T] = DefaultAgentResponse,
+    response_model: type[T] | None = None,
+    response_schema: dict[str, Any] | None = None,
     return_table: bool = False,
-) -> ScalarResult[T] | TableResult:
+) -> ScalarResult[T] | ScalarResult[dict[str, Any]] | TableResult:
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await single_agent_async(
@@ -94,6 +260,7 @@ async def single_agent[T: BaseModel](
                 effort_level=effort_level,
                 llm=llm,
                 response_model=response_model,
+                response_schema=response_schema,
                 return_table=return_table,
             )
             return await cohort_task.await_result()
@@ -104,6 +271,7 @@ async def single_agent[T: BaseModel](
         effort_level=effort_level,
         llm=llm,
         response_model=response_model,
+        response_schema=response_schema,
         return_table=return_table,
     )
     return await cohort_task.await_result()
@@ -112,12 +280,17 @@ async def single_agent[T: BaseModel](
 async def single_agent_async[T: BaseModel](
     task: str,
     session: Session,
-    input: BaseModel | DataFrame | UUID | Result | None = None,
+    input: dict[str, Any] | BaseModel | DataFrame | UUID | Result | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[T] = DefaultAgentResponse,
+    response_model: type[T] | None = None,
+    response_schema: dict[str, Any] | None = None,
     return_table: bool = False,
-) -> EveryrowTask[T]:
+) -> EveryrowTask[T] | EveryrowTask[dict[str, Any]]:
+    schema_dict, model_or_none = _validate_response_params(
+        response_model, response_schema
+    )
+
     if input is not None:
         input_artifact_ids = [await _process_single_agent_input(input, session)]
     else:
@@ -127,7 +300,7 @@ async def single_agent_async[T: BaseModel](
         task=task,
         llm=llm or UNSET,
         effort_level=effort_level,
-        response_schema=response_model.model_json_schema(),
+        response_schema=schema_dict,
         response_schema_type=ResponseSchemaType.JSON,
         is_expand=return_table,
         include_provenance_and_notes=False,
@@ -141,8 +314,8 @@ async def single_agent_async[T: BaseModel](
         session_id=session.session_id,
     )
 
-    cohort_task = EveryrowTask(
-        response_model=response_model, is_map=False, is_expand=return_table
+    cohort_task: EveryrowTask[T] | EveryrowTask[dict[str, Any]] = EveryrowTask(  # type: ignore[assignment]
+        response_model=model_or_none, is_map=False, is_expand=return_table
     )
     await cohort_task.submit(body, session.client)
     return cohort_task
@@ -154,7 +327,8 @@ async def agent_map(
     input: DataFrame | UUID | TableResult | None = None,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[BaseModel] = DefaultAgentResponse,
+    response_model: type[BaseModel] | None = None,
+    response_schema: dict[str, Any] | None = None,
 ) -> TableResult:
     if input is None:
         raise EveryrowError("input is required for agent_map")
@@ -167,6 +341,7 @@ async def agent_map(
                 effort_level,
                 llm,
                 response_model,
+                response_schema,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -174,7 +349,7 @@ async def agent_map(
             else:
                 raise EveryrowError("Agent map task did not return a table result")
     cohort_task = await agent_map_async(
-        task, session, input, effort_level, llm, response_model
+        task, session, input, effort_level, llm, response_model, response_schema
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -251,14 +426,20 @@ async def agent_map_async(
     input: DataFrame | UUID | TableResult,
     effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
-    response_model: type[BaseModel] = DefaultAgentResponse,
-) -> EveryrowTask[BaseModel]:
+    response_model: type[BaseModel] | None = None,
+    response_schema: dict[str, Any] | None = None,
+) -> EveryrowTask[BaseModel] | EveryrowTask[dict[str, Any]]:
+    schema_dict, model_or_none = _validate_response_params(
+        response_model, response_schema
+    )
+    custom_schema = _ensure_custom_schema(schema_dict)
+
     input_artifact_ids = [await _process_agent_map_input(input, session)]
     query = AgentQueryParams(
         task=task,
         effort_level=effort_level,
         llm=llm or UNSET,
-        response_schema=_convert_pydantic_to_custom_schema(response_model),
+        response_schema=custom_schema,
         response_schema_type=ResponseSchemaType.CUSTOM,
         is_expand=False,
         include_provenance_and_notes=False,
@@ -274,8 +455,8 @@ async def agent_map_async(
         session_id=session.session_id,
     )
 
-    cohort_task = EveryrowTask(
-        response_model=response_model, is_map=True, is_expand=False
+    cohort_task: EveryrowTask[BaseModel] | EveryrowTask[dict[str, Any]] = EveryrowTask(
+        response_model=model_or_none, is_map=True, is_expand=False
     )
     await cohort_task.submit(body, session.client)
     return cohort_task
@@ -294,21 +475,37 @@ async def _process_agent_map_input(
 
 
 async def _process_single_agent_input(
-    input: BaseModel | DataFrame | UUID | Result,
+    input: dict[str, Any] | BaseModel | DataFrame | UUID | Result,
     session: Session,
 ) -> UUID:
     if isinstance(input, Result):
         return input.artifact_id
     elif isinstance(input, DataFrame):
         return await create_table_artifact(input, session)
-    elif isinstance(input, BaseModel):
+    elif isinstance(input, dict):
+        return await create_scalar_artifact_from_dict(input, session)
+    elif PYDANTIC_AVAILABLE and isinstance(input, BaseModel):
         return await create_scalar_artifact(input, session)
     else:
-        return input
+        return input  # type: ignore[return-value]
 
 
 async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
     payload = CreateRequest(query=CreateQueryParams(data_to_create=input.model_dump()))
+    body = SubmitTaskBody(
+        payload=payload,
+        session_id=session.session_id,
+    )
+    task_id = await submit_task(body, session.client)
+    finished_create_artifact_task = await await_task_completion(task_id, session.client)
+    return finished_create_artifact_task.artifact_id  # type: ignore (we check artifact_id in await_task_completion)
+
+
+async def create_scalar_artifact_from_dict(
+    input: dict[str, Any], session: Session
+) -> UUID:
+    """Create a scalar artifact from a dict."""
+    payload = CreateRequest(query=CreateQueryParams(data_to_create=input))
     body = SubmitTaskBody(
         payload=payload,
         session_id=session.session_id,
@@ -425,6 +622,7 @@ async def rank[T: BaseModel](
     field_name: str | None = None,
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
+    response_schema: dict[str, Any] | None = None,
     ascending_order: bool = True,
 ) -> TableResult:
     """Rank rows in a table using rank operation.
@@ -434,8 +632,9 @@ async def rank[T: BaseModel](
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         field_name: The name of the field to extract and sort by
-        field_type: The type of the field (default: "float", ignored if response_model is provided)
-        response_model: Optional Pydantic model for the response schema
+        field_type: The type of the field (default: "float", ignored if response_model or response_schema is provided)
+        response_model: Optional Pydantic model for the response schema (mutually exclusive with response_schema)
+        response_schema: Optional JSON schema dict for the response (mutually exclusive with response_model)
         ascending_order: If True, sort in ascending order
 
     Returns:
@@ -452,6 +651,7 @@ async def rank[T: BaseModel](
                 field_name=field_name,
                 field_type=field_type,
                 response_model=response_model,
+                response_schema=response_schema,
                 ascending_order=ascending_order,
             )
             result = await cohort_task.await_result()
@@ -466,6 +666,7 @@ async def rank[T: BaseModel](
         field_name=field_name,
         field_type=field_type,
         response_model=response_model,
+        response_schema=response_schema,
         ascending_order=ascending_order,
     )
     result = await cohort_task.await_result()
@@ -482,19 +683,40 @@ async def rank_async[T: BaseModel](
     field_name: str,
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
+    response_schema: dict[str, Any] | None = None,
     ascending_order: bool = True,
-) -> EveryrowTask[T]:
+) -> EveryrowTask[T] | EveryrowTask[dict[str, Any]]:
     """Submit a rank task asynchronously."""
     input_artifact_id = await _process_agent_map_input(input, session)
 
+    # For rank, we have special handling - if neither response_model nor response_schema
+    # is provided, we generate a simple schema based on field_name and field_type
+    if response_model is not None and response_schema is not None:
+        raise EveryrowError(
+            "Cannot specify both response_model and response_schema. "
+            "Use response_model for Pydantic models or response_schema for JSON schema dicts."
+        )
+
+    model_or_none: type[T] | None = None
     if response_model is not None:
-        response_schema = _convert_pydantic_to_custom_schema(response_model)
-        if field_name not in response_schema:
+        _ensure_pydantic()
+        custom_schema = _convert_pydantic_to_custom_schema(response_model)
+        if field_name not in custom_schema:
             raise ValueError(
                 f"Field {field_name} not in response model {response_model.__name__}"
             )
+        model_or_none = response_model
+    elif response_schema is not None:
+        custom_schema = _ensure_custom_schema(response_schema)
+        if field_name not in custom_schema:
+            # Check in properties for JSON schema format
+            props = response_schema.get("properties", {})
+            if field_name not in props:
+                schema_name = response_schema.get("title", "response_schema")
+                raise ValueError(f"Field {field_name} not in {schema_name}")
     else:
-        response_schema = {
+        # Generate a simple schema based on field_name and field_type
+        custom_schema = {
             "_model_name": "RankResponse",
             field_name: {
                 "type": field_type,
@@ -504,7 +726,7 @@ async def rank_async[T: BaseModel](
 
     query = DeepRankPublicParams(
         task=task,
-        response_schema=response_schema,
+        response_schema=custom_schema,
         field_to_sort_by=field_name,
         ascending_order=ascending_order,
     )
@@ -518,8 +740,8 @@ async def rank_async[T: BaseModel](
         session_id=session.session_id,
     )
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(
-        response_model=response_model or BaseModel,  # type: ignore[arg-type]
+    cohort_task: EveryrowTask[T] | EveryrowTask[dict[str, Any]] = EveryrowTask(
+        response_model=model_or_none,
         is_map=True,
         is_expand=False,
     )
@@ -532,6 +754,7 @@ async def screen[T: BaseModel](
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
     response_model: type[T] | None = None,
+    response_schema: dict[str, Any] | None = None,
 ) -> TableResult:
     """Screen rows in a table using screen operation.
 
@@ -539,8 +762,9 @@ async def screen[T: BaseModel](
         task: The task description for screening
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
-        response_model: Optional Pydantic model for the response schema.
-            If not provided, defaults to a result with just a "passes" boolean.
+        response_model: Optional Pydantic model for the response schema (mutually exclusive with response_schema).
+        response_schema: Optional JSON schema dict for the response (mutually exclusive with response_model).
+            If neither is provided, must be explicitly specified.
 
     Returns:
         TableResult containing the screened table
@@ -554,6 +778,7 @@ async def screen[T: BaseModel](
                 session=internal_session,
                 input=input,
                 response_model=response_model,
+                response_schema=response_schema,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -565,6 +790,7 @@ async def screen[T: BaseModel](
         session=session,
         input=input,
         response_model=response_model,
+        response_schema=response_schema,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -578,16 +804,17 @@ async def screen_async[T: BaseModel](
     session: Session,
     input: DataFrame | UUID | TableResult,
     response_model: type[T] | None = None,
-) -> EveryrowTask[T]:
+    response_schema: dict[str, Any] | None = None,
+) -> EveryrowTask[T] | EveryrowTask[dict[str, Any]]:
     """Submit a screen task asynchronously."""
+    schema_dict, model_or_none = _validate_response_params(
+        response_model, response_schema
+    )
     input_artifact_id = await _process_agent_map_input(input, session)
-
-    actual_response_model = response_model or DefaultScreenResult
-    response_schema = actual_response_model.model_json_schema()
 
     query = DeepScreenPublicParams(
         task=task,
-        response_schema=response_schema,
+        response_schema=schema_dict,
         response_schema_type=ResponseSchemaType.JSON,
     )
     request = DeepScreenRequest(
@@ -599,8 +826,8 @@ async def screen_async[T: BaseModel](
         session_id=session.session_id,
     )
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(
-        response_model=actual_response_model,  # type: ignore[arg-type]
+    cohort_task: EveryrowTask[T] | EveryrowTask[dict[str, Any]] = EveryrowTask(  # type: ignore[assignment]
+        response_model=model_or_none,
         is_map=True,
         is_expand=False,
     )
