@@ -6,6 +6,7 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.error_response import ErrorResponse
+from ...models.insufficient_balance_error import InsufficientBalanceError
 from ...models.operation_response import OperationResponse
 from ...models.single_agent_operation import SingleAgentOperation
 from ...types import Response
@@ -32,14 +33,14 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ErrorResponse | OperationResponse | None:
+) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     if response.status_code == 200:
         response_200 = OperationResponse.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 402:
-        response_402 = ErrorResponse.from_dict(response.json())
+        response_402 = InsufficientBalanceError.from_dict(response.json())
 
         return response_402
 
@@ -56,7 +57,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ErrorResponse | OperationResponse]:
+) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -69,7 +70,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     body: SingleAgentOperation,
-) -> Response[ErrorResponse | OperationResponse]:
+) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
@@ -82,7 +83,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | OperationResponse]
+        Response[ErrorResponse | InsufficientBalanceError | OperationResponse]
     """
 
     kwargs = _get_kwargs(
@@ -100,7 +101,7 @@ def sync(
     *,
     client: AuthenticatedClient,
     body: SingleAgentOperation,
-) -> ErrorResponse | OperationResponse | None:
+) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
@@ -113,7 +114,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | OperationResponse
+        ErrorResponse | InsufficientBalanceError | OperationResponse
     """
 
     return sync_detailed(
@@ -126,7 +127,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     body: SingleAgentOperation,
-) -> Response[ErrorResponse | OperationResponse]:
+) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
@@ -139,7 +140,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | OperationResponse]
+        Response[ErrorResponse | InsufficientBalanceError | OperationResponse]
     """
 
     kwargs = _get_kwargs(
@@ -155,7 +156,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     body: SingleAgentOperation,
-) -> ErrorResponse | OperationResponse | None:
+) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
@@ -168,7 +169,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | OperationResponse
+        ErrorResponse | InsufficientBalanceError | OperationResponse
     """
 
     return (

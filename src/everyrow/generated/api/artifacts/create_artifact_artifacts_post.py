@@ -5,22 +5,21 @@ import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.create_artifact_request import CreateArtifactRequest
+from ...models.create_artifact_response import CreateArtifactResponse
 from ...models.error_response import ErrorResponse
-from ...models.insufficient_balance_error import InsufficientBalanceError
-from ...models.merge_operation import MergeOperation
-from ...models.operation_response import OperationResponse
 from ...types import Response
 
 
 def _get_kwargs(
     *,
-    body: MergeOperation,
+    body: CreateArtifactRequest,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/operations/merge",
+        "url": "/artifacts",
     }
 
     _kwargs["json"] = body.to_dict()
@@ -33,16 +32,11 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
+) -> CreateArtifactResponse | ErrorResponse | None:
     if response.status_code == 200:
-        response_200 = OperationResponse.from_dict(response.json())
+        response_200 = CreateArtifactResponse.from_dict(response.json())
 
         return response_200
-
-    if response.status_code == 402:
-        response_402 = InsufficientBalanceError.from_dict(response.json())
-
-        return response_402
 
     if response.status_code == 422:
         response_422 = ErrorResponse.from_dict(response.json())
@@ -57,7 +51,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
+) -> Response[CreateArtifactResponse | ErrorResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -69,21 +63,22 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient,
-    body: MergeOperation,
-) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
-    """Semantic table join
+    body: CreateArtifactRequest,
+) -> Response[CreateArtifactResponse | ErrorResponse]:
+    """Create an artifact
 
-     Use AI to semantically merge two tables based on task instructions.
+     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
+    JSON object creates a scalar.
 
     Args:
-        body (MergeOperation):
+        body (CreateArtifactRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | InsufficientBalanceError | OperationResponse]
+        Response[CreateArtifactResponse | ErrorResponse]
     """
 
     kwargs = _get_kwargs(
@@ -100,21 +95,22 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient,
-    body: MergeOperation,
-) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
-    """Semantic table join
+    body: CreateArtifactRequest,
+) -> CreateArtifactResponse | ErrorResponse | None:
+    """Create an artifact
 
-     Use AI to semantically merge two tables based on task instructions.
+     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
+    JSON object creates a scalar.
 
     Args:
-        body (MergeOperation):
+        body (CreateArtifactRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | InsufficientBalanceError | OperationResponse
+        CreateArtifactResponse | ErrorResponse
     """
 
     return sync_detailed(
@@ -126,21 +122,22 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
-    body: MergeOperation,
-) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
-    """Semantic table join
+    body: CreateArtifactRequest,
+) -> Response[CreateArtifactResponse | ErrorResponse]:
+    """Create an artifact
 
-     Use AI to semantically merge two tables based on task instructions.
+     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
+    JSON object creates a scalar.
 
     Args:
-        body (MergeOperation):
+        body (CreateArtifactRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | InsufficientBalanceError | OperationResponse]
+        Response[CreateArtifactResponse | ErrorResponse]
     """
 
     kwargs = _get_kwargs(
@@ -155,21 +152,22 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient,
-    body: MergeOperation,
-) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
-    """Semantic table join
+    body: CreateArtifactRequest,
+) -> CreateArtifactResponse | ErrorResponse | None:
+    """Create an artifact
 
-     Use AI to semantically merge two tables based on task instructions.
+     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
+    JSON object creates a scalar.
 
     Args:
-        body (MergeOperation):
+        body (CreateArtifactRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | InsufficientBalanceError | OperationResponse
+        CreateArtifactResponse | ErrorResponse
     """
 
     return (
