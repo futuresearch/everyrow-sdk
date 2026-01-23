@@ -297,7 +297,7 @@ codex
 ```
 Or install directly:
 ```sh
-python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
   --repo futuresearch/everyrow-sdk --path skills/everyrow-sdk
 ```
 Restart Codex to pick up the new skill.
