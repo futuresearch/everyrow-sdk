@@ -2,68 +2,37 @@
 
 MCP (Model Context Protocol) server for [everyrow](https://everyrow.io): agent ops at spreadsheet scale.
 
-This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications (like Claude Code) to screen, rank, dedupe, merge, and run agents on CSV files.
+This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files.
 
-## Installation
+**All tools operate on local CSV files.** Provide absolute file paths as input, and transformed results are written to new CSV files at your specified output path.
 
-```bash
-# Using uv (recommended)
-cd everyrow-mcp
-uv pip install -e .
+## Setup
 
-# Or using pip
-pip install -e .
-```
+The server requires an everyrow API key. Get one at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
 
-## Configuration
-
-### Environment Variables
-
-The server requires an everyrow API key:
+Either set the API key in your shell environment, or hardcode it directly in the config below.
 
 ```bash
 export EVERYROW_API_KEY=your_key_here
 ```
 
-Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
-
-### Claude Code Configuration
-
-Add to your Claude Code settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+Add this to your MCP config. If you have [uv](https://docs.astral.sh/uv/) installed:
 
 ```json
 {
   "mcpServers": {
     "everyrow": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/path/to/everyrow-sdk/everyrow-mcp",
-        "everyrow-mcp"
-      ],
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
       "env": {
-        "EVERYROW_API_KEY": "your_key_here"
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
       }
     }
   }
 }
 ```
 
-Or if installed globally:
-
-```json
-{
-  "mcpServers": {
-    "everyrow": {
-      "command": "everyrow-mcp",
-      "env": {
-        "EVERYROW_API_KEY": "your_key_here"
-      }
-    }
-  }
-}
-```
+Alternatively, install with pip (ideally in a venv) and use `"command": "everyrow-mcp"` instead of uvx.
 
 ## Available Tools
 
@@ -76,7 +45,6 @@ Parameters:
 - task: Natural language description of screening criteria
 - input_csv: Absolute path to input CSV
 - output_path: Directory or full .csv path for output
-- response_schema: (optional) JSON schema for response fields
 ```
 
 Example: Filter job postings for "remote-friendly AND senior-level AND salary disclosed"
@@ -93,7 +61,6 @@ Parameters:
 - field_name: Name of the score field to add
 - field_type: Type of field (float, int, str, bool)
 - ascending_order: Sort direction (default: true)
-- response_schema: (optional) JSON schema for response fields
 ```
 
 Example: Rank leads by "likelihood to need data integration solutions"
@@ -137,7 +104,6 @@ Parameters:
 - task: Natural language description of research task
 - input_csv: Absolute path to input CSV
 - output_path: Directory or full .csv path for output
-- response_schema: (optional) JSON schema for response fields
 ```
 
 Example: "Find this company's latest funding round and lead investors"
@@ -155,26 +121,6 @@ The `output_path` parameter accepts two formats:
    - Result: `/output/my_results.csv`
 
 The server validates output paths before making API requests to avoid wasted costs.
-
-## Response Schemas
-
-For `screen`, `rank`, and `agent` operations, you can provide a custom response schema as JSON:
-
-```json
-{
-  "properties": {
-    "score": {
-      "type": "number",
-      "description": "Relevance score from 0 to 100"
-    },
-    "reasoning": {
-      "type": "string",
-      "description": "Explanation for the score"
-    }
-  },
-  "required": ["score"]
-}
-```
 
 ## Development
 

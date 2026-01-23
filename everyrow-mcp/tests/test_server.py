@@ -25,41 +25,7 @@ from everyrow_mcp.server import (
     everyrow_screen,
 )
 
-
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return the path to test fixtures."""
-    return Path(__file__).parent / "fixtures"
-
-
-@pytest.fixture
-def jobs_csv(fixtures_dir: Path) -> str:
-    """Return path to jobs.csv fixture."""
-    return str(fixtures_dir / "jobs.csv")
-
-
-@pytest.fixture
-def companies_csv(fixtures_dir: Path) -> str:
-    """Return path to companies.csv fixture."""
-    return str(fixtures_dir / "companies.csv")
-
-
-@pytest.fixture
-def contacts_csv(fixtures_dir: Path) -> str:
-    """Return path to contacts.csv fixture."""
-    return str(fixtures_dir / "contacts.csv")
-
-
-@pytest.fixture
-def products_csv(fixtures_dir: Path) -> str:
-    """Return path to products.csv fixture."""
-    return str(fixtures_dir / "products.csv")
-
-
-@pytest.fixture
-def suppliers_csv(fixtures_dir: Path) -> str:
-    """Return path to suppliers.csv fixture."""
-    return str(fixtures_dir / "suppliers.csv")
+# CSV fixtures are defined in conftest.py
 
 
 class TestSchemaToModel:
@@ -135,7 +101,7 @@ class TestScreenTool:
             result_data = json.loads(result)
 
             assert result_data["status"] == "success"
-            assert result_data["input_rows"] == 8
+            assert result_data["input_rows"] == 5
             assert result_data["output_rows"] == 2
             assert "screened_jobs.csv" in result_data["output_file"]
 
@@ -233,9 +199,9 @@ class TestDedupeTool:
             result_data = json.loads(result)
 
             assert result_data["status"] == "success"
-            assert result_data["input_rows"] == 8
+            assert result_data["input_rows"] == 5
             assert result_data["output_rows"] == 4
-            assert result_data["duplicates_removed"] == 4
+            assert result_data["duplicates_removed"] == 1
             assert "deduped_contacts.csv" in result_data["output_file"]
 
 
@@ -272,8 +238,8 @@ class TestMergeTool:
             result_data = json.loads(result)
 
             assert result_data["status"] == "success"
-            assert result_data["left_rows"] == 8
-            assert result_data["right_rows"] == 6
+            assert result_data["left_rows"] == 3
+            assert result_data["right_rows"] == 3
             assert "merged_products.csv" in result_data["output_file"]
 
 

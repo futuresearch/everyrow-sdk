@@ -31,8 +31,6 @@ async def lifespan(_server: FastMCP):
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
         print("everyrow-mcp: Authenticated successfully")
-    except ValueError as e:
-        raise RuntimeError(f"everyrow-mcp startup failed: {e}") from e
     except Exception as e:
         raise RuntimeError(f"everyrow-mcp startup failed: {e}") from e
 
@@ -500,44 +498,41 @@ async def everyrow_agent(params: AgentInput) -> str:
     )
 
 
+JSON_TYPE_MAP = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
+
+
 def _schema_to_model(name: str, schema: dict[str, Any]) -> type[BaseModel]:
     """Convert a JSON schema dict to a dynamic Pydantic model.
 
     This allows the MCP client to pass arbitrary response schemas without
     needing to define Python classes.
     """
-    # Extract properties from schema
     properties = schema.get("properties", schema)
     required = set(schema.get("required", []))
 
-    # Map JSON schema types to Python types
-    type_map = {
-        "string": str,
-        "integer": int,
-        "number": float,
-        "boolean": bool,
-        "array": list,
-        "object": dict,
-    }
-
-    # Build field definitions
     fields: dict[str, Any] = {}
     for field_name, field_def in properties.items():
-        if field_name.startswith("_"):
+        if field_name.startswith("_") or not isinstance(field_def, dict):
             continue
 
-        if isinstance(field_def, dict):
-            field_type_str = field_def.get("type", "string")
-            python_type = type_map.get(field_type_str, str)
-            description = field_def.get("description", "")
+        field_type_str = field_def.get("type", "string")
+        python_type = JSON_TYPE_MAP.get(field_type_str, str)
+        description = field_def.get("description", "")
 
-            if field_name in required:
-                fields[field_name] = (python_type, Field(..., description=description))
-            else:
-                fields[field_name] = (
-                    python_type | None,
-                    Field(default=None, description=description),
-                )
+        if field_name in required:
+            fields[field_name] = (python_type, Field(..., description=description))
+        else:
+            fields[field_name] = (
+                python_type | None,
+                Field(default=None, description=description),
+            )
 
     return create_model(name, **fields)
 

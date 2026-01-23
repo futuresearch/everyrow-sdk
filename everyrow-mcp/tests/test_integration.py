@@ -33,146 +33,14 @@ pytestmark = pytest.mark.skipif(
     reason="Integration tests are skipped by default. Set RUN_INTEGRATION_TESTS=1 to run.",
 )
 
-
-@pytest.fixture
-def fixtures_dir() -> Path:
-    """Return the path to test fixtures."""
-    return Path(__file__).parent / "fixtures"
-
-
-@pytest.fixture
-def output_dir(tmp_path: Path) -> Path:
-    """Return a temporary output directory."""
-    return tmp_path
-
-
-@pytest.fixture
-def small_jobs_csv(tmp_path: Path) -> Path:
-    """Create a small jobs CSV for testing (5 rows to minimize cost)."""
-    df = pd.DataFrame(
-        [
-            {
-                "company": "Airtable",
-                "title": "Senior Engineer",
-                "salary": "$185000",
-                "location": "Remote",
-            },
-            {
-                "company": "Vercel",
-                "title": "Lead Engineer",
-                "salary": "Competitive",
-                "location": "NYC",
-            },
-            {
-                "company": "Notion",
-                "title": "Staff Engineer",
-                "salary": "$200000",
-                "location": "San Francisco",
-            },
-            {
-                "company": "Linear",
-                "title": "Junior Developer",
-                "salary": "$85000",
-                "location": "Remote",
-            },
-            {
-                "company": "Descript",
-                "title": "Principal Architect",
-                "salary": "$250000",
-                "location": "Remote",
-            },
-        ]
-    )
-    path = tmp_path / "small_jobs.csv"
-    df.to_csv(path, index=False)
-    return path
-
-
-@pytest.fixture
-def small_companies_csv(tmp_path: Path) -> Path:
-    """Create a small companies CSV for testing."""
-    df = pd.DataFrame(
-        [
-            {"name": "TechStart", "industry": "Software", "size": 50},
-            {"name": "AILabs", "industry": "AI/ML", "size": 30},
-            {"name": "DataFlow", "industry": "Data", "size": 100},
-            {"name": "CloudNine", "industry": "Cloud", "size": 75},
-            {"name": "OldBank", "industry": "Finance", "size": 5000},
-        ]
-    )
-    path = tmp_path / "small_companies.csv"
-    df.to_csv(path, index=False)
-    return path
-
-
-@pytest.fixture
-def small_contacts_csv(tmp_path: Path) -> Path:
-    """Create a small contacts CSV with duplicates for dedupe testing."""
-    df = pd.DataFrame(
-        [
-            {
-                "name": "John Smith",
-                "email": "john.smith@acme.com",
-                "company": "Acme Corp",
-            },
-            {
-                "name": "J. Smith",
-                "email": "jsmith@acme.com",
-                "company": "Acme Corporation",
-            },
-            {
-                "name": "Alexandra Butoi",
-                "email": "a.butoi@tech.io",
-                "company": "TechStart",
-            },
-            {
-                "name": "A. Butoi",
-                "email": "alexandra.b@tech.io",
-                "company": "TechStart Inc",
-            },
-            {"name": "Mike Johnson", "email": "mike@data.com", "company": "DataFlow"},
-        ]
-    )
-    path = tmp_path / "small_contacts.csv"
-    df.to_csv(path, index=False)
-    return path
-
-
-@pytest.fixture
-def products_csv(tmp_path: Path) -> Path:
-    """Create a products CSV for merge testing."""
-    df = pd.DataFrame(
-        [
-            {"product": "Photoshop", "category": "Design"},
-            {"product": "VSCode", "category": "Development"},
-            {"product": "Slack", "category": "Communication"},
-        ]
-    )
-    path = tmp_path / "products.csv"
-    df.to_csv(path, index=False)
-    return path
-
-
-@pytest.fixture
-def suppliers_csv(tmp_path: Path) -> Path:
-    """Create a suppliers CSV for merge testing."""
-    df = pd.DataFrame(
-        [
-            {"company": "Adobe Inc", "approved": True},
-            {"company": "Microsoft Corporation", "approved": True},
-            {"company": "Salesforce Inc", "approved": True},
-        ]
-    )
-    path = tmp_path / "suppliers.csv"
-    df.to_csv(path, index=False)
-    return path
+# CSV fixtures are defined in conftest.py
 
 
 class TestScreenIntegration:
     """Integration tests for the screen tool."""
 
     @pytest.mark.asyncio
-    async def test_screen_jobs(self, small_jobs_csv: Path, output_dir: Path):
+    async def test_screen_jobs(self, jobs_csv: Path, tmp_path: Path):
         """Test screening jobs for remote senior roles."""
         params = ScreenInput(
             task="""
@@ -181,8 +49,8 @@ class TestScreenIntegration:
                 2. Senior-level (title includes Senior, Staff, Principal, or Lead)
                 3. Salary disclosed (specific dollar amount, not "Competitive")
             """,
-            input_csv=str(small_jobs_csv),
-            output_path=str(output_dir),
+            input_csv=str(jobs_csv),
+            output_path=str(tmp_path),
         )
 
         result = await everyrow_screen(params)
@@ -209,12 +77,12 @@ class TestRankIntegration:
     """Integration tests for the rank tool."""
 
     @pytest.mark.asyncio
-    async def test_rank_companies(self, small_companies_csv: Path, output_dir: Path):
+    async def test_rank_companies(self, companies_csv: Path, tmp_path: Path):
         """Test ranking companies by AI/ML maturity."""
         params = RankInput(
             task="Score by AI/ML adoption maturity and innovation focus. Higher score = more AI focused.",
-            input_csv=str(small_companies_csv),
-            output_path=str(output_dir),
+            input_csv=str(companies_csv),
+            output_path=str(tmp_path),
             field_name="ai_score",
             field_type="float",
             ascending_order=False,  # Highest first
@@ -242,7 +110,7 @@ class TestDedupeIntegration:
     """Integration tests for the dedupe tool."""
 
     @pytest.mark.asyncio
-    async def test_dedupe_contacts(self, small_contacts_csv: Path, output_dir: Path):
+    async def test_dedupe_contacts(self, contacts_csv: Path, tmp_path: Path):
         """Test deduplicating contacts."""
         params = DedupeInput(
             equivalence_relation="""
@@ -250,8 +118,8 @@ class TestDedupeIntegration:
                 Consider name abbreviations (J. Smith = John Smith),
                 and company name variations (Acme Corp = Acme Corporation).
             """,
-            input_csv=str(small_contacts_csv),
-            output_path=str(output_dir),
+            input_csv=str(contacts_csv),
+            output_path=str(tmp_path),
             select_representative=True,
         )
 
@@ -286,7 +154,7 @@ class TestMergeIntegration:
 
     @pytest.mark.asyncio
     async def test_merge_products_suppliers(
-        self, products_csv: Path, suppliers_csv: Path, output_dir: Path
+        self, products_csv: Path, suppliers_csv: Path, tmp_path: Path
     ):
         """Test merging products with suppliers."""
         params = MergeInput(
@@ -296,7 +164,7 @@ class TestMergeIntegration:
             """,
             left_csv=str(products_csv),
             right_csv=str(suppliers_csv),
-            output_path=str(output_dir),
+            output_path=str(tmp_path),
         )
 
         result = await everyrow_merge(params)
@@ -322,7 +190,7 @@ class TestAgentIntegration:
     """Integration tests for the agent tool."""
 
     @pytest.mark.asyncio
-    async def test_agent_company_research(self, output_dir: Path):
+    async def test_agent_company_research(self, tmp_path: Path):
         """Test agent researching companies."""
         # Use only 2 companies to minimize cost
         df = pd.DataFrame(
@@ -331,13 +199,13 @@ class TestAgentIntegration:
                 {"name": "OpenAI"},
             ]
         )
-        input_csv = output_dir / "companies_to_research.csv"
+        input_csv = tmp_path / "companies_to_research.csv"
         df.to_csv(input_csv, index=False)
 
         params = AgentInput(
             task="Find the company's headquarters city and approximate employee count.",
             input_csv=str(input_csv),
-            output_path=str(output_dir),
+            output_path=str(tmp_path),
             response_schema={
                 "properties": {
                     "headquarters": {
