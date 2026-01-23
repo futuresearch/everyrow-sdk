@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -7,10 +8,12 @@ import pytest
 from pydantic import BaseModel
 
 from everyrow.generated.models import (
-    ArtifactGroupRecord,
-    StandaloneArtifactRecord,
-    TaskEffort,
-    TaskResponse,
+    CreateArtifactResponse,
+    OperationResponse,
+    PublicTaskType,
+    TaskResultResponse,
+    TaskResultResponseDataType0Item,
+    TaskResultResponseDataType1,
     TaskStatus,
     TaskStatusResponse,
 )
@@ -38,6 +41,39 @@ def mock_env_api_key(monkeypatch):
     monkeypatch.setenv("EVERYROW_API_KEY", "test-key")
 
 
+def _make_status_response(
+    task_id, session_id, artifact_id=None, status=TaskStatus.COMPLETED
+):
+    return TaskStatusResponse(
+        task_id=task_id,
+        session_id=session_id,
+        status=status,
+        task_type=PublicTaskType.AGENT,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        artifact_id=artifact_id,
+    )
+
+
+def _make_table_result(task_id, records, artifact_id=None):
+    data_items = [TaskResultResponseDataType0Item.from_dict(r) for r in records]
+    return TaskResultResponse(
+        task_id=task_id,
+        status=TaskStatus.COMPLETED,
+        data=data_items,
+        artifact_id=artifact_id,
+    )
+
+
+def _make_scalar_result(task_id, record, artifact_id=None):
+    return TaskResultResponse(
+        task_id=task_id,
+        status=TaskStatus.COMPLETED,
+        data=TaskResultResponseDataType1.from_dict(record),
+        artifact_id=artifact_id,
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_scalar_artifact(mocker, mock_session):
     class MyModel(BaseModel):
@@ -45,32 +81,20 @@ async def test_create_scalar_artifact(mocker, mock_session):
         age: int
 
     model = MyModel(name="John", age=30)
-    task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
-    # Mock submit_task
-    mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+    mock_create = mocker.patch(
+        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
-
-    # Mock get_task_status
-    mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
-        new_callable=AsyncMock,
-    )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
+    mock_create.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+        session_id=mock_session.session_id,
     )
 
     result_artifact_id = await create_scalar_artifact(model, mock_session)
 
     assert result_artifact_id == artifact_id
-    assert mock_submit.called
-    assert mock_status.called
+    assert mock_create.called
 
 
 @pytest.mark.asyncio
@@ -84,33 +108,34 @@ async def test_single_agent(mocker, mock_session):
     task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
-    # Mock submit_task
+    # Mock operation endpoint
     mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.ops.single_agent_operations_single_agent_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
-        artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
     )
 
-    # Mock get_artifacts
-    mock_get_artifacts = mocker.patch(
-        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+    # Mock get_task_result
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_get_artifacts.return_value = [
-        StandaloneArtifactRecord(
-            uid=artifact_id, type_="standalone", data={"answer": "New Delhi"}
-        )
-    ]
+    mock_result.return_value = _make_scalar_result(
+        task_id, {"answer": "New Delhi"}, artifact_id
+    )
 
     result = await single_agent(
         task="What is the capital of the given country?",
@@ -132,52 +157,41 @@ async def test_single_agent_with_table_output(mocker, mock_session):
     task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
-    # Mock submit_task
+    # Mock operation endpoint
     mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.ops.single_agent_operations_single_agent_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
-        artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
     )
 
-    # Mock get_artifacts for TableResult
-    mock_get_artifacts = mocker.patch(
-        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+    # Mock get_task_result with table data
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_get_artifacts.return_value = [
-        ArtifactGroupRecord(
-            uid=artifact_id,
-            type_="group",
-            data=[],
-            artifacts=[
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(), type_="standalone", data={"city": "Mumbai"}
-                ),
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(), type_="standalone", data={"city": "Delhi"}
-                ),
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(), type_="standalone", data={"city": "Bangalore"}
-                ),
-            ],
-        )
-    ]
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [{"city": "Mumbai"}, {"city": "Delhi"}, {"city": "Bangalore"}],
+        artifact_id,
+    )
 
     result = await single_agent(
         task="What are the three largest cities in the given country?",
         session=mock_session,
         input=MyInput(country="India"),
-        effort_level=TaskEffort.LOW,
         return_table=True,
     )
 
@@ -191,55 +205,40 @@ async def test_single_agent_with_table_output(mocker, mock_session):
 async def test_agent_map(mocker, mock_session):
     task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
-    input_artifact_id = uuid.uuid4()
 
-    # Mock create_table_artifact (called because input is DataFrame)
-    mock_create_table = mocker.patch(
-        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
-    )
-    mock_create_table.return_value = input_artifact_id
-
-    # Mock submit_task
+    # Mock operation endpoint
     mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.ops.agent_map_operations_agent_map_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
-        artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
     )
 
-    # Mock get_artifacts
-    mock_get_artifacts = mocker.patch(
-        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+    # Mock get_task_result
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_get_artifacts.return_value = [
-        ArtifactGroupRecord(
-            uid=artifact_id,
-            type_="group",
-            data=[],
-            artifacts=[
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(),
-                    type_="standalone",
-                    data={"country": "India", "answer": "New Delhi"},
-                ),
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(),
-                    type_="standalone",
-                    data={"country": "USA", "answer": "Washington D.C."},
-                ),
-            ],
-        )
-    ]
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [
+            {"country": "India", "answer": "New Delhi"},
+            {"country": "USA", "answer": "Washington D.C."},
+        ],
+        artifact_id,
+    )
 
     input_df = pd.DataFrame([{"country": "India"}, {"country": "USA"}])
     result = await agent_map(
@@ -258,55 +257,40 @@ async def test_agent_map(mocker, mock_session):
 async def test_agent_map_with_table_output(mocker, mock_session):
     task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
-    input_artifact_id = uuid.uuid4()
 
-    # Mock create_table_artifact
-    mock_create_table = mocker.patch(
-        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
-    )
-    mock_create_table.return_value = input_artifact_id
-
-    # Mock submit_task
+    # Mock operation endpoint
     mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+        "everyrow.ops.agent_map_operations_agent_map_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
 
     # Mock get_task_status
     mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
     )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
-        artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
     )
 
-    # Mock get_artifacts
-    mock_get_artifacts = mocker.patch(
-        "everyrow.task.get_artifacts_artifacts_get.asyncio", new_callable=AsyncMock
+    # Mock get_task_result
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_get_artifacts.return_value = [
-        ArtifactGroupRecord(
-            uid=artifact_id,
-            type_="group",
-            data=[],
-            artifacts=[
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(),
-                    type_="standalone",
-                    data={"country": "India", "city": "Mumbai"},
-                ),
-                StandaloneArtifactRecord(
-                    uid=uuid.uuid4(),
-                    type_="standalone",
-                    data={"country": "USA", "city": "New York"},
-                ),
-            ],
-        )
-    ]
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [
+            {"country": "India", "city": "Mumbai"},
+            {"country": "USA", "city": "New York"},
+        ],
+        artifact_id,
+    )
 
     input_df = pd.DataFrame([{"country": "India"}, {"country": "USA"}])
     result = await agent_map(
@@ -321,7 +305,7 @@ async def test_agent_map_with_table_output(mocker, mock_session):
 
 
 @pytest.mark.asyncio
-async def test_rank_model_validation(mocker, mock_session) -> None:
+async def test_rank_model_validation(mock_session) -> None:
     input_df = pd.DataFrame(
         [
             {"country": "China"},
@@ -334,13 +318,6 @@ async def test_rank_model_validation(mocker, mock_session) -> None:
 
     class ResponseModel(BaseModel):
         population_size: int
-
-    input_artifact_id = uuid.uuid4()
-    # Mock create_table_artifact (called because input is DataFrame)
-    mock_create_table = mocker.patch(
-        "everyrow.ops.create_table_artifact", new_callable=AsyncMock
-    )
-    mock_create_table.return_value = input_artifact_id
 
     with pytest.raises(
         ValueError,
@@ -358,59 +335,43 @@ async def test_rank_model_validation(mocker, mock_session) -> None:
 @pytest.mark.asyncio
 async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
     """NaN values should be converted to None for JSON compatibility."""
-
-    task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
-    mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+    mock_create = mocker.patch(
+        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
-
-    mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
-        new_callable=AsyncMock,
-    )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
+    mock_create.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+        session_id=mock_session.session_id,
     )
 
     df_with_nan = pd.DataFrame([{"name": "Alice", "age": np.nan}])
     await create_table_artifact(df_with_nan, mock_session)
 
-    call_args = mock_submit.call_args
-    data_to_create = call_args.kwargs["body"].payload.query.data_to_create
-    assert data_to_create == [{"name": "Alice", "age": None}]
+    call_args = mock_create.call_args
+    body = call_args.kwargs["body"]
+    # data is a list of CreateArtifactRequestDataType0Item
+    records = [item.additional_properties for item in body.data]
+    assert records == [{"name": "Alice", "age": None}]
 
 
 @pytest.mark.asyncio
 async def test_create_table_artifact_preserves_valid_values(mocker, mock_session):
     """Non-NaN values should be passed through unchanged."""
-    task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
-    mock_submit = mocker.patch(
-        "everyrow.task.submit_task_tasks_post.asyncio", new_callable=AsyncMock
+    mock_create = mocker.patch(
+        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
     )
-    mock_submit.return_value = TaskResponse(task_id=task_id)
-
-    mock_status = mocker.patch(
-        "everyrow.task.get_task_status_endpoint_tasks_task_id_status_get.asyncio",
-        new_callable=AsyncMock,
-    )
-    mock_status.return_value = TaskStatusResponse(
-        status=TaskStatus.COMPLETED,
+    mock_create.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
-        task_id=task_id,
-        error=None,
+        session_id=mock_session.session_id,
     )
 
     df = pd.DataFrame([{"name": "Alice", "age": 30}])
     await create_table_artifact(df, mock_session)
 
-    call_args = mock_submit.call_args
-    data_to_create = call_args.kwargs["body"].payload.query.data_to_create
-    assert data_to_create == [{"name": "Alice", "age": 30}]
+    call_args = mock_create.call_args
+    body = call_args.kwargs["body"]
+    records = [item.additional_properties for item in body.data]
+    assert records == [{"name": "Alice", "age": 30}]
