@@ -1,5 +1,5 @@
 {
   "name": "everyrow",
   "description": "Gemini extension for the everyrow SDK - AI-powered data processing utilities for transforming, deduping, merging, ranking, and screening dataframes",
-  "version": "0.1.4"
+  "version": "0.1.5"
 }
