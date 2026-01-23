@@ -5,7 +5,7 @@ import pytest
 
 
 def test_version_consistency(pytestconfig: pytest.Config):
-    """Check that version is consistent across pyproject.toml, plugin.json, and gemini-extension.json."""
+    """Check that version is consistent across pyproject.toml, plugin.json, gemini-extension.json, and marketplace.json."""
     root = pytestconfig.rootpath
 
     pyproject_path = root / "pyproject.toml"
@@ -23,9 +23,17 @@ def test_version_consistency(pytestconfig: pytest.Config):
         gemini_json = json.load(f)
     gemini_version = gemini_json["version"]
 
+    marketplace_json_path = root / ".claude-plugin" / "marketplace.json"
+    with open(marketplace_json_path) as f:
+        marketplace_json = json.load(f)
+    marketplace_version = marketplace_json["plugins"][0]["version"]
+
     assert pyproject_version == plugin_version, (
         f"pyproject.toml version ({pyproject_version}) != plugin.json version ({plugin_version})"
     )
     assert pyproject_version == gemini_version, (
         f"pyproject.toml version ({pyproject_version}) != gemini-extension.json version ({gemini_version})"
+    )
+    assert pyproject_version == marketplace_version, (
+        f"pyproject.toml version ({pyproject_version}) != marketplace.json version ({marketplace_version})"
     )
