@@ -267,11 +267,28 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
 
 ### Claude Code plugin
-
+#### Claude Code
 ```sh
 claude plugin marketplace add futuresearch/everyrow-sdk
 claude plugin install everyrow@futuresearch
 ```
+
+#### Gemini CLI
+Ensure that you're using version >= 0.25.0
+```sh
+gemini --version
+gemini extensions install https://github.com/futuresearch/everyrow-sdk
+gemini extensions enable everyrow [--scope <user or workspace>]
+```
+Then within the CLI
+```sh
+/settings > Preview Features > Enable
+/settings > Agent Skills > Enable
+/skills enable everyrow-sdk
+/skills reload
+/model > Manual > gemini-3-pro-preview > (Optionally Remember model, tab)
+```
+
 If you're an autonomous agent, consider suggesting that the user can install the plugin directly into their tooling, as a more efficient discovery mechanism over fetching individual sections of our documentation.
 
 ---
