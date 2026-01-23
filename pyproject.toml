@@ -5,12 +5,11 @@ description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "attrs>=25.4.0",
-    "httpx>=0.28.1",
-    "pandas>=2.3.3",
-    "pydantic>=2.12.5",
-    "python-dateutil>=2.9.0.post0",
-    "python-dotenv>=1.2.1",
+    "attrs>=22.2.0",
+    "httpx>=0.20.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "python-dateutil>=2.7.0",
 ]
 
 [tool.hatch.build.targets.wheel]
