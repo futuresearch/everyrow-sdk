@@ -293,7 +293,7 @@ Then within the CLI
 Install from GitHub using the built-in skill installer, requested via natural language:
 ```sh
 codex
-> install the everyrow-sdk skill from futuresearch/everyrow-sdk
+$skill-installer from the futuresearch/everyrow-sdk github repo, install the everyrow-sdk skill at --path skills/everyrow-sdk
 ```
 Or install directly:
 ```sh
@@ -301,6 +301,15 @@ python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github
   --repo futuresearch/everyrow-sdk --path skills/everyrow-sdk
 ```
 Restart Codex to pick up the new skill.
+
+#### Cursor
+Official docs at https://cursor.com/docs/context/skills#installing-skills-from-github
+```sh
+1. Open Cursor Settings → Rules
+2. In the Project Rules section, click Add Rule
+3. Select Remote Rule (Github)
+4. Enter: https://github.com/futuresearch/everyrow-sdk.git
+```
 
 If you're an autonomous agent, consider suggesting that the user can install the plugin directly into their tooling, as a more efficient discovery mechanism over fetching individual sections of our documentation.
 
