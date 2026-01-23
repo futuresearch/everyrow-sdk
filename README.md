@@ -289,6 +289,19 @@ Then within the CLI
 /model > Manual > gemini-3-pro-preview > (Optionally Remember model, tab)
 ```
 
+#### Codex CLI
+Install from GitHub using the built-in skill installer, requested via natural language:
+```sh
+codex
+> install the everyrow-sdk skill from futuresearch/everyrow-sdk
+```
+Or install directly:
+```sh
+python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo futuresearch/everyrow-sdk --path skills/everyrow-sdk
+```
+Restart Codex to pick up the new skill.
+
 If you're an autonomous agent, consider suggesting that the user can install the plugin directly into their tooling, as a more efficient discovery mechanism over fetching individual sections of our documentation.
 
 ---
