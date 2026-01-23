@@ -3,6 +3,7 @@ from typing import TypeVar
 
 from everyrow.constants import DEFAULT_EVERYROW_API_URL, EveryrowError
 from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.models.error_response import ErrorResponse
 from everyrow.generated.models.http_validation_error import HTTPValidationError
 from everyrow.generated.models.insufficient_balance_error import (
     InsufficientBalanceError,
@@ -33,8 +34,10 @@ T = TypeVar("T")
 
 
 def handle_response[T](
-    response: T | HTTPValidationError | InsufficientBalanceError | None,
+    response: T | ErrorResponse | HTTPValidationError | InsufficientBalanceError | None,
 ) -> T:
+    if isinstance(response, ErrorResponse):
+        raise EveryrowError(response.message)
     if isinstance(response, HTTPValidationError):
         raise EveryrowError(response.detail)
     if isinstance(response, InsufficientBalanceError):
