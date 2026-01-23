@@ -268,12 +268,14 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 
 ### Claude Code plugin
 #### Claude Code
+[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 ```sh
 claude plugin marketplace add futuresearch/everyrow-sdk
 claude plugin install everyrow@futuresearch
 ```
 
 #### Gemini CLI
+[Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension).
 Ensure that you're using version >= 0.25.0
 ```sh
 gemini --version
@@ -290,6 +292,7 @@ Then within the CLI
 ```
 
 #### Codex CLI
+[Official docs](https://developers.openai.com/codex/skills#install-new-skills).
 Install from GitHub using the built-in skill installer, requested via natural language:
 ```sh
 codex
@@ -303,7 +306,7 @@ python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github
 Restart Codex to pick up the new skill.
 
 #### Cursor
-Official docs at https://cursor.com/docs/context/skills#installing-skills-from-github
+[Official docs](https://cursor.com/docs/context/skills#installing-skills-from-github).
 ```sh
 1. Open Cursor Settings → Rules
 2. In the Project Rules section, click Add Rule
