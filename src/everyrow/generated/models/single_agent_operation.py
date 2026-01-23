@@ -7,6 +7,7 @@ from uuid import UUID
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.public_effort_level import PublicEffortLevel
 from ..models.public_llm import PublicLLM
 from ..types import UNSET, Unset
 
@@ -31,6 +32,7 @@ class SingleAgentOperation:
         response_schema (None | SingleAgentOperationResponseSchemaType0 | Unset): JSON Schema for the response format.
             If not provided, use default answer schema.
         llm (PublicLLM | Unset):
+        effort_level (PublicEffortLevel | Unset):
     """
 
     input_: list[SingleAgentOperationInputType1Item] | SingleAgentOperationInputType2 | UUID
@@ -38,6 +40,7 @@ class SingleAgentOperation:
     session_id: None | Unset | UUID = UNSET
     response_schema: None | SingleAgentOperationResponseSchemaType0 | Unset = UNSET
     llm: PublicLLM | Unset = UNSET
+    effort_level: PublicEffortLevel | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -77,6 +80,10 @@ class SingleAgentOperation:
         if not isinstance(self.llm, Unset):
             llm = self.llm.value
 
+        effort_level: str | Unset = UNSET
+        if not isinstance(self.effort_level, Unset):
+            effort_level = self.effort_level.value
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -91,6 +98,8 @@ class SingleAgentOperation:
             field_dict["response_schema"] = response_schema
         if llm is not UNSET:
             field_dict["llm"] = llm
+        if effort_level is not UNSET:
+            field_dict["effort_level"] = effort_level
 
         return field_dict
 
@@ -177,12 +186,20 @@ class SingleAgentOperation:
         else:
             llm = PublicLLM(_llm)
 
+        _effort_level = d.pop("effort_level", UNSET)
+        effort_level: PublicEffortLevel | Unset
+        if isinstance(_effort_level, Unset):
+            effort_level = UNSET
+        else:
+            effort_level = PublicEffortLevel(_effort_level)
+
         single_agent_operation = cls(
             input_=input_,
             task=task,
             session_id=session_id,
             response_schema=response_schema,
             llm=llm,
+            effort_level=effort_level,
         )
 
         single_agent_operation.additional_properties = d

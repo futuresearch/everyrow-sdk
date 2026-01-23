@@ -7,6 +7,7 @@ from uuid import UUID
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.public_effort_level import PublicEffortLevel
 from ..models.public_llm import PublicLLM
 from ..types import UNSET, Unset
 
@@ -31,6 +32,7 @@ class AgentMapOperation:
         response_schema (AgentMapOperationResponseSchemaType0 | None | Unset): JSON Schema for the response format. If
             not provided, use default answer schema.
         llm (PublicLLM | Unset):
+        effort_level (PublicEffortLevel | Unset):
         join_with_input (bool | Unset): If True, merge agent output with input row. If False, output only agent results.
             Default: True.
     """
@@ -40,6 +42,7 @@ class AgentMapOperation:
     session_id: None | Unset | UUID = UNSET
     response_schema: AgentMapOperationResponseSchemaType0 | None | Unset = UNSET
     llm: PublicLLM | Unset = UNSET
+    effort_level: PublicEffortLevel | Unset = UNSET
     join_with_input: bool | Unset = True
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -80,6 +83,10 @@ class AgentMapOperation:
         if not isinstance(self.llm, Unset):
             llm = self.llm.value
 
+        effort_level: str | Unset = UNSET
+        if not isinstance(self.effort_level, Unset):
+            effort_level = self.effort_level.value
+
         join_with_input = self.join_with_input
 
         field_dict: dict[str, Any] = {}
@@ -96,6 +103,8 @@ class AgentMapOperation:
             field_dict["response_schema"] = response_schema
         if llm is not UNSET:
             field_dict["llm"] = llm
+        if effort_level is not UNSET:
+            field_dict["effort_level"] = effort_level
         if join_with_input is not UNSET:
             field_dict["join_with_input"] = join_with_input
 
@@ -182,6 +191,13 @@ class AgentMapOperation:
         else:
             llm = PublicLLM(_llm)
 
+        _effort_level = d.pop("effort_level", UNSET)
+        effort_level: PublicEffortLevel | Unset
+        if isinstance(_effort_level, Unset):
+            effort_level = UNSET
+        else:
+            effort_level = PublicEffortLevel(_effort_level)
+
         join_with_input = d.pop("join_with_input", UNSET)
 
         agent_map_operation = cls(
@@ -190,6 +206,7 @@ class AgentMapOperation:
             session_id=session_id,
             response_schema=response_schema,
             llm=llm,
+            effort_level=effort_level,
             join_with_input=join_with_input,
         )
 

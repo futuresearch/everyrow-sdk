@@ -24,6 +24,7 @@ from everyrow.generated.models import (
     CreateArtifactRequestDataType1,
     DedupeOperation,
     MergeOperation,
+    PublicEffortLevel,
     RankOperation,
     RankOperationResponseSchemaType0,
     ScreenOperation,
@@ -181,7 +182,7 @@ async def single_agent_async[T: BaseModel](
     task: str,
     session: Session,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,  # noqa: ARG001
+    effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
@@ -196,8 +197,7 @@ async def single_agent_async[T: BaseModel](
             response_model.model_json_schema()
         ),
         llm=llm if llm is not None else UNSET,
-        # TODO: Re-enable effort_level once the API supports it.
-        # effort_level=effort_level,
+        effort_level=PublicEffortLevel(effort_level.value),
     )
 
     response = await single_agent_operations_single_agent_post.asyncio(
@@ -247,7 +247,7 @@ async def agent_map_async(
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
-    effort_level: EffortLevel = EffortLevel.LOW,  # noqa: ARG001
+    effort_level: EffortLevel = EffortLevel.LOW,
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
 ) -> EveryrowTask[BaseModel]:
@@ -262,8 +262,7 @@ async def agent_map_async(
         ),
         llm=llm if llm is not None else UNSET,
         join_with_input=True,
-        # TODO: Re-enable effort_level once the API supports it.
-        # effort_level=effort_level,
+        effort_level=PublicEffortLevel(effort_level.value),
     )
 
     response = await agent_map_operations_agent_map_post.asyncio(
