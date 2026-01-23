@@ -114,7 +114,12 @@ def _validate_response_params(
 def _convert_json_schema_to_custom_schema(
     json_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    """Convert a JSON schema dict to the custom response schema format expected by rank/agent_map.
+    """Convert a JSON schema dict to the custom response schema format expected by rank.
+
+    NOTE: This custom schema format is only needed for `rank` because `DeepRankPublicParams`
+    doesn't have a `response_schema_type` field - it's hardcoded to expect the custom format.
+    Other operations like `single_agent`, `agent_map`, and `screen` use `ResponseSchemaType.JSON`
+    with standard JSON schema.
 
     The custom format uses _model_name instead of type: object, and uses optional: bool
     instead of required arrays.
@@ -178,10 +183,12 @@ def _convert_json_schema_to_custom_schema(
 
 
 def _ensure_custom_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Convert JSON schema to custom format if needed.
+    """Convert JSON schema to custom format if needed (only used by rank).
 
     If the schema already has _model_name, it's already in custom format.
     If it has type: object, convert from JSON schema to custom format.
+
+    NOTE: This is only needed for `rank` - see _convert_json_schema_to_custom_schema for why.
     """
     if "_model_name" in schema:
         return schema  # Already custom format
@@ -361,6 +368,9 @@ async def agent_map(
 def _convert_pydantic_to_custom_schema(model: type[BaseModel]) -> dict[str, Any]:
     """Convert a Pydantic model to the custom response schema format expected by rank.
 
+    NOTE: This custom schema format is only needed for `rank` because `DeepRankPublicParams`
+    doesn't have a `response_schema_type` field - it's hardcoded to expect the custom format.
+
     The custom format uses _model_name instead of type: object, and uses optional: bool
     instead of required arrays.
 
@@ -432,15 +442,14 @@ async def agent_map_async(
     schema_dict, model_or_none = _validate_response_params(
         response_model, response_schema
     )
-    custom_schema = _ensure_custom_schema(schema_dict)
 
     input_artifact_ids = [await _process_agent_map_input(input, session)]
     query = AgentQueryParams(
         task=task,
         effort_level=effort_level,
         llm=llm or UNSET,
-        response_schema=custom_schema,
-        response_schema_type=ResponseSchemaType.CUSTOM,
+        response_schema=schema_dict,
+        response_schema_type=ResponseSchemaType.JSON,
         is_expand=False,
         include_provenance_and_notes=False,
     )
