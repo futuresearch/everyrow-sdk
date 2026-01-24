@@ -25,7 +25,7 @@ jobs:
       - name: Build packages
         run: |
           uv build
-          uv build --directory everyrow-mcp --out-dir dist
+          uv build --directory everyrow-mcp --out-dir $GITHUB_WORKSPACE/dist
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
