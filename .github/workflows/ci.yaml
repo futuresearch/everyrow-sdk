@@ -4,20 +4,22 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "everyrow/**"
+      - "src/everyrow/**"
       - "tests/**"
       - "examples/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/ci.yaml"
+      - "everyrow-mcp/**"
 
   pull_request:
     paths:
-      - "everyrow/**"
+      - "src/everyrow/**"
       - "tests/**"
       - "examples/**"
       - "pyproject.toml"
       - "uv.lock"
+      - "everyrow-mcp/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -52,3 +54,29 @@ jobs:
 
       - name: Run basedpyright
         run: uv run basedpyright
+
+  mcp-checks:
+    name: everyrow-mcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "everyrow-mcp/uv.lock"
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --directory everyrow-mcp
+
+      - name: Run ruff
+        run: uv run --directory everyrow-mcp ruff check
+
+      - name: Run tests
+        run: uv run --directory everyrow-mcp pytest tests

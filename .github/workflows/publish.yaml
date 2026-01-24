@@ -22,8 +22,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build package
-        run: uv build
+      - name: Build packages
+        run: |
+          uv build
+          uv build --directory everyrow-mcp --out-dir dist
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
