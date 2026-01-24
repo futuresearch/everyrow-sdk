@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+      }
+    }
+  }
+}

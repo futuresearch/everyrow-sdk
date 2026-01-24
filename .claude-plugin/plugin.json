@@ -5,5 +5,6 @@
   "author": {
     "name": "FutureSearch"
   },
-  "repository": "https://github.com/futuresearch/everyrow-sdk"
+  "repository": "https://github.com/futuresearch/everyrow-sdk",
+  "mcpServers": "../.mcp.json"
 }
