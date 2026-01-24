@@ -18,18 +18,26 @@ from everyrow.generated.api.operations import (
 )
 from everyrow.generated.models import (
     AgentMapOperation,
+    AgentMapOperationInputType1Item,
     AgentMapOperationResponseSchemaType0,
     CreateArtifactRequest,
     CreateArtifactRequestDataType0Item,
     CreateArtifactRequestDataType1,
     DedupeOperation,
+    DedupeOperationInputType1Item,
     MergeOperation,
+    MergeOperationLeftInputType1Item,
+    MergeOperationRightInputType1Item,
     PublicEffortLevel,
     RankOperation,
+    RankOperationInputType1Item,
     RankOperationResponseSchemaType0,
     ScreenOperation,
+    ScreenOperationInputType1Item,
     ScreenOperationResponseSchemaType0,
     SingleAgentOperation,
+    SingleAgentOperationInputType1Item,
+    SingleAgentOperationInputType2,
     SingleAgentOperationResponseSchemaType0,
 )
 from everyrow.generated.types import UNSET
@@ -56,9 +64,10 @@ def _df_to_records(df: DataFrame) -> list[dict[str, Any]]:
     return json.loads(json_str)
 
 
-def _prepare_table_input(
+def _prepare_table_input[T](
     input: DataFrame | UUID | TableResult | None,
-) -> UUID | list[dict[str, Any]]:
+    item_class: type[T],
+) -> UUID | list[T]:
     """Convert table input to UUID or list of generated model items."""
     if input is None:
         return []
@@ -67,24 +76,28 @@ def _prepare_table_input(
     if isinstance(input, TableResult):
         return input.artifact_id
     if isinstance(input, DataFrame):
-        return _df_to_records(input)
+        records = _df_to_records(input)
+        return [item_class.from_dict(r) for r in records]  # type: ignore[attr-defined]
     raise TypeError(f"Unsupported input type: {type(input)}")
 
 
-def _prepare_single_input(
+def _prepare_single_input[TItem, TObj](
     input: BaseModel | DataFrame | UUID | Result | None,
-) -> InputData:
+    item_class: type[TItem],
+    object_class: type[TObj],
+) -> UUID | list[TItem] | TObj:
     """Convert single-agent input to the appropriate generated model type."""
     if input is None:
-        return {}
+        return object_class.from_dict({})  # type: ignore[attr-defined]
     if isinstance(input, UUID):
         return input
     if isinstance(input, Result):
         return input.artifact_id
     if isinstance(input, DataFrame):
-        return _df_to_records(input)
+        records = _df_to_records(input)
+        return [item_class.from_dict(r) for r in records]  # type: ignore[attr-defined]
     if isinstance(input, BaseModel):
-        return input.model_dump()
+        return object_class.from_dict(input.model_dump())  # type: ignore[attr-defined]
     raise TypeError(f"Unsupported input type: {type(input)}")
 
 
@@ -187,7 +200,9 @@ async def single_agent_async[T: BaseModel](
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
 ) -> EveryrowTask[T]:
-    input_data = _prepare_single_input(input)
+    input_data = _prepare_single_input(
+        input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2
+    )
 
     body = SingleAgentOperation(
         input_=input_data,  # type: ignore
@@ -251,7 +266,7 @@ async def agent_map_async(
     llm: LLM | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
 ) -> EveryrowTask[BaseModel]:
-    input_data = _prepare_table_input(input)
+    input_data = _prepare_table_input(input, AgentMapOperationInputType1Item)
 
     body = AgentMapOperation(
         input_=input_data,  # type: ignore
@@ -327,7 +342,7 @@ async def screen_async[T: BaseModel](
     response_model: type[T] | None = None,
 ) -> EveryrowTask[T]:
     """Submit a screen task asynchronously."""
-    input_data = _prepare_table_input(input)
+    input_data = _prepare_table_input(input, ScreenOperationInputType1Item)
     actual_response_model = response_model or DefaultScreenResult
 
     body = ScreenOperation(
@@ -421,7 +436,7 @@ async def rank_async[T: BaseModel](
     ascending_order: bool = True,
 ) -> EveryrowTask[T]:
     """Submit a rank task asynchronously."""
-    input_data = _prepare_table_input(input)
+    input_data = _prepare_table_input(input, RankOperationInputType1Item)
 
     if response_model is not None:
         response_schema = response_model.model_json_schema()
@@ -531,8 +546,8 @@ async def merge_async(
     merge_on_right: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a merge task asynchronously."""
-    left_data = _prepare_table_input(left_table)
-    right_data = _prepare_table_input(right_table)
+    left_data = _prepare_table_input(left_table, MergeOperationLeftInputType1Item)
+    right_data = _prepare_table_input(right_table, MergeOperationRightInputType1Item)
 
     body = MergeOperation(
         left_input=left_data,  # type: ignore
@@ -601,7 +616,7 @@ async def dedupe_async(
     equivalence_relation: str,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
-    input_data = _prepare_table_input(input)
+    input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
 
     body = DedupeOperation(
         input_=input_data,  # type: ignore
