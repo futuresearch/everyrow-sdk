@@ -266,7 +266,7 @@ from everyrow import fetch_task_data
 df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
 
-### Claude Code plugin
+### Coding agent plugins
 #### Claude Code
 [Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 ```sh
