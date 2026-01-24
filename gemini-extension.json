@@ -1,5 +1,11 @@
 {
   "name": "everyrow",
   "description": "Gemini extension for the everyrow SDK - AI-powered data processing utilities for transforming, deduping, merging, ranking, and screening dataframes",
-  "version": "0.1.7"
+  "version": "0.1.7",
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"]
+    }
+  }
 }
