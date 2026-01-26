@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.4",
+  "name": "everyrow-mcp",
+  "display_name": "Everyrow MCP Server",
+  "version": "0.1.9",
+  "description": "AI-powered dataframe ops: transform, dedupe, merge, rank, and screen with natural language",
+  "long_description": "MCP server for everyrow: agent ops at spreadsheet scale. This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files. All tools operate on local CSV files.",
+  "author": {
+    "name": "FutureSearch",
+    "url": "https://everyrow.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/futuresearch/everyrow-sdk.git"
+  },
+  "homepage": "https://everyrow.io",
+  "documentation": "https://github.com/futuresearch/everyrow-sdk/tree/main/everyrow-mcp",
+  "support": "https://github.com/futuresearch/everyrow-sdk/issues",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/everyrow_mcp/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "${__dirname}/src/everyrow_mcp/server.py"],
+      "env": {
+        "EVERYROW_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "everyrow_screen",
+      "description": "Filter CSV rows based on criteria that require judgment"
+    },
+    {
+      "name": "everyrow_rank",
+      "description": "Score and sort CSV rows based on qualitative criteria"
+    },
+    {
+      "name": "everyrow_dedupe",
+      "description": "Remove duplicate rows using semantic equivalence"
+    },
+    {
+      "name": "everyrow_merge",
+      "description": "Join two CSV files using intelligent entity matching"
+    },
+    {
+      "name": "everyrow_agent",
+      "description": "Run web research agents on each row of a CSV"
+    }
+  ],
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Everyrow API Key",
+      "description": "Your API key from https://everyrow.io/api-key ($20 free credit)",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  },
+  "keywords": ["everyrow", "dataframe", "csv", "ai", "data-processing", "dedupe", "merge", "rank", "screen"],
+  "license": "MIT",
+  "privacy_policies": ["https://everyrow.io/privacy"]
+}
