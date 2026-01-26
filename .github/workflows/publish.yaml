@@ -29,3 +29,28 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  build-mcpb:
+    name: Build MCPB Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # MCPB bundles enable one-click installation in Claude Desktop.
+    # Note: Local MCP servers currently only work in Chat mode, not Cowork mode.
+    # See: https://github.com/anthropics/claude-code/issues/20377
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build MCPB bundle
+        working-directory: everyrow-mcp
+        run: npx -y @anthropic-ai/mcpb pack
+
+      - name: Upload MCPB to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: everyrow-mcp/everyrow-mcp.mcpb
