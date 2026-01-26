@@ -1,6 +1,6 @@
 [project]
 name = "everyrow"
-version = "0.1.8"
+version = "0.1.9"
 description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -33,6 +33,7 @@ dev = [
     "pytest-mock>=3.15.1",
     "basedpyright>=1.22.0",
     "ruff>=0.9.9",
+    "jsonschema>=4.0.0",
 ]
 
 [tool.basedpyright]

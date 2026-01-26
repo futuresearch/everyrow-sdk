@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.futuresearch/everyrow-mcp",
+  "title": "Everyrow MCP Server",
+  "description": "AI-powered dataframe ops: transform, dedupe, merge, rank, and screen with natural language",
+  "repository": {
+    "url": "https://github.com/futuresearch/everyrow-sdk",
+    "source": "github",
+    "subfolder": "everyrow-mcp"
+  },
+  "websiteUrl": "https://github.com/futuresearch/everyrow-sdk/tree/main/everyrow-mcp",
+  "version": "0.1.9",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "everyrow-mcp",
+      "version": "0.1.9",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "API key for the everyrow service, found at https://everyrow.io/api-key",
+          "isRequired": true,
+          "isSecret": true,
+          "name": "EVERYROW_API_KEY"
+        }
+      ]
+    }
+  ]
+}

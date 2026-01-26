@@ -129,6 +129,10 @@ cd everyrow-mcp
 uv sync
 uv run pytest
 ```
+For MCP registry publishing:
+
+mcp-name: io.github.futuresearch/everyrow-mcp
+
 
 ## License
 
