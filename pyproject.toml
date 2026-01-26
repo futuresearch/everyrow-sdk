@@ -1,6 +1,6 @@
 [project]
 name = "everyrow"
-version = "0.1.9"
+version = "0.1.10"
 description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
