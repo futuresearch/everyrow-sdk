@@ -41,6 +41,11 @@ def test_version_consistency(pytestconfig: pytest.Config):
     server_json_version = server_json["version"]
     server_json_package_version = server_json["packages"][0]["version"]
 
+    manifest_json_path = root / "everyrow-mcp" / "manifest.json"
+    with open(manifest_json_path) as f:
+        manifest_json = json.load(f)
+    manifest_version = manifest_json["version"]
+
     assert pyproject_version == plugin_version, (
         f"pyproject.toml version ({pyproject_version}) != plugin.json version ({plugin_version})"
     )
@@ -58,6 +63,9 @@ def test_version_consistency(pytestconfig: pytest.Config):
     )
     assert pyproject_version == server_json_package_version, (
         f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/server.json packages[0].version ({server_json_package_version})"
+    )
+    assert pyproject_version == manifest_version, (
+        f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/manifest.json version ({manifest_version})"
     )
 
 

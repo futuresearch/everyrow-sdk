@@ -217,3 +217,9 @@ __marimo__/
 
 .history/
 .python-version
+
+# MCPB bundles
+*.mcpb
+
+# MCP registry tokens
+.mcpregistry_*
