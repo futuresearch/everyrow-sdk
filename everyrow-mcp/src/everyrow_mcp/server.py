@@ -30,7 +30,6 @@ async def lifespan(_server: FastMCP):
             response = await whoami(client=c)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
-        print("everyrow-mcp: Authenticated successfully")
     except Exception as e:
         raise RuntimeError(f"everyrow-mcp startup failed: {e}") from e
 
