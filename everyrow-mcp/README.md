@@ -6,7 +6,15 @@ This server exposes everyrow's 5 core operations as MCP tools, allowing LLM appl
 
 **All tools operate on local CSV files.** Provide absolute file paths as input, and transformed results are written to new CSV files at your specified output path.
 
-## Setup
+## Installation
+
+### Option 1: Claude Desktop (Recommended)
+
+Download the latest `.mcpb` bundle from the [GitHub Releases](https://github.com/futuresearch/everyrow-sdk/releases) page and double-click to install in Claude Desktop. You'll be prompted to enter your everyrow API key during setup.
+
+> **Note:** The MCPB bundle works in Claude Desktop's **Chat** mode. Due to a [known limitation](https://github.com/anthropics/claude-code/issues/20377), local MCP servers are not currently exposed in Cowork mode.
+
+### Option 2: Claude Code / Manual Setup
 
 The server requires an everyrow API key. Get one at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
 

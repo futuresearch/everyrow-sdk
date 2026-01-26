@@ -1,6 +1,7 @@
 """MCP server for everyrow SDK operations."""
 
 import json
+import logging
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -539,6 +540,14 @@ def _schema_to_model(name: str, schema: dict[str, Any]) -> type[BaseModel]:
 
 def main():
     """Run the MCP server."""
+    # Configure logging to use stderr only (stdout is reserved for JSON-RPC)
+    logging.basicConfig(
+        level=logging.WARNING,
+        stream=sys.stderr,
+        format="%(levelname)s: %(message)s",
+        force=True,
+    )
+
     # Check for API key before starting
     if "EVERYROW_API_KEY" not in os.environ:
         print(
