@@ -33,6 +33,7 @@ dev = [
     "pytest-mock>=3.15.1",
     "basedpyright>=1.22.0",
     "ruff>=0.9.9",
+    "jsonschema>=4.0.0",
 ]
 
 [tool.basedpyright]

@@ -1,11 +1,13 @@
 import json
 import tomllib
 
+import httpx
+import jsonschema
 import pytest
 
 
 def test_version_consistency(pytestconfig: pytest.Config):
-    """Check that version is consistent across pyproject.toml, plugin.json, gemini-extension.json, marketplace.json, and everyrow-mcp/pyproject.toml."""
+    """Check that version is consistent across pyproject.toml, plugin.json, gemini-extension.json, marketplace.json, everyrow-mcp/pyproject.toml, and everyrow-mcp/server.json."""
     root = pytestconfig.rootpath
 
     pyproject_path = root / "pyproject.toml"
@@ -33,6 +35,12 @@ def test_version_consistency(pytestconfig: pytest.Config):
         mcp_pyproject = tomllib.load(f)
     mcp_version = mcp_pyproject["project"]["version"]
 
+    server_json_path = root / "everyrow-mcp" / "server.json"
+    with open(server_json_path) as f:
+        server_json = json.load(f)
+    server_json_version = server_json["version"]
+    server_json_package_version = server_json["packages"][0]["version"]
+
     assert pyproject_version == plugin_version, (
         f"pyproject.toml version ({pyproject_version}) != plugin.json version ({plugin_version})"
     )
@@ -45,3 +53,27 @@ def test_version_consistency(pytestconfig: pytest.Config):
     assert pyproject_version == mcp_version, (
         f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/pyproject.toml version ({mcp_version})"
     )
+    assert pyproject_version == server_json_version, (
+        f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/server.json version ({server_json_version})"
+    )
+    assert pyproject_version == server_json_package_version, (
+        f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/server.json packages[0].version ({server_json_package_version})"
+    )
+
+
+def test_server_json_schema(pytestconfig: pytest.Config):
+    """Validate everyrow-mcp/server.json against its JSON schema."""
+    root = pytestconfig.rootpath
+
+    server_json_path = root / "everyrow-mcp" / "server.json"
+    with open(server_json_path) as f:
+        server_json = json.load(f)
+
+    schema_url = server_json.get("$schema")
+    assert schema_url, "server.json must have a $schema field"
+
+    response = httpx.get(schema_url)
+    response.raise_for_status()
+    schema = response.json()
+
+    jsonschema.validate(instance=server_json, schema=schema)
