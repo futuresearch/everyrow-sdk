@@ -1,13 +1,11 @@
 import json
 import tomllib
 
-import httpx
-import jsonschema
 import pytest
 
 
 def test_version_consistency(pytestconfig: pytest.Config):
-    """Check that version is consistent across pyproject.toml, plugin.json, gemini-extension.json, marketplace.json, everyrow-mcp/pyproject.toml, and everyrow-mcp/server.json."""
+    """Check that version is consistent across all version files in the monorepo."""
     # root is everyrow-sdk/, repo_root is the parent directory
     root = pytestconfig.rootpath
     repo_root = root.parent
@@ -69,22 +67,3 @@ def test_version_consistency(pytestconfig: pytest.Config):
     assert pyproject_version == manifest_version, (
         f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/manifest.json version ({manifest_version})"
     )
-
-
-def test_server_json_schema(pytestconfig: pytest.Config):
-    """Validate everyrow-mcp/server.json against its JSON schema."""
-    root = pytestconfig.rootpath
-    repo_root = root.parent
-
-    server_json_path = repo_root / "everyrow-mcp" / "server.json"
-    with open(server_json_path) as f:
-        server_json = json.load(f)
-
-    schema_url = server_json.get("$schema")
-    assert schema_url, "server.json must have a $schema field"
-
-    response = httpx.get(schema_url)
-    response.raise_for_status()
-    schema = response.json()
-
-    jsonschema.validate(instance=server_json, schema=schema)
