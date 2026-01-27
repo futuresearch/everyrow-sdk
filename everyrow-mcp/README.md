@@ -8,17 +8,25 @@ This server exposes everyrow's 5 core operations as MCP tools, allowing LLM appl
 
 ## Installation
 
+The server requires an everyrow API key. Get one at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
+
 ### Claude Desktop
 
 Download the latest `.mcpb` bundle from the [GitHub Releases](https://github.com/futuresearch/everyrow-sdk/releases) page and double-click to install in Claude Desktop. You'll be prompted to enter your everyrow API key during setup.
 
 > **Note:** The MCPB bundle works in Claude Desktop's **Chat** mode. Due to a [known limitation](https://github.com/anthropics/claude-code/issues/20377), local MCP servers are not currently exposed in Cowork mode.
 
+### Cursor
+Set the environment variable in your terminal shell before opening cursor. You may need to re-open cursor from your shell after this. Alternatively, hardcode the api key within cursor settings instead of the hard-coded `${env:EVERYROW_API_KEY}`
+```bash
+export EVERYROW_API_KEY=your_key_here
+```
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=everyrow&config=eyJlbnYiOnsiRVZFUllST1dfQVBJX0tFWSI6IiR7ZW52OkVWRVJZUk9XX0FQSV9LRVl9In0sImNvbW1hbmQiOiJ1dnggZXZlcnlyb3ctbWNwIn0%3D)
+
 ### Manual Config
 
-The server requires an everyrow API key. Get one at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
-
-Either set the API key in your shell environment, or hardcode it directly in the config below.
+Either set the API key in your shell environment as mentioned above, or hardcode it directly in the config below. Environment variable interpolation may differ between MCP clients.
 
 ```bash
 export EVERYROW_API_KEY=your_key_here
