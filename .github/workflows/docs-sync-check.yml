@@ -1,0 +1,81 @@
+name: Docs Sync Check
+
+# LLM AGENTS: Installation instructions must stay in sync across:
+# - README.md (main SDK readme)
+# - everyrow-mcp/README.md (MCP server readme)
+# - docs/installation.md (consolidated installation guide)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-docs-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if docs files changed
+        id: check-files
+        run: |
+          # Get list of changed files in this PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+
+          # Check if any README.md or docs/ files changed
+          MATCHED_FILES=""
+          for file in $CHANGED_FILES; do
+            if [[ "$file" == *"README.md" ]] || [[ "$file" == docs/* ]]; then
+              MATCHED_FILES="$MATCHED_FILES $file"
+            fi
+          done
+
+          if [ -n "$MATCHED_FILES" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "files=$MATCHED_FILES" >> $GITHUB_OUTPUT
+            echo "Found docs files in changed files:$MATCHED_FILES"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "No docs files changed"
+          fi
+
+      - name: Verify docs consistency with Claude
+        if: steps.check-files.outputs.found == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            TASK: Verify installation instructions are consistent (pass/fail CI check)
+
+            Changed docs files: ${{ steps.check-files.outputs.files }}
+
+            Files that must stay in sync:
+
+            1. README.md - "Coding agent plugins" section (Claude Code, Gemini CLI, Codex CLI, Cursor)
+            2. everyrow-mcp/README.md - "Installation" section (Claude Desktop, Manual Config)
+            3. docs/installation.md - Contains both SDK and MCP installation instructions
+
+            What must be consistent:
+            - Claude Code plugin commands must match
+            - Gemini CLI commands and settings must match
+            - Codex CLI commands must match
+            - Cursor setup steps must match
+            - MCP server config (uvx/everyrow-mcp) must match
+            - Claude Desktop .mcpb installation instructions must match
+            - API key setup instructions must match
+
+            INSTRUCTIONS:
+            1. Read all three files listed above
+            2. Compare the installation instructions in each
+            3. Verify commands and configurations are identical where they overlap
+            4. If consistent: exit 0
+            5. If inconsistent: exit 1 and explain what differs
+          claude_args: |
+            --model haiku
+            --allowedTools "Read,Bash(exit:*)"
