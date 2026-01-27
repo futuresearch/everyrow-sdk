@@ -7,43 +7,48 @@ pre-commit:
       group:
         jobs:
           - name: format-sdk
-            glob: "everyrow-sdk/**/*.py"
+            root: "everyrow-sdk/"
+            glob: "**/*.py"
             exclude:
-              - "everyrow-sdk/src/everyrow/generated/**"
-            run: uv run --directory everyrow-sdk ruff format {staged_files}
+              - "src/everyrow/generated/**"
+            run: uv run ruff format {staged_files}
             stage_fixed: true
 
     - name: "SDK Linting"
       group:
         jobs:
           - name: lint-sdk
-            glob: "everyrow-sdk/**/*.py"
+            root: "everyrow-sdk/"
+            glob: "**/*.py"
             exclude:
-              - "everyrow-sdk/src/everyrow/generated/**"
-            run: uv run --directory everyrow-sdk ruff check --fix {staged_files}
+              - "src/everyrow/generated/**"
+            run: uv run ruff check --fix {staged_files}
             stage_fixed: true
 
     - name: "SDK Typechecking"
       group:
         jobs:
           - name: typecheck-sdk
-            glob: "everyrow-sdk/**/*.py"
+            root: "everyrow-sdk/"
+            glob: "**/*.py"
             exclude:
-              - "everyrow-sdk/src/everyrow/generated/**"
-            run: uv run --directory everyrow-sdk basedpyright
+              - "src/everyrow/generated/**"
+            run: uv run basedpyright
 
     - name: "MCP Formatting"
       group:
         jobs:
           - name: format-mcp
-            glob: "everyrow-mcp/**/*.py"
-            run: uv run --directory everyrow-mcp ruff format {staged_files}
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run ruff format {staged_files}
             stage_fixed: true
 
     - name: "MCP Linting"
       group:
         jobs:
           - name: lint-mcp
-            glob: "everyrow-mcp/**/*.py"
-            run: uv run --directory everyrow-mcp ruff check --fix {staged_files}
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run ruff check --fix {staged_files}
             stage_fixed: true
