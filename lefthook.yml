@@ -52,3 +52,11 @@ pre-commit:
             glob: "**/*.py"
             run: uv run ruff check --fix {staged_files}
             stage_fixed: true
+
+    - name: "MCP Typechecking"
+      group:
+        jobs:
+          - name: typecheck-mcp
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run basedpyright
