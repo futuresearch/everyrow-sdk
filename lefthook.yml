@@ -3,31 +3,47 @@ output:
 
 pre-commit:
   jobs:
-    - name: "Formatting"
+    - name: "SDK Formatting"
       group:
         jobs:
-          - name: format
-            glob: "**/*.py"
+          - name: format-sdk
+            glob: "everyrow-sdk/**/*.py"
             exclude:
-              - "src/everyrow/generated/**"
-            run: uv run ruff format {staged_files}
+              - "everyrow-sdk/src/everyrow/generated/**"
+            run: uv run --directory everyrow-sdk ruff format {staged_files}
             stage_fixed: true
 
-    - name: "Linting"
+    - name: "SDK Linting"
       group:
         jobs:
-          - name: lint
-            glob: "**/*.py"
+          - name: lint-sdk
+            glob: "everyrow-sdk/**/*.py"
             exclude:
-              - "src/everyrow/generated/**"
-            run: uv run ruff check --fix {staged_files}
+              - "everyrow-sdk/src/everyrow/generated/**"
+            run: uv run --directory everyrow-sdk ruff check --fix {staged_files}
             stage_fixed: true
 
-    - name: "Typechecking"
+    - name: "SDK Typechecking"
       group:
         jobs:
-          - name: typecheck
-            glob: "**/*.py"
+          - name: typecheck-sdk
+            glob: "everyrow-sdk/**/*.py"
             exclude:
-              - "src/everyrow/generated/**"
-            run: uv run basedpyright --project ./pyproject.toml
+              - "everyrow-sdk/src/everyrow/generated/**"
+            run: uv run --directory everyrow-sdk basedpyright
+
+    - name: "MCP Formatting"
+      group:
+        jobs:
+          - name: format-mcp
+            glob: "everyrow-mcp/**/*.py"
+            run: uv run --directory everyrow-mcp ruff format {staged_files}
+            stage_fixed: true
+
+    - name: "MCP Linting"
+      group:
+        jobs:
+          - name: lint-mcp
+            glob: "everyrow-mcp/**/*.py"
+            run: uv run --directory everyrow-mcp ruff check --fix {staged_files}
+            stage_fixed: true
