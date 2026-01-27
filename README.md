@@ -59,6 +59,12 @@ uv sync
 uv run pytest
 ```
 
+To enable pre-commit hooks (from repo root):
+
+```bash
+lefthook install
+```
+
 ## License
 
 MIT - See [LICENSE.txt](./LICENSE.txt)
