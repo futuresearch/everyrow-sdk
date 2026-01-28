@@ -1,33 +1,37 @@
 import asyncio
-from typing import TypeVar, cast
+from enum import StrEnum
+from typing import TypeVar
 from uuid import UUID
 
 from pandas import DataFrame
 from pydantic.main import BaseModel
 
 from everyrow.api_utils import create_client, handle_response
-from everyrow.citations import render_citations_group, render_citations_standalone
 from everyrow.constants import EveryrowError
-from everyrow.generated.api.default import (
-    get_artifacts_artifacts_get,
-    get_task_status_endpoint_tasks_task_id_status_get,
-    submit_task_tasks_post,
+from everyrow.generated.api.tasks import (
+    get_task_result_tasks_task_id_result_get,
+    get_task_status_tasks_task_id_status_get,
 )
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models import (
-    ArtifactGroupRecord,
-    LLMEnum,
-    StandaloneArtifactRecord,
-    TaskEffort,
+    PublicLLM,
+    TaskResultResponse,
+    TaskResultResponseDataType1,
     TaskStatus,
     TaskStatusResponse,
 )
-from everyrow.generated.models.submit_task_body import SubmitTaskBody
+from everyrow.generated.types import Unset
 from everyrow.result import ScalarResult, TableResult
 
-# "export" generated types.
-LLM = LLMEnum
-EffortLevel = TaskEffort
+LLM = PublicLLM
+
+
+# TODO: Re-enable effort_level once the API supports it.
+class EffortLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -41,16 +45,15 @@ class EveryrowTask[T: BaseModel]:
         self._is_expand = is_expand
         self._response_model = response_model
 
-    async def submit(
+    def set_submitted(
         self,
-        body: SubmitTaskBody,
+        task_id: UUID,
+        session_id: UUID,
         client: AuthenticatedClient,
-    ) -> UUID:
-        task_id = await submit_task(body, client)
+    ) -> None:
         self.task_id = task_id
-        self.session_id = body.session_id
+        self.session_id = session_id
         self._client = client
-        return task_id
 
     async def get_status(
         self, client: AuthenticatedClient | None = None
@@ -74,33 +77,32 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        final_status_response = await await_task_completion(self.task_id, client)
-        artifact_id = cast(
-            UUID, final_status_response.artifact_id
-        )  # we check artifact_id in await_task_completion
+        final_status = await await_task_completion(self.task_id, client)
+
+        result_response = await get_task_result(self.task_id, client)
+        artifact_id = result_response.artifact_id
+
+        if isinstance(artifact_id, Unset) or artifact_id is None:
+            raise EveryrowError("Task result has no artifact ID")
+
+        error = (
+            final_status.error if not isinstance(final_status.error, Unset) else None
+        )
 
         if self._is_map or self._is_expand:
-            data = await read_table_result(artifact_id, client=client)
+            data = _extract_table_data(result_response)
             return TableResult(
                 artifact_id=artifact_id,
                 data=data,
-                error=final_status_response.error,
+                error=error,
             )
         else:
-            data = await read_scalar_result(
-                artifact_id, self._response_model, client=client
-            )
+            data = _extract_scalar_data(result_response, self._response_model)
             return ScalarResult(
                 artifact_id=artifact_id,
                 data=data,
-                error=final_status_response.error,
+                error=error,
             )
-
-
-async def submit_task(body: SubmitTaskBody, client: AuthenticatedClient) -> UUID:
-    response = await submit_task_tasks_post.asyncio(client=client, body=body)
-    response = handle_response(response)
-    return response.task_id
 
 
 async def await_task_completion(
@@ -126,13 +128,17 @@ async def await_task_completion(
             ):
                 break
         await asyncio.sleep(1)
-    if (
-        status_response.status == TaskStatus.FAILED
-        or status_response.artifact_id is None
-    ):
-        raise EveryrowError(
-            f"Failed to create input in everyrow: {status_response.error}"
+
+    if status_response.status == TaskStatus.FAILED:
+        error_msg = (
+            status_response.error
+            if not isinstance(status_response.error, Unset)
+            else "Unknown error"
         )
+        raise EveryrowError(f"Task failed: {error_msg}")
+
+    if status_response.status == TaskStatus.REVOKED:
+        raise EveryrowError("Task was revoked")
 
     return status_response
 
@@ -140,50 +146,40 @@ async def await_task_completion(
 async def get_task_status(
     task_id: UUID, client: AuthenticatedClient
 ) -> TaskStatusResponse:
-    response = await get_task_status_endpoint_tasks_task_id_status_get.asyncio(
-        client=client, task_id=task_id
+    response = await get_task_status_tasks_task_id_status_get.asyncio(
+        task_id=task_id, client=client
     )
     response = handle_response(response)
     return response
 
 
-async def read_table_result(
-    artifact_id: UUID,
-    client: AuthenticatedClient,
-) -> DataFrame:
-    response = await get_artifacts_artifacts_get.asyncio(
-        client=client, artifact_ids=[artifact_id]
+async def get_task_result(
+    task_id: UUID, client: AuthenticatedClient
+) -> TaskResultResponse:
+    response = await get_task_result_tasks_task_id_result_get.asyncio(
+        task_id=task_id, client=client
     )
     response = handle_response(response)
-    if len(response) != 1:
-        raise EveryrowError(f"Expected 1 artifact, got {len(response)}")
-    artifact = response[0]
-    if not isinstance(artifact, ArtifactGroupRecord):
-        raise EveryrowError("Expected table result, but got a scalar")
-
-    artifact = render_citations_group(artifact)
-
-    return DataFrame([a.data for a in artifact.artifacts])
+    return response
 
 
-async def read_scalar_result[T: BaseModel](
-    artifact_id: UUID,
-    response_model: type[T],
-    client: AuthenticatedClient,
+def _extract_table_data(result: TaskResultResponse) -> DataFrame:
+    if isinstance(result.data, list):
+        records = [item.additional_properties for item in result.data]
+        return DataFrame(records)
+    raise EveryrowError(
+        "Expected table result (list of records), but got scalar or null"
+    )
+
+
+def _extract_scalar_data[T: BaseModel](
+    result: TaskResultResponse, response_model: type[T]
 ) -> T:
-    response = await get_artifacts_artifacts_get.asyncio(
-        client=client, artifact_ids=[artifact_id]
-    )
-    response = handle_response(response)
-    if len(response) != 1:
-        raise EveryrowError(f"Expected 1 artifact, got {len(response)}")
-    artifact = response[0]
-    if not isinstance(artifact, StandaloneArtifactRecord):
-        raise EveryrowError("Expected scalar result, but got a table")
-
-    artifact = render_citations_standalone(artifact)
-
-    return response_model(**artifact.data)
+    if isinstance(result.data, TaskResultResponseDataType1):
+        return response_model(**result.data.additional_properties)
+    if isinstance(result.data, list) and len(result.data) == 1:
+        return response_model(**result.data[0].additional_properties)
+    raise EveryrowError("Expected scalar result, but got table or null")
 
 
 async def fetch_task_data(
@@ -191,9 +187,6 @@ async def fetch_task_data(
     client: AuthenticatedClient | None = None,
 ) -> DataFrame:
     """Fetch the result data for a completed task as a pandas DataFrame.
-
-    This is a convenience helper that retrieves the table-level group artifact
-    associated with a task and returns it as a DataFrame.
 
     Args:
         task_id: The UUID of the task to fetch data for (can be a string or UUID).
@@ -205,11 +198,6 @@ async def fetch_task_data(
 
     Raises:
         EveryrowError: If the task has not completed, failed, or has no artifact.
-
-    Example:
-        >>> from everyrow import fetch_task_data
-        >>> df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
-        >>> print(df.head())
     """
     if isinstance(task_id, str):
         task_id = UUID(task_id)
@@ -219,12 +207,10 @@ async def fetch_task_data(
 
     status_response = await get_task_status(task_id, client)
 
-    if status_response.status not in (TaskStatus.COMPLETED,):
+    if status_response.status != TaskStatus.COMPLETED:
         raise EveryrowError(
-            f"Task {task_id} is not completed (status: {status_response.status.value}). Error: {status_response.error}"
+            f"Task {task_id} is not completed (status: {status_response.status.value})."
         )
 
-    if status_response.artifact_id is None:
-        raise EveryrowError(f"Task {task_id} has no associated artifact.")
-
-    return await read_table_result(status_response.artifact_id, client)
+    result_response = await get_task_result(task_id, client)
+    return _extract_table_data(result_response)

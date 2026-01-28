@@ -18,11 +18,13 @@ class InsufficientBalanceError:
     Attributes:
         message (str):
         current_balance_dollars (float):
+        minimum_required_dollars (float):
         error (str | Unset):  Default: 'INSUFFICIENT_BALANCE'.
     """
 
     message: str
     current_balance_dollars: float
+    minimum_required_dollars: float
     error: str | Unset = "INSUFFICIENT_BALANCE"
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -30,6 +32,8 @@ class InsufficientBalanceError:
         message = self.message
 
         current_balance_dollars = self.current_balance_dollars
+
+        minimum_required_dollars = self.minimum_required_dollars
 
         error = self.error
 
@@ -39,6 +43,7 @@ class InsufficientBalanceError:
             {
                 "message": message,
                 "current_balance_dollars": current_balance_dollars,
+                "minimum_required_dollars": minimum_required_dollars,
             }
         )
         if error is not UNSET:
@@ -53,11 +58,14 @@ class InsufficientBalanceError:
 
         current_balance_dollars = d.pop("current_balance_dollars")
 
+        minimum_required_dollars = d.pop("minimum_required_dollars")
+
         error = d.pop("error", UNSET)
 
         insufficient_balance_error = cls(
             message=message,
             current_balance_dollars=current_balance_dollars,
+            minimum_required_dollars=minimum_required_dollars,
             error=error,
         )
 
