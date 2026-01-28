@@ -10,30 +10,42 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
-    from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
+    from ..models.screen_operation_input_type_1_item import (
+        ScreenOperationInputType1Item,
+    )
+    from ..models.screen_operation_input_type_2 import ScreenOperationInputType2
+    from ..models.screen_operation_response_schema_type_0 import (
+        ScreenOperationResponseSchemaType0,
+    )
 
 
-T = TypeVar("T", bound="DedupeOperation")
+T = TypeVar("T", bound="ScreenOperation")
 
 
 @_attrs_define
-class DedupeOperation:
+class ScreenOperation:
     """
     Attributes:
-        input_ (DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID): The input data as a) the ID of
+        input_ (list[ScreenOperationInputType1Item] | ScreenOperationInputType2 | UUID): The input data as a) the ID of
             an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form of a
             list of JSON objects
-        equivalence_relation (str): Description of what makes two rows equivalent/duplicates
+        task (str): Instructions for the AI to filter/screen each row
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
+        response_schema (None | ScreenOperationResponseSchemaType0 | Unset): JSON Schema for the response format. If not
+            provided, uses default answer schema.
     """
 
-    input_: DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID
-    equivalence_relation: str
+    input_: list[ScreenOperationInputType1Item] | ScreenOperationInputType2 | UUID
+    task: str
     session_id: None | Unset | UUID = UNSET
+    response_schema: None | ScreenOperationResponseSchemaType0 | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.screen_operation_response_schema_type_0 import (
+            ScreenOperationResponseSchemaType0,
+        )
+
         input_: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.input_, UUID):
             input_ = str(self.input_)
@@ -46,7 +58,7 @@ class DedupeOperation:
         else:
             input_ = self.input_.to_dict()
 
-        equivalence_relation = self.equivalence_relation
+        task = self.task
 
         session_id: None | str | Unset
         if isinstance(self.session_id, Unset):
@@ -56,27 +68,44 @@ class DedupeOperation:
         else:
             session_id = self.session_id
 
+        response_schema: dict[str, Any] | None | Unset
+        if isinstance(self.response_schema, Unset):
+            response_schema = UNSET
+        elif isinstance(self.response_schema, ScreenOperationResponseSchemaType0):
+            response_schema = self.response_schema.to_dict()
+        else:
+            response_schema = self.response_schema
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
                 "input": input_,
-                "equivalence_relation": equivalence_relation,
+                "task": task,
             }
         )
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
+        if response_schema is not UNSET:
+            field_dict["response_schema"] = response_schema
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
-        from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
+        from ..models.screen_operation_input_type_1_item import (
+            ScreenOperationInputType1Item,
+        )
+        from ..models.screen_operation_input_type_2 import ScreenOperationInputType2
+        from ..models.screen_operation_response_schema_type_0 import (
+            ScreenOperationResponseSchemaType0,
+        )
 
         d = dict(src_dict)
 
-        def _parse_input_(data: object) -> DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID:
+        def _parse_input_(
+            data: object,
+        ) -> list[ScreenOperationInputType1Item] | ScreenOperationInputType2 | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
@@ -91,7 +120,9 @@ class DedupeOperation:
                 input_type_1 = []
                 _input_type_1 = data
                 for input_type_1_item_data in _input_type_1:
-                    input_type_1_item = DedupeOperationInputType1Item.from_dict(input_type_1_item_data)
+                    input_type_1_item = ScreenOperationInputType1Item.from_dict(
+                        input_type_1_item_data
+                    )
 
                     input_type_1.append(input_type_1_item)
 
@@ -100,13 +131,13 @@ class DedupeOperation:
                 pass
             if not isinstance(data, dict):
                 raise TypeError()
-            input_type_2 = DedupeOperationInputType2.from_dict(data)
+            input_type_2 = ScreenOperationInputType2.from_dict(data)
 
             return input_type_2
 
         input_ = _parse_input_(d.pop("input"))
 
-        equivalence_relation = d.pop("equivalence_relation")
+        task = d.pop("task")
 
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
@@ -125,14 +156,36 @@ class DedupeOperation:
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
 
-        dedupe_operation = cls(
+        def _parse_response_schema(
+            data: object,
+        ) -> None | ScreenOperationResponseSchemaType0 | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                response_schema_type_0 = ScreenOperationResponseSchemaType0.from_dict(
+                    data
+                )
+
+                return response_schema_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | ScreenOperationResponseSchemaType0 | Unset, data)
+
+        response_schema = _parse_response_schema(d.pop("response_schema", UNSET))
+
+        screen_operation = cls(
             input_=input_,
-            equivalence_relation=equivalence_relation,
+            task=task,
             session_id=session_id,
+            response_schema=response_schema,
         )
 
-        dedupe_operation.additional_properties = d
-        return dedupe_operation
+        screen_operation.additional_properties = d
+        return screen_operation
 
     @property
     def additional_keys(self) -> list[str]:

@@ -24,7 +24,7 @@ jobs:
 
       - name: Build packages
         run: |
-          uv build
+          uv build --directory everyrow-sdk --out-dir $GITHUB_WORKSPACE/dist
           uv build --directory everyrow-mcp --out-dir $GITHUB_WORKSPACE/dist
 
       - name: Publish to PyPI

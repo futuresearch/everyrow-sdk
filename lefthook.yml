@@ -3,31 +3,60 @@ output:
 
 pre-commit:
   jobs:
-    - name: "Formatting"
+    - name: "SDK Formatting"
       group:
         jobs:
-          - name: format
+          - name: format-sdk
+            root: "everyrow-sdk/"
             glob: "**/*.py"
             exclude:
               - "src/everyrow/generated/**"
             run: uv run ruff format {staged_files}
             stage_fixed: true
 
-    - name: "Linting"
+    - name: "SDK Linting"
       group:
         jobs:
-          - name: lint
+          - name: lint-sdk
+            root: "everyrow-sdk/"
             glob: "**/*.py"
             exclude:
               - "src/everyrow/generated/**"
             run: uv run ruff check --fix {staged_files}
             stage_fixed: true
 
-    - name: "Typechecking"
+    - name: "SDK Typechecking"
       group:
         jobs:
-          - name: typecheck
+          - name: typecheck-sdk
+            root: "everyrow-sdk/"
             glob: "**/*.py"
             exclude:
               - "src/everyrow/generated/**"
-            run: uv run basedpyright --project ./pyproject.toml
+            run: uv run basedpyright
+
+    - name: "MCP Formatting"
+      group:
+        jobs:
+          - name: format-mcp
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run ruff format {staged_files}
+            stage_fixed: true
+
+    - name: "MCP Linting"
+      group:
+        jobs:
+          - name: lint-mcp
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run ruff check --fix {staged_files}
+            stage_fixed: true
+
+    - name: "MCP Typechecking"
+      group:
+        jobs:
+          - name: typecheck-mcp
+            root: "everyrow-mcp/"
+            glob: "**/*.py"
+            run: uv run basedpyright

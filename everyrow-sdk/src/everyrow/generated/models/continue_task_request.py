@@ -10,8 +10,12 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.create_artifact_request_data_type_0_item import CreateArtifactRequestDataType0Item
-    from ..models.create_artifact_request_data_type_1 import CreateArtifactRequestDataType1
+    from ..models.create_artifact_request_data_type_0_item import (
+        CreateArtifactRequestDataType0Item,
+    )
+    from ..models.create_artifact_request_data_type_1 import (
+        CreateArtifactRequestDataType1,
+    )
 
 
 T = TypeVar("T", bound="CreateArtifactRequest")
@@ -64,19 +68,27 @@ class CreateArtifactRequest:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.create_artifact_request_data_type_0_item import CreateArtifactRequestDataType0Item
-        from ..models.create_artifact_request_data_type_1 import CreateArtifactRequestDataType1
+        from ..models.create_artifact_request_data_type_0_item import (
+            CreateArtifactRequestDataType0Item,
+        )
+        from ..models.create_artifact_request_data_type_1 import (
+            CreateArtifactRequestDataType1,
+        )
 
         d = dict(src_dict)
 
-        def _parse_data(data: object) -> CreateArtifactRequestDataType1 | list[CreateArtifactRequestDataType0Item]:
+        def _parse_data(
+            data: object,
+        ) -> CreateArtifactRequestDataType1 | list[CreateArtifactRequestDataType0Item]:
             try:
                 if not isinstance(data, list):
                     raise TypeError()
                 data_type_0 = []
                 _data_type_0 = data
                 for data_type_0_item_data in _data_type_0:
-                    data_type_0_item = CreateArtifactRequestDataType0Item.from_dict(data_type_0_item_data)
+                    data_type_0_item = CreateArtifactRequestDataType0Item.from_dict(
+                        data_type_0_item_data
+                    )
 
                     data_type_0.append(data_type_0_item)
 

@@ -12,39 +12,48 @@ from ..models.public_llm import PublicLLM
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
-    from ..models.single_agent_operation_input_type_2 import SingleAgentOperationInputType2
-    from ..models.single_agent_operation_response_schema_type_0 import SingleAgentOperationResponseSchemaType0
+    from ..models.agent_map_operation_input_type_1_item import (
+        AgentMapOperationInputType1Item,
+    )
+    from ..models.agent_map_operation_input_type_2 import AgentMapOperationInputType2
+    from ..models.agent_map_operation_response_schema_type_0 import (
+        AgentMapOperationResponseSchemaType0,
+    )
 
 
-T = TypeVar("T", bound="SingleAgentOperation")
+T = TypeVar("T", bound="AgentMapOperation")
 
 
 @_attrs_define
-class SingleAgentOperation:
+class AgentMapOperation:
     """
     Attributes:
-        input_ (list[SingleAgentOperationInputType1Item] | SingleAgentOperationInputType2 | UUID): The input data as a)
-            the ID of an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the
-            form of a list of JSON objects
-        task (str): Instructions for the AI agent
+        input_ (AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID): The input data as a) the ID
+            of an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form
+            of a list of JSON objects
+        task (str): Instructions for the AI agent to execute per row
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
-        response_schema (None | SingleAgentOperationResponseSchemaType0 | Unset): JSON Schema for the response format.
-            If not provided, use default answer schema.
+        response_schema (AgentMapOperationResponseSchemaType0 | None | Unset): JSON Schema for the response format. If
+            not provided, use default answer schema.
         llm (PublicLLM | Unset):
         effort_level (PublicEffortLevel | Unset):
+        join_with_input (bool | Unset): If True, merge agent output with input row. If False, output only agent results.
+            Default: True.
     """
 
-    input_: list[SingleAgentOperationInputType1Item] | SingleAgentOperationInputType2 | UUID
+    input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
     task: str
     session_id: None | Unset | UUID = UNSET
-    response_schema: None | SingleAgentOperationResponseSchemaType0 | Unset = UNSET
+    response_schema: AgentMapOperationResponseSchemaType0 | None | Unset = UNSET
     llm: PublicLLM | Unset = UNSET
     effort_level: PublicEffortLevel | Unset = UNSET
+    join_with_input: bool | Unset = True
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.single_agent_operation_response_schema_type_0 import SingleAgentOperationResponseSchemaType0
+        from ..models.agent_map_operation_response_schema_type_0 import (
+            AgentMapOperationResponseSchemaType0,
+        )
 
         input_: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.input_, UUID):
@@ -71,7 +80,7 @@ class SingleAgentOperation:
         response_schema: dict[str, Any] | None | Unset
         if isinstance(self.response_schema, Unset):
             response_schema = UNSET
-        elif isinstance(self.response_schema, SingleAgentOperationResponseSchemaType0):
+        elif isinstance(self.response_schema, AgentMapOperationResponseSchemaType0):
             response_schema = self.response_schema.to_dict()
         else:
             response_schema = self.response_schema
@@ -83,6 +92,8 @@ class SingleAgentOperation:
         effort_level: str | Unset = UNSET
         if not isinstance(self.effort_level, Unset):
             effort_level = self.effort_level.value
+
+        join_with_input = self.join_with_input
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -100,20 +111,28 @@ class SingleAgentOperation:
             field_dict["llm"] = llm
         if effort_level is not UNSET:
             field_dict["effort_level"] = effort_level
+        if join_with_input is not UNSET:
+            field_dict["join_with_input"] = join_with_input
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
-        from ..models.single_agent_operation_input_type_2 import SingleAgentOperationInputType2
-        from ..models.single_agent_operation_response_schema_type_0 import SingleAgentOperationResponseSchemaType0
+        from ..models.agent_map_operation_input_type_1_item import (
+            AgentMapOperationInputType1Item,
+        )
+        from ..models.agent_map_operation_input_type_2 import (
+            AgentMapOperationInputType2,
+        )
+        from ..models.agent_map_operation_response_schema_type_0 import (
+            AgentMapOperationResponseSchemaType0,
+        )
 
         d = dict(src_dict)
 
         def _parse_input_(
             data: object,
-        ) -> list[SingleAgentOperationInputType1Item] | SingleAgentOperationInputType2 | UUID:
+        ) -> AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
@@ -128,7 +147,9 @@ class SingleAgentOperation:
                 input_type_1 = []
                 _input_type_1 = data
                 for input_type_1_item_data in _input_type_1:
-                    input_type_1_item = SingleAgentOperationInputType1Item.from_dict(input_type_1_item_data)
+                    input_type_1_item = AgentMapOperationInputType1Item.from_dict(
+                        input_type_1_item_data
+                    )
 
                     input_type_1.append(input_type_1_item)
 
@@ -137,7 +158,7 @@ class SingleAgentOperation:
                 pass
             if not isinstance(data, dict):
                 raise TypeError()
-            input_type_2 = SingleAgentOperationInputType2.from_dict(data)
+            input_type_2 = AgentMapOperationInputType2.from_dict(data)
 
             return input_type_2
 
@@ -162,7 +183,9 @@ class SingleAgentOperation:
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
 
-        def _parse_response_schema(data: object) -> None | SingleAgentOperationResponseSchemaType0 | Unset:
+        def _parse_response_schema(
+            data: object,
+        ) -> AgentMapOperationResponseSchemaType0 | None | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -170,12 +193,14 @@ class SingleAgentOperation:
             try:
                 if not isinstance(data, dict):
                     raise TypeError()
-                response_schema_type_0 = SingleAgentOperationResponseSchemaType0.from_dict(data)
+                response_schema_type_0 = AgentMapOperationResponseSchemaType0.from_dict(
+                    data
+                )
 
                 return response_schema_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(None | SingleAgentOperationResponseSchemaType0 | Unset, data)
+            return cast(AgentMapOperationResponseSchemaType0 | None | Unset, data)
 
         response_schema = _parse_response_schema(d.pop("response_schema", UNSET))
 
@@ -193,17 +218,20 @@ class SingleAgentOperation:
         else:
             effort_level = PublicEffortLevel(_effort_level)
 
-        single_agent_operation = cls(
+        join_with_input = d.pop("join_with_input", UNSET)
+
+        agent_map_operation = cls(
             input_=input_,
             task=task,
             session_id=session_id,
             response_schema=response_schema,
             llm=llm,
             effort_level=effort_level,
+            join_with_input=join_with_input,
         )
 
-        single_agent_operation.additional_properties = d
-        return single_agent_operation
+        agent_map_operation.additional_properties = d
+        return agent_map_operation
 
     @property
     def additional_keys(self) -> list[str]:

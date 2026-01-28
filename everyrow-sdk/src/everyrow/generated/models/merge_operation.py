@@ -10,10 +10,16 @@ from attrs import field as _attrs_field
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
+    from ..models.merge_operation_left_input_type_1_item import (
+        MergeOperationLeftInputType1Item,
+    )
     from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
-    from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
-    from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
+    from ..models.merge_operation_right_input_type_1_item import (
+        MergeOperationRightInputType1Item,
+    )
+    from ..models.merge_operation_right_input_type_2 import (
+        MergeOperationRightInputType2,
+    )
 
 
 T = TypeVar("T", bound="MergeOperation")
@@ -33,8 +39,12 @@ class MergeOperation:
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
-    left_input: list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID
-    right_input: list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID
+    left_input: (
+        list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID
+    )
+    right_input: (
+        list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID
+    )
     task: str
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
@@ -108,16 +118,26 @@ class MergeOperation:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
-        from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
-        from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
-        from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
+        from ..models.merge_operation_left_input_type_1_item import (
+            MergeOperationLeftInputType1Item,
+        )
+        from ..models.merge_operation_left_input_type_2 import (
+            MergeOperationLeftInputType2,
+        )
+        from ..models.merge_operation_right_input_type_1_item import (
+            MergeOperationRightInputType1Item,
+        )
+        from ..models.merge_operation_right_input_type_2 import (
+            MergeOperationRightInputType2,
+        )
 
         d = dict(src_dict)
 
         def _parse_left_input(
             data: object,
-        ) -> list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID:
+        ) -> (
+            list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID
+        ):
             try:
                 if not isinstance(data, str):
                     raise TypeError()
@@ -132,7 +152,9 @@ class MergeOperation:
                 left_input_type_1 = []
                 _left_input_type_1 = data
                 for left_input_type_1_item_data in _left_input_type_1:
-                    left_input_type_1_item = MergeOperationLeftInputType1Item.from_dict(left_input_type_1_item_data)
+                    left_input_type_1_item = MergeOperationLeftInputType1Item.from_dict(
+                        left_input_type_1_item_data
+                    )
 
                     left_input_type_1.append(left_input_type_1_item)
 
@@ -149,7 +171,11 @@ class MergeOperation:
 
         def _parse_right_input(
             data: object,
-        ) -> list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID:
+        ) -> (
+            list[MergeOperationRightInputType1Item]
+            | MergeOperationRightInputType2
+            | UUID
+        ):
             try:
                 if not isinstance(data, str):
                     raise TypeError()
@@ -164,7 +190,11 @@ class MergeOperation:
                 right_input_type_1 = []
                 _right_input_type_1 = data
                 for right_input_type_1_item_data in _right_input_type_1:
-                    right_input_type_1_item = MergeOperationRightInputType1Item.from_dict(right_input_type_1_item_data)
+                    right_input_type_1_item = (
+                        MergeOperationRightInputType1Item.from_dict(
+                            right_input_type_1_item_data
+                        )
+                    )
 
                     right_input_type_1.append(right_input_type_1_item)
 

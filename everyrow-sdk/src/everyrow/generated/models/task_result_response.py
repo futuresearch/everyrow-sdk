@@ -11,7 +11,9 @@ from ..models.task_status import TaskStatus
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
+    from ..models.task_result_response_data_type_0_item import (
+        TaskResultResponseDataType0Item,
+    )
     from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
 
 
@@ -33,12 +35,19 @@ class TaskResultResponse:
     task_id: UUID
     status: TaskStatus
     artifact_id: None | Unset | UUID = UNSET
-    data: list[TaskResultResponseDataType0Item] | None | TaskResultResponseDataType1 | Unset = UNSET
+    data: (
+        list[TaskResultResponseDataType0Item]
+        | None
+        | TaskResultResponseDataType1
+        | Unset
+    ) = UNSET
     error: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
+        from ..models.task_result_response_data_type_1 import (
+            TaskResultResponseDataType1,
+        )
 
         task_id = str(self.task_id)
 
@@ -91,8 +100,12 @@ class TaskResultResponse:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
-        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
+        from ..models.task_result_response_data_type_0_item import (
+            TaskResultResponseDataType0Item,
+        )
+        from ..models.task_result_response_data_type_1 import (
+            TaskResultResponseDataType1,
+        )
 
         d = dict(src_dict)
         task_id = UUID(d.pop("task_id"))
@@ -118,7 +131,12 @@ class TaskResultResponse:
 
         def _parse_data(
             data: object,
-        ) -> list[TaskResultResponseDataType0Item] | None | TaskResultResponseDataType1 | Unset:
+        ) -> (
+            list[TaskResultResponseDataType0Item]
+            | None
+            | TaskResultResponseDataType1
+            | Unset
+        ):
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -129,7 +147,9 @@ class TaskResultResponse:
                 data_type_0 = []
                 _data_type_0 = data
                 for data_type_0_item_data in _data_type_0:
-                    data_type_0_item = TaskResultResponseDataType0Item.from_dict(data_type_0_item_data)
+                    data_type_0_item = TaskResultResponseDataType0Item.from_dict(
+                        data_type_0_item_data
+                    )
 
                     data_type_0.append(data_type_0_item)
 
@@ -144,7 +164,13 @@ class TaskResultResponse:
                 return data_type_1
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
-            return cast(list[TaskResultResponseDataType0Item] | None | TaskResultResponseDataType1 | Unset, data)
+            return cast(
+                list[TaskResultResponseDataType0Item]
+                | None
+                | TaskResultResponseDataType1
+                | Unset,
+                data,
+            )
 
         data = _parse_data(d.pop("data", UNSET))
 
