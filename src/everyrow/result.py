@@ -1,15 +1,17 @@
-from typing import TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 from uuid import UUID
 
 import attrs
 from pandas import DataFrame
-from pydantic import BaseModel
 
-T = TypeVar("T", bound=str | BaseModel)
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+T = TypeVar("T", bound="str | BaseModel | dict[str, Any]")
 
 
 @attrs.define
-class ScalarResult[T: str | BaseModel]:
+class ScalarResult[T: "str | BaseModel | dict[str, Any]"]:
     artifact_id: UUID
     data: T
     error: str | None

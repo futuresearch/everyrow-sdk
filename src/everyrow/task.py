@@ -1,9 +1,8 @@
 import asyncio
-from typing import TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import UUID
 
 from pandas import DataFrame
-from pydantic.main import BaseModel
 
 from everyrow.api_utils import create_client, handle_response
 from everyrow.citations import render_citations_group, render_citations_standalone
@@ -25,15 +24,18 @@ from everyrow.generated.models import (
 from everyrow.generated.models.submit_task_body import SubmitTaskBody
 from everyrow.result import ScalarResult, TableResult
 
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
 # "export" generated types.
 LLM = LLMEnum
 EffortLevel = TaskEffort
 
-T = TypeVar("T", bound=BaseModel)
+T = TypeVar("T", bound="BaseModel")
 
 
-class EveryrowTask[T: BaseModel]:
-    def __init__(self, response_model: type[T], is_map: bool, is_expand: bool):
+class EveryrowTask[T: "BaseModel | dict[str, Any]"]:
+    def __init__(self, response_model: "type[T] | None", is_map: bool, is_expand: bool):
         self.task_id: UUID | None = None
         self.session_id: UUID | None = None
         self._client: AuthenticatedClient | None = None
@@ -87,12 +89,12 @@ class EveryrowTask[T: BaseModel]:
                 error=final_status_response.error,
             )
         else:
-            data = await read_scalar_result(
+            scalar_data = await read_scalar_result(
                 artifact_id, self._response_model, client=client
             )
-            return ScalarResult(
+            return ScalarResult(  # type: ignore[return-value]
                 artifact_id=artifact_id,
-                data=data,
+                data=scalar_data,
                 error=final_status_response.error,
             )
 
@@ -166,11 +168,11 @@ async def read_table_result(
     return DataFrame([a.data for a in artifact.artifacts])
 
 
-async def read_scalar_result[T: BaseModel](
+async def read_scalar_result[T: "BaseModel"](
     artifact_id: UUID,
-    response_model: type[T],
+    response_model: "type[T] | None",
     client: AuthenticatedClient,
-) -> T:
+) -> "T | dict[str, Any]":
     response = await get_artifacts_artifacts_get.asyncio(
         client=client, artifact_ids=[artifact_id]
     )
@@ -183,6 +185,8 @@ async def read_scalar_result[T: BaseModel](
 
     artifact = render_citations_standalone(artifact)
 
+    if response_model is None:
+        return artifact.data
     return response_model(**artifact.data)
 
 
