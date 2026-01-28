@@ -20,7 +20,7 @@ class DeepMergePublicParams:
         merge_on_left (None | str | Unset): Column name for merge table
         merge_on_right (None | str | Unset): Column name for merge table
         merge_model (LLMEnum | None | Unset): LLM model for merge operation Default: LLMEnum.GEMINI_3_FLASH_MINIMAL.
-        use_web_search (str | Unset): Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search without initial LLM merge Default: "auto".
+        use_web_search (str | None | Unset): Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search without initial LLM merge Default: "auto".
         preview (bool | Unset): When true, process only the first few inputs Default: False.
     """
 
@@ -28,7 +28,7 @@ class DeepMergePublicParams:
     merge_on_left: None | str | Unset = UNSET
     merge_on_right: None | str | Unset = UNSET
     merge_model: LLMEnum | None | Unset = LLMEnum.GEMINI_3_FLASH_MINIMAL
-    use_web_search: str | Unset = "auto"
+    use_web_search: str | None | Unset = "auto"
     preview: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

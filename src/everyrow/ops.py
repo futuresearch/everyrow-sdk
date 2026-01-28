@@ -340,7 +340,7 @@ async def merge(
     right_table: DataFrame | UUID | TableResult | None = None,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    use_web_search: str = "auto",
+    use_web_search: str | None = "auto",
 ) -> TableResult:
     """Merge two tables using merge operation.
 
@@ -397,7 +397,7 @@ async def merge_async(
     right_table: DataFrame | UUID | TableResult,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    use_web_search: str = "auto",
+    use_web_search: str | None = "auto",
 ) -> EveryrowTask[BaseModel]:
     """Submit a merge task asynchronously."""
     left_artifact_id = await _process_agent_map_input(left_table, session)

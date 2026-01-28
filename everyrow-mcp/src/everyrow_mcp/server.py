@@ -354,7 +354,7 @@ class MergeInput(BaseModel):
         description="Optional column name in the right table to use as the merge key. "
         "If not provided, the LLM will determine the best matching strategy.",
     )
-    use_web_search: str = Field(
+    use_web_search: str | None = Field(
         default="auto",
         description='Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search without initial LLM merge',
     )
