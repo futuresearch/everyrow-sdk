@@ -56,14 +56,15 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 
 ## Parameters
 
-| Name | Type | Description |
-|------|------|-------------|
-| `task` | str | How to match the tables |
-| `left_table` | DataFrame | Primary table (all rows kept) |
-| `right_table` | DataFrame | Table to match from |
-| `merge_on_left` | Optional[str] | Column in left table. Model will try to guess if not specified. |
-| `merge_on_right` | Optional[str] | Column in right table. Model will try to guess if not specified. |
-| `session` | Session | Optional, auto-created if omitted |
+| Name | Type | Description                                                                 |
+|------|------|-----------------------------------------------------------------------------|
+| `task` | str | How to match the tables                                                     |
+| `left_table` | DataFrame | Primary table (all rows kept)                                               |
+| `right_table` | DataFrame | Table to match from                                                         |
+| `merge_on_left` | Optional[str] | Column in left table. Model will try to guess if not specified.             |
+| `merge_on_right` | Optional[str] | Column in right table. Model will try to guess if not specified.            |
+| `use_web_search` | Optional[str] | If web search should be enforced / skpped. Value: 'auto' (default) / 'yes' / 'no' |
+| `session` | Session | Optional, auto-created if omitted                                           |
 
 ## Performance
 

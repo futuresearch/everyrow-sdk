@@ -20,6 +20,7 @@ class DeepMergePublicParams:
         merge_on_left (None | str | Unset): Column name for merge table
         merge_on_right (None | str | Unset): Column name for merge table
         merge_model (LLMEnum | None | Unset): LLM model for merge operation Default: LLMEnum.GEMINI_3_FLASH_MINIMAL.
+        use_web_search (None | str | Unset): Control web search behavior: "auto" (default) uses web-search if needed, "no" skips web search entirely, "yes" forces web search on all rows.
         preview (bool | Unset): When true, process only the first few inputs Default: False.
     """
 
@@ -27,6 +28,7 @@ class DeepMergePublicParams:
     merge_on_left: None | str | Unset = UNSET
     merge_on_right: None | str | Unset = UNSET
     merge_model: LLMEnum | None | Unset = LLMEnum.GEMINI_3_FLASH_MINIMAL
+    use_web_search: None | str | Unset = "auto"
     preview: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -53,6 +55,12 @@ class DeepMergePublicParams:
         else:
             merge_model = self.merge_model
 
+        use_web_search: None | str | Unset
+        if isinstance(self.use_web_search, Unset):
+            use_web_search = UNSET
+        else:
+            use_web_search = self.use_web_search
+
         preview = self.preview
 
         field_dict: dict[str, Any] = {}
@@ -68,6 +76,8 @@ class DeepMergePublicParams:
             field_dict["merge_on_right"] = merge_on_right
         if merge_model is not UNSET:
             field_dict["merge_model"] = merge_model
+        if use_web_search is not UNSET:
+            field_dict["use_web_search"] = use_web_search
         if preview is not UNSET:
             field_dict["preview"] = preview
 
@@ -113,6 +123,15 @@ class DeepMergePublicParams:
 
         merge_model = _parse_merge_model(d.pop("merge_model", UNSET))
 
+        def _parse_use_web_search(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        use_web_search = _parse_use_web_search(d.pop("use_web_search", UNSET))
+
         preview = d.pop("preview", UNSET)
 
         deep_merge_public_params = cls(
@@ -120,6 +139,7 @@ class DeepMergePublicParams:
             merge_on_left=merge_on_left,
             merge_on_right=merge_on_right,
             merge_model=merge_model,
+            use_web_search=use_web_search,
             preview=preview,
         )
 

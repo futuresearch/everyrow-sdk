@@ -340,6 +340,7 @@ async def merge(
     right_table: DataFrame | UUID | TableResult | None = None,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
+    use_web_search: str | None = None,
 ) -> TableResult:
     """Merge two tables using merge operation.
 
@@ -350,6 +351,7 @@ async def merge(
         right_table: The right table to merge (DataFrame, UUID, or TableResult)
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
+        use_web_search: Optional enforce / skip web search - 'auto' (default), 'yes', or 'no'
 
     Returns:
         TableResult containing the merged table
@@ -365,6 +367,7 @@ async def merge(
                 right_table=right_table,
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
+                use_web_search=use_web_search,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -378,6 +381,7 @@ async def merge(
         right_table=right_table,
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
+        use_web_search=use_web_search,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -393,6 +397,7 @@ async def merge_async(
     right_table: DataFrame | UUID | TableResult,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
+    use_web_search: str | None = None
 ) -> EveryrowTask[BaseModel]:
     """Submit a merge task asynchronously."""
     left_artifact_id = await _process_agent_map_input(left_table, session)
@@ -402,6 +407,7 @@ async def merge_async(
         task=task,
         merge_on_left=merge_on_left or UNSET,
         merge_on_right=merge_on_right or UNSET,
+        use_web_search=use_web_search or UNSET
     )
     request = DeepMergeRequest(
         query=query,
