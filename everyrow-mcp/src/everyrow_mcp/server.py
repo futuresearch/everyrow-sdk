@@ -354,6 +354,10 @@ class MergeInput(BaseModel):
         description="Optional column name in the right table to use as the merge key. "
         "If not provided, the LLM will determine the best matching strategy.",
     )
+    use_web_search: str = Field(
+        default="auto",
+        description='Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search without initial LLM merge',
+    )
 
     @field_validator("left_csv", "right_csv")
     @classmethod
@@ -395,6 +399,7 @@ async def everyrow_merge(params: MergeInput) -> str:
         right_table=right_df,
         merge_on_left=params.merge_on_left,
         merge_on_right=params.merge_on_right,
+        use_web_search=params.use_web_search,
     )
 
     output_file = resolve_output_path(params.output_path, params.left_csv, "merged")
