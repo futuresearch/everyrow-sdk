@@ -5,11 +5,11 @@ from datetime import datetime
 from uuid import UUID
 
 from everyrow.api_utils import create_client, handle_response
-from everyrow.generated.api.default import (
-    create_session_endpoint_sessions_create_post,
+from everyrow.generated.api.sessions import (
+    create_session_endpoint_sessions_post,
 )
 from everyrow.generated.client import AuthenticatedClient
-from everyrow.generated.models.create_session_request import CreateSessionRequest
+from everyrow.generated.models.create_session import CreateSession
 
 
 class Session:
@@ -61,9 +61,9 @@ async def create_session(
         await client.__aenter__()
 
     try:
-        response = await create_session_endpoint_sessions_create_post.asyncio(
+        response = await create_session_endpoint_sessions_post.asyncio(
             client=client,
-            body=CreateSessionRequest(
+            body=CreateSession(
                 name=name or f"everyrow-sdk-session-{datetime.now().isoformat()}"
             ),
         )

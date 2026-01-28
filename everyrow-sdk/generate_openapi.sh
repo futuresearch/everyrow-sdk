@@ -5,7 +5,7 @@ set -e  # Exit on error
 
 echo "Generating OpenAPI client files..."
 uv run openapi-python-client generate \
-  --url "https://engine.futuresearch.ai/openapi.json" \
+  --url "https://everyrow.io/api/v0/openapi.json" \
   --config openapi-python-client.yaml \
   --overwrite \
   --meta uv

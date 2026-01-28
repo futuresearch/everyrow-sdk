@@ -71,4 +71,23 @@ MIT - See [LICENSE.txt](./LICENSE.txt)
 
 ---
 
-Built by [FutureSearch](https://futuresearch.ai).
+## About
+
+Built by [FutureSearch](https://futuresearch.ai). We kept running into the same data problems: ranking leads, deduping messy CRM exports, merging tables without clean keys. Tedious for humans, but needs judgment that automation can't handle. So we built this.
+
+[everyrow.io](https://everyrow.io) (app/dashboard) · [case studies](https://futuresearch.ai/solutions/) · [research](https://futuresearch.ai/research/)
+
+**Citing everyrow:** If you use this software in your research, please cite it using the metadata in [CITATION.cff](CITATION.cff) or the BibTeX below:
+
+```bibtex
+@software{everyrow,
+  author       = {FutureSearch},
+  title        = {everyrow},
+  url          = {https://github.com/futuresearch/everyrow-sdk},
+  version      = {0.1.10},
+  year         = {2026},
+  license      = {MIT}
+}
+```
+
+**License** MIT license. See [LICENSE.txt](LICENSE.txt).
