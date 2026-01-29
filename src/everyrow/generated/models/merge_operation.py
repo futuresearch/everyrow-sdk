@@ -39,7 +39,7 @@ class MergeOperation:
     task: str
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
-    use_web_search: None | str | Unset = "auto"
+    use_web_search: None | str | Unset = UNSET
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
