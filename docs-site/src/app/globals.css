@@ -214,46 +214,6 @@ a:hover {
   margin: 2rem 0;
 }
 
-/* Syntax highlighting - highlight.js github theme */
-.hljs {
-  color: #e2e8f0;
-}
-
-.hljs-comment,
-.hljs-quote {
-  color: #94a3b8;
-  font-style: italic;
-}
-
-.hljs-keyword,
-.hljs-selector-tag {
-  color: #c084fc;
-}
-
-.hljs-string,
-.hljs-attr {
-  color: #86efac;
-}
-
-.hljs-number,
-.hljs-literal {
-  color: #fbbf24;
-}
-
-.hljs-function,
-.hljs-title {
-  color: #60a5fa;
-}
-
-.hljs-built_in,
-.hljs-type {
-  color: #38bdf8;
-}
-
-.hljs-variable {
-  color: #f472b6;
-}
-
 /* Mobile responsive */
 @media (max-width: 768px) {
   .docs-layout {
