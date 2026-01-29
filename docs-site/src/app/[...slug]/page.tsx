@@ -1,0 +1,49 @@
+import { notFound } from "next/navigation";
+import { DocsLayout } from "@/components/DocsLayout";
+import { getDocBySlug, getDocSlugs, getNavigation } from "@/utils/docs";
+import { markdownToHtml } from "@/utils/markdown";
+
+interface PageProps {
+  params: Promise<{ slug: string[] }>;
+}
+
+export async function generateStaticParams() {
+  const slugs = getDocSlugs();
+  return slugs.map((slug) => ({
+    slug: slug.split("/"),
+  }));
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const { slug } = await params;
+  const slugPath = slug.join("/");
+  const doc = getDocBySlug(slugPath);
+
+  if (!doc) {
+    return { title: "Not Found" };
+  }
+
+  return {
+    title: `${doc.title} | Everyrow Docs`,
+    description: doc.description,
+  };
+}
+
+export default async function DocPage({ params }: PageProps) {
+  const { slug } = await params;
+  const slugPath = slug.join("/");
+  const doc = getDocBySlug(slugPath);
+
+  if (!doc) {
+    notFound();
+  }
+
+  const navigation = getNavigation();
+  const htmlContent = await markdownToHtml(doc.content);
+
+  return (
+    <DocsLayout navigation={navigation}>
+      <article className="prose" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+    </DocsLayout>
+  );
+}
