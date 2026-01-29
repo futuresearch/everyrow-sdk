@@ -493,7 +493,7 @@ async def merge(
     right_table: DataFrame | UUID | TableResult | None = None,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    use_web_search: str | None = None,
+    use_web_search: Literal["auto", "yes", "no"] | None = None,
 ) -> TableResult:
     """Merge two tables using AI.
 
@@ -504,7 +504,7 @@ async def merge(
         right_table: The right table to merge (DataFrame, UUID, or TableResult)
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
-        use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search ony every row. Defaults to "auto" if not provided.
+        use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
 
     Returns:
         TableResult containing the merged table
@@ -548,7 +548,7 @@ async def merge_async(
     right_table: DataFrame | UUID | TableResult,
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
-    use_web_search: str | None = None,
+    use_web_search: Literal["auto", "yes", "no"] | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a merge task asynchronously."""
     left_data = _prepare_table_input(left_table, MergeOperationLeftInputType1Item)

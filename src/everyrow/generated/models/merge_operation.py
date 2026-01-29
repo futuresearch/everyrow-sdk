@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 from uuid import UUID
 
 from attrs import define as _attrs_define
@@ -30,7 +30,7 @@ class MergeOperation:
         task (str): Instructions for the AI to determine how to merge rows
         left_key (None | str | Unset): Column name to merge on from left table
         right_key (None | str | Unset): Column name to merge on from right table
-        use_web_search (None | str | Unset): Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row
+        use_web_search (None | Literal["auto", "yes", "no"] | Unset): Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
@@ -39,7 +39,7 @@ class MergeOperation:
     task: str
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
-    use_web_search: None | str | Unset = UNSET
+    use_web_search: None | Literal["auto", "yes", "no"] | Unset = UNSET
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -82,7 +82,7 @@ class MergeOperation:
         else:
             right_key = self.right_key
 
-        use_web_search: None | str | Unset
+        use_web_search: None | Literal["auto", "yes", "no"] | Unset
         if isinstance(self.use_web_search, Unset):
             use_web_search = UNSET
         else:
@@ -209,12 +209,14 @@ class MergeOperation:
 
         right_key = _parse_right_key(d.pop("right_key", UNSET))
 
-        def _parse_use_web_search(data: object) -> None | str | Unset:
+        def _parse_use_web_search(data: object) -> None | Literal["auto", "yes", "no"] | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
-            return cast(None | str | Unset, data)
+            if data in ("auto", "yes", "no"):
+                return cast(Literal["auto", "yes", "no"], data)
+            raise ValueError(f"use_web_search must be one of 'auto', 'yes', 'no' or None, got {data!r}")
 
         use_web_search = _parse_use_web_search(d.pop("use_web_search", UNSET))
 
