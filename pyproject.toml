@@ -34,6 +34,7 @@ dev = [
     "basedpyright>=1.22.0",
     "ruff>=0.9.9",
     "jsonschema>=4.0.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.basedpyright]
@@ -72,5 +73,9 @@ ban-relative-imports = "all"
 exclude = ["src/everyrow/generated/**"]
 
 [tool.pytest.ini_options]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-m", "not integration"]
 pythonpath = ["src"]
+markers = [
+    "integration: marks tests as integration tests (require EVERYROW_API_KEY)",
+]
+asyncio_mode = "auto"

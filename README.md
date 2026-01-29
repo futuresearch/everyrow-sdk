@@ -342,11 +342,12 @@ lefthook install
 ```
 
 ```bash
-uv run pytest              # tests
-uv run ruff check .        # lint
-uv run ruff format .       # format
-uv run basedpyright        # type check
-./generate_openapi.sh      # regenerate client
+uv run pytest                                          # unit tests
+uv run --env-file .env pytest -m integration           # integration tests (requires EVERYROW_API_KEY)
+uv run ruff check .                                    # lint
+uv run ruff format .                                   # format
+uv run basedpyright                                    # type check
+./generate_openapi.sh                                  # regenerate client
 ```
 
 ---
