@@ -1,0 +1,32 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run integration tests
+        env:
+          EVERYROW_API_KEY: ${{ secrets.EVERYROW_API_KEY }}
+        run: |
+          uv run pip install pytest-xdist
+          uv run pytest -n 8 tests/integration/ -v -m integration --tb=short
