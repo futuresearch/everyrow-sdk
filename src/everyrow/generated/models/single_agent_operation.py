@@ -33,6 +33,8 @@ class SingleAgentOperation:
             If not provided, use default answer schema.
         llm (PublicLLM | Unset):
         effort_level (PublicEffortLevel | Unset):
+        return_list (bool | Unset): If True, treat the output as a list of responses instead of a single response.
+            Default: True.
     """
 
     input_: list[SingleAgentOperationInputType1Item] | SingleAgentOperationInputType2 | UUID
@@ -41,6 +43,7 @@ class SingleAgentOperation:
     response_schema: None | SingleAgentOperationResponseSchemaType0 | Unset = UNSET
     llm: PublicLLM | Unset = UNSET
     effort_level: PublicEffortLevel | Unset = UNSET
+    return_list: bool | Unset = True
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,6 +87,8 @@ class SingleAgentOperation:
         if not isinstance(self.effort_level, Unset):
             effort_level = self.effort_level.value
 
+        return_list = self.return_list
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -100,6 +105,8 @@ class SingleAgentOperation:
             field_dict["llm"] = llm
         if effort_level is not UNSET:
             field_dict["effort_level"] = effort_level
+        if return_list is not UNSET:
+            field_dict["return_list"] = return_list
 
         return field_dict
 
@@ -193,6 +200,8 @@ class SingleAgentOperation:
         else:
             effort_level = PublicEffortLevel(_effort_level)
 
+        return_list = d.pop("return_list", UNSET)
+
         single_agent_operation = cls(
             input_=input_,
             task=task,
@@ -200,6 +209,7 @@ class SingleAgentOperation:
             response_schema=response_schema,
             llm=llm,
             effort_level=effort_level,
+            return_list=return_list,
         )
 
         single_agent_operation.additional_properties = d
