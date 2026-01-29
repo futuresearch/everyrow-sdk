@@ -60,8 +60,8 @@ jobs:
 
       - name: Build static site
         env:
-          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.POSTHOG_KEY_COHORT }}
-          NEXT_PUBLIC_POSTHOG_HOST: https://us.i.posthog.com
+          NEXT_PUBLIC_POSTHOG_KEY: phc_mBkDsIFEJvsI15Feb99JY3ekCUxSEbAiQOuHttmSsFk
+          NEXT_PUBLIC_POSTHOG_HOST: https://z.futuresearch.ai
           NEXT_PUBLIC_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
         run: pnpm build
 
