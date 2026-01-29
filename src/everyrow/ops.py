@@ -213,6 +213,7 @@ async def single_agent_async[T: BaseModel](
         ),
         llm=llm if llm is not None else UNSET,
         effort_level=PublicEffortLevel(effort_level.value),
+        return_list=return_table,
     )
 
     response = await single_agent_operations_single_agent_post.asyncio(
