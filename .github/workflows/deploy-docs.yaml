@@ -59,10 +59,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build static site
-        env:
-          NEXT_PUBLIC_POSTHOG_KEY: phc_mBkDsIFEJvsI15Feb99JY3ekCUxSEbAiQOuHttmSsFk
-          NEXT_PUBLIC_POSTHOG_HOST: https://z.futuresearch.ai
-          NEXT_PUBLIC_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
         run: pnpm build
 
       - name: Log in to Google Cloud

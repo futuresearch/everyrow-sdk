@@ -5,23 +5,22 @@ import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const posthogApiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogApiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-const environment = process.env.NEXT_PUBLIC_ENVIRONMENT ?? "development";
+// PostHog public configuration - these are safe to expose
+const POSTHOG_KEY = "phc_mBkDsIFEJvsI15Feb99JY3ekCUxSEbAiQOuHttmSsFk";
+const POSTHOG_HOST = "https://z.futuresearch.ai";
 
-if (
-  typeof window !== "undefined" &&
-  posthogApiKey !== undefined &&
-  posthogApiHost !== undefined
-) {
-  posthog.init(posthogApiKey, {
-    api_host: posthogApiHost,
+if (typeof window !== "undefined") {
+  posthog.init(POSTHOG_KEY, {
+    api_host: POSTHOG_HOST,
     ui_host: "https://us.posthog.com",
     person_profiles: "identified_only",
     capture_pageview: false,
     capture_pageleave: true,
     loaded: (posthog) => {
-      posthog.register({ environment, app: "everyrow-docs" });
+      posthog.register({
+        environment: "production",
+        app: "everyrow-docs",
+      });
     },
   });
 }
@@ -31,7 +30,7 @@ function PostHogPageView(): null {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (pathname && posthogApiKey) {
+    if (pathname) {
       let url = window.origin + pathname;
       if (searchParams && searchParams.toString()) {
         url = url + `?${searchParams.toString()}`;
@@ -46,9 +45,6 @@ function PostHogPageView(): null {
 }
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  if (!posthogApiKey) {
-    return <>{children}</>;
-  }
   return (
     <PHProvider client={posthog}>
       <PostHogPageView />
