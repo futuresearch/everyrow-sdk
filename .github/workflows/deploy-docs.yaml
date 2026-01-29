@@ -21,8 +21,8 @@ on:
       - ".github/workflows/deploy-docs.yaml"
 
 env:
-  # GCS bucket for static docs files
-  # Traefik needs to be configured to route everyrow.io/docs/* to this bucket
+  # GCS bucket for static docs files (e.g., "everyrow-docs")
+  # Traefik needs to route everyrow.io/docs/* to this bucket
   DOCS_BUCKET: ${{ vars.DOCS_BUCKET }}
 
 permissions:
@@ -74,4 +74,4 @@ jobs:
       - name: Deploy docs site to GCS
         if: ${{ github.ref == 'refs/heads/main' || inputs.deploy_production }}
         run: |
-          gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}/docs
+          gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}
