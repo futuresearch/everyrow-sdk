@@ -74,4 +74,4 @@ jobs:
       - name: Deploy docs site to GCS
         if: ${{ github.ref == 'refs/heads/main' || inputs.deploy_production }}
         run: |
-          gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}
+          gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}/docs
