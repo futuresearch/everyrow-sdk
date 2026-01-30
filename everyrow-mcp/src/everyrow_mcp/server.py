@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 from everyrow.api_utils import create_client
@@ -354,6 +354,10 @@ class MergeInput(BaseModel):
         description="Optional column name in the right table to use as the merge key. "
         "If not provided, the LLM will determine the best matching strategy.",
     )
+    use_web_search: Literal["auto", "yes", "no"] | None = Field(
+        default=None,
+        description='Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.',
+    )
 
     @field_validator("left_csv", "right_csv")
     @classmethod
@@ -395,6 +399,7 @@ async def everyrow_merge(params: MergeInput) -> str:
         right_table=right_df,
         merge_on_left=params.merge_on_left,
         merge_on_right=params.merge_on_right,
+        use_web_search=params.use_web_search,
     )
 
     output_file = resolve_output_path(params.output_path, params.left_csv, "merged")
