@@ -36,13 +36,43 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./docs-site
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --- Python setup for notebook conversion ---
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Convert notebooks to HTML
+        run: |
+          uv run --group case-studies python -c "
+          import subprocess
+          from pathlib import Path
+
+          notebooks_dir = Path('docs/case_studies')
+          output_dir = Path('docs-site/public/notebooks')
+          output_dir.mkdir(parents=True, exist_ok=True)
+
+          for notebook in notebooks_dir.glob('*/notebook.ipynb'):
+              case_study_name = notebook.parent.name
+              case_output_dir = output_dir / case_study_name
+              case_output_dir.mkdir(exist_ok=True)
+
+              subprocess.run([
+                  'jupyter', 'nbconvert',
+                  '--to', 'html',
+                  '--output-dir', str(case_output_dir),
+                  '--output', 'index',
+                  str(notebook)
+              ], check=True)
+              print(f'Converted: {case_study_name}')
+          "
+
+      # --- Node.js setup for docs site ---
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -56,9 +86,11 @@ jobs:
           cache-dependency-path: "docs-site/pnpm-lock.yaml"
 
       - name: Install dependencies
+        working-directory: ./docs-site
         run: pnpm install --frozen-lockfile
 
       - name: Build static site
+        working-directory: ./docs-site
         run: pnpm build
 
       - name: Log in to Google Cloud
@@ -73,5 +105,6 @@ jobs:
 
       - name: Deploy docs site to GCS
         if: ${{ github.ref == 'refs/heads/main' || inputs.deploy_production }}
+        working-directory: ./docs-site
         run: |
           gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}
