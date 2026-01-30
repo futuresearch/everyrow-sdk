@@ -2,7 +2,7 @@
 
 Labeling data with an LLM at scale requires orchestration and can get very expensive. EveryRow can classify each row of a dataframe using LLMs or LLM web agents at low cost, by handling the batching, parallelism, task queues, error handling, and consistency, in a single function call.
 
-We run [evals](https://evals.futuresearch.ai/) to find the pareto frontier for classification tasks, getting you the most accuracy for your dollar.
+We run [evals](https://evals.futuresearch.ai/) to find the pareto frontier for classification tasks, providing the best accuracy-cost trade-offs.
 
 Here, we classify 200 job postings into 9 categories in 2 minutes for $1.74.
 
@@ -12,8 +12,7 @@ Here, we classify 200 job postings into 9 categories in 2 minutes for $1.74.
 | Time         | 2.1 minutes |
 | Cost         | $1.74       |
 | Cost per row | $0.009      |
-
-[View the session](https://everyrow.io/sessions/f852c537-1724-44bb-8979-84434ecb2dfe)
+| Session      | [view](https://everyrow.io/sessions/f852c537-1724-44bb-8979-84434ecb2dfe) |
 
 If you're categorizing support tickets, labeling training data, or tagging content by topic, string heuristic or embedding techniques are low accuracy, but training a model is a very high lift. LLMs make it possible to solve this efficiently.
 

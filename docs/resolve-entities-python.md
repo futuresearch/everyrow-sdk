@@ -2,7 +2,7 @@
 
 Identifying matching records that represent the same entity across messy data typically requires labeled training data, manual blocking rules, or extensive threshold tuning.
 
-LLMs can solve this at high accuracy. But they can be expensive to run at scale, and require a lot of orchestration. EveryRow is designed to do this as cheaply as possible while still having high accuracy, in a single method with almost no setup.
+LLMs can solve this at high accuracy. But they can be expensive to run at scale, and require a lot of orchestration. EveryRow is designed to do this as cheaply as possible while still having high accuracy, in a single function with almost no setup.
 
 | Metric              | Value                                                                     |
 | ------------------- | ------------------------------------------------------------------------- |

@@ -2,14 +2,15 @@
 
 `pandas.apply()` runs a local function on each row. But it can't use LLM judgment or do web research to find new values. And doing this by hand can be very slow or expensive. EveryRow provides a one-line utility to do this cheaply and at scale.
 
-This guide shows how to add a column for price, for 246 common software products, in a single method call on your pandas dataframe.
+This guide shows how to add a column for price, for 246 common software products, in a single function call on your pandas dataframe.
 
 | Metric       | Value                                                                     |
 | ------------ | ------------------------------------------------------------------------- |
 | Rows         | 246                                                                       |
-| Cost         | $6.68                                                                     |
 | Time         | 15.7 minutes                                                              |
-| Success rate | 99.6% (1 failed)                                                          |
+| Cost         | $6.68                                                                     |
+| Cost per row | $0.027                                                                    |
+| Success rate | 99.6% (1 failed to find the price)                                        |
 | Session      | [view](https://everyrow.io/sessions/e09de4e8-1e0d-44af-8d1a-a25620565ed4) |
 
 ```bash
@@ -75,6 +76,6 @@ asyncio.run(main())
 
 Each result includes a `research` column showing how the agent found the answer, with citations linking back to sources. For example, Slack's entry shows: "The Pro plan costs $7.25 USD per active user per month when billed annually (from slack.com/pricing/pro). Annual price calculation: $7.25 × 12 months = $87 per user per year."
 
-The key to doing this cheaply is in the orchestration of the web research agents, using the right batching, parallelism, LLMs, search tools, and page reading tools. Web research agents have degrees of freedom on how to solve problems, and EveryRow optimizes them for cost and accuracy, all in a single method on your pandas dataframe.
+The key to doing this cheaply is in the orchestration of the web research agents, using the right batching, parallelism, LLMs, search tools, and page reading tools. Web research agents have degrees of freedom on how to solve problems, and EveryRow optimizes them for cost and accuracy, all in a single function applied to your pandas dataframe.
 
-By using LLM web agents, this works for any new column, any enrichment, that you need on your table, as long as the information can be found on the web.
+By using LLM web agents, this works for any new column of enrichment that you need on your table, as long as the information can be found on the web.
