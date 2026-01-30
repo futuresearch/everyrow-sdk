@@ -48,29 +48,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Convert notebooks to HTML
-        run: |
-          uv run --group case-studies python -c "
-          import subprocess
-          from pathlib import Path
-
-          notebooks_dir = Path('docs/case_studies')
-          output_dir = Path('docs-site/src/notebooks')
-          output_dir.mkdir(parents=True, exist_ok=True)
-
-          for notebook in notebooks_dir.glob('*/notebook.ipynb'):
-              case_study_name = notebook.parent.name
-
-              # Use basic template for body-only HTML (no <html>/<head>)
-              subprocess.run([
-                  'jupyter', 'nbconvert',
-                  '--to', 'html',
-                  '--template', 'basic',
-                  '--output-dir', str(output_dir),
-                  '--output', case_study_name,
-                  str(notebook)
-              ], check=True)
-              print(f'Converted: {case_study_name}')
-          "
+        run: uv run --group case-studies python docs-site/scripts/convert-notebooks.py
 
       # --- Node.js setup for docs site ---
       - name: Install pnpm

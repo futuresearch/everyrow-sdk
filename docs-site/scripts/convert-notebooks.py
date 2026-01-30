@@ -5,9 +5,13 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parent.parent.parent
+# Use resolve() for absolute paths - works regardless of working directory
+SCRIPT_DIR = Path(__file__).resolve().parent  # docs-site/scripts/
+DOCS_SITE_DIR = SCRIPT_DIR.parent  # docs-site/
+REPO_ROOT = DOCS_SITE_DIR.parent  # repo root
+
 NOTEBOOKS_DIR = REPO_ROOT / "docs" / "case_studies"
-OUTPUT_DIR = Path(__file__).parent.parent / "src" / "notebooks"
+OUTPUT_DIR = DOCS_SITE_DIR / "src" / "notebooks"
 
 
 def convert(notebook: Path) -> str:
