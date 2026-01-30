@@ -1,16 +1,30 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { execSync } from "child_process";
 import { getAllNotebooks } from "./notebooks";
 
 // Path to the docs content directory (relative to project root)
 const DOCS_DIR = path.join(process.cwd(), "..", "docs");
+
+function getGitLastModified(filePath: string): Date {
+  try {
+    const result = execSync(`git log -1 --format=%cI -- "${filePath}"`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    return result ? new Date(result) : new Date();
+  } catch {
+    return new Date();
+  }
+}
 
 export interface DocMeta {
   slug: string;
   title: string;
   description?: string;
   category: string;
+  lastModified: Date;
 }
 
 export interface Doc extends DocMeta {
@@ -56,6 +70,7 @@ export function getAllDocs(): DocMeta[] {
           title: data.title || slugToTitle(path.basename(slug)),
           description: data.description,
           category: getCategory(relativePath),
+          lastModified: getGitLastModified(fullPath),
         });
       }
     }
@@ -82,6 +97,7 @@ export function getDocBySlug(slug: string): Doc | null {
     title: data.title || slugToTitle(path.basename(slug)),
     description: data.description,
     category: getCategory(slug),
+    lastModified: getGitLastModified(fullPath),
     content,
   };
 }
