@@ -1,13 +1,25 @@
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 
 const NOTEBOOKS_DIR = path.join(process.cwd(), "src", "notebooks");
 const SOURCE_NOTEBOOKS_DIR = path.join(process.cwd(), "..", "docs", "case_studies");
+
+function getGitLastModified(filePath: string): Date {
+  const result = execSync(`git log -1 --format=%cI -- "${filePath}"`, {
+    encoding: "utf-8",
+  }).trim();
+  if (!result) {
+    throw new Error(`No git history found for ${filePath}`);
+  }
+  return new Date(result);
+}
 
 export interface NotebookMeta {
   slug: string;
   title: string;
   description: string;
+  lastModified: Date;
 }
 
 export interface Notebook extends NotebookMeta {
@@ -81,7 +93,14 @@ export function getAllNotebooks(): NotebookMeta[] {
     .map((f) => {
       const slug = f.replace(/\.html$/, "");
       const { title, description } = extractMetadataFromSource(slug);
-      return { slug, title, description };
+      // Get last commit date from source notebook, not generated HTML
+      const sourcePath = path.join(SOURCE_NOTEBOOKS_DIR, slug, "notebook.ipynb");
+      return {
+        slug,
+        title,
+        description,
+        lastModified: getGitLastModified(sourcePath),
+      };
     })
     .sort((a, b) => a.title.localeCompare(b.title));
 }
@@ -95,11 +114,14 @@ export function getNotebookBySlug(slug: string): Notebook | null {
 
   const html = fs.readFileSync(filePath, "utf-8");
   const { title, description } = extractMetadataFromSource(slug);
+  // Get last commit date from source notebook, not generated HTML
+  const sourcePath = path.join(SOURCE_NOTEBOOKS_DIR, slug, "notebook.ipynb");
 
   return {
     slug,
     title,
     description,
+    lastModified: getGitLastModified(sourcePath),
     html,
   };
 }
