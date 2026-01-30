@@ -2,7 +2,7 @@
 
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 // PostHog public configuration - these are safe to expose
@@ -25,7 +25,9 @@ if (typeof window !== "undefined") {
   });
 }
 
-function PostHogPageView(): null {
+// This component uses useSearchParams which must be wrapped in Suspense
+// to prevent the entire page from bailing out of static rendering
+function PostHogPageViewInner(): null {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -42,6 +44,14 @@ function PostHogPageView(): null {
   }, [pathname, searchParams]);
 
   return null;
+}
+
+function PostHogPageView() {
+  return (
+    <Suspense fallback={null}>
+      <PostHogPageViewInner />
+    </Suspense>
+  );
 }
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
