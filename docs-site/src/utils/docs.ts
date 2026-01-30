@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { getAllNotebooks } from "./notebooks";
 
 // Path to the docs content directory (relative to project root)
 const DOCS_DIR = path.join(process.cwd(), "..", "docs");
@@ -97,6 +98,7 @@ export interface NavSection {
 
 export function getNavigation(): NavSection[] {
   const docs = getAllDocs();
+  const notebooks = getAllNotebooks();
 
   const guides = docs.filter((d) => d.category === "Guides");
   const reference = docs.filter((d) => d.category === "Reference");
@@ -119,6 +121,13 @@ export function getNavigation(): NavSection[] {
       items: reference.map((d) => ({
         slug: d.slug,
         title: d.title.replace(/^reference\//, ""),
+      })),
+    },
+    {
+      title: "Case Studies",
+      items: notebooks.map((n) => ({
+        slug: `notebooks/${n.slug}`,
+        title: n.title,
       })),
     },
   ];

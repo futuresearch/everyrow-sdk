@@ -9,7 +9,7 @@ out/
 dist/
 
 # Generated notebook HTML (built from docs/case_studies/)
-public/notebooks/
+src/notebooks/
 
 # Debug
 npm-debug.log*

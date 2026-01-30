@@ -214,6 +214,156 @@ a:hover {
   margin: 2rem 0;
 }
 
+/* Jupyter Notebook styles */
+.notebook-content {
+  line-height: 1.6;
+}
+
+.notebook-content .cell {
+  margin-bottom: 1.5rem;
+}
+
+.notebook-content .text_cell .rendered_html h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  margin-top: 0;
+  line-height: 1.2;
+}
+
+.notebook-content .text_cell .rendered_html h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.notebook-content .text_cell .rendered_html h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.notebook-content .text_cell .rendered_html p {
+  margin-bottom: 1rem;
+}
+
+.notebook-content .text_cell .rendered_html code {
+  background-color: var(--code-bg);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  font-family: ui-monospace, "SF Mono", Monaco, monospace;
+}
+
+.notebook-content .text_cell .rendered_html ul,
+.notebook-content .text_cell .rendered_html ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.notebook-content .anchor-link {
+  display: none;
+}
+
+/* Code cells */
+.notebook-content .code_cell .input {
+  margin-bottom: 0.5rem;
+}
+
+.notebook-content .input_prompt,
+.notebook-content .output_prompt {
+  display: none;
+}
+
+.notebook-content .input_area {
+  background-color: var(--code-block-bg);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.notebook-content .input_area pre {
+  margin: 0;
+  padding: 1rem;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  font-family: ui-monospace, "SF Mono", Monaco, monospace;
+}
+
+.notebook-content .highlight pre {
+  background: transparent;
+  margin: 0;
+}
+
+/* Output styles */
+.notebook-content .output_wrapper {
+  margin-top: 0.5rem;
+}
+
+.notebook-content .output_subarea {
+  padding: 0.75rem;
+  background-color: var(--code-bg);
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.notebook-content .output_text pre {
+  margin: 0;
+  font-size: 0.875rem;
+  font-family: ui-monospace, "SF Mono", Monaco, monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* DataFrame tables */
+.notebook-content .dataframe {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.notebook-content .dataframe th,
+.notebook-content .dataframe td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 1px solid var(--border);
+}
+
+.notebook-content .dataframe th {
+  background-color: var(--code-bg);
+  font-weight: 600;
+}
+
+.notebook-content .dataframe tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+/* Syntax highlighting */
+.notebook-content .highlight .k,
+.notebook-content .highlight .kn,
+.notebook-content .highlight .kd { color: #c678dd; }
+.notebook-content .highlight .s,
+.notebook-content .highlight .s1,
+.notebook-content .highlight .s2 { color: #98c379; }
+.notebook-content .highlight .n { color: #e5c07b; }
+.notebook-content .highlight .nn,
+.notebook-content .highlight .nc { color: #61afef; }
+.notebook-content .highlight .nf { color: #61afef; }
+.notebook-content .highlight .o { color: #56b6c2; }
+.notebook-content .highlight .p { color: #abb2bf; }
+.notebook-content .highlight .c,
+.notebook-content .highlight .c1 { color: #5c6370; font-style: italic; }
+.notebook-content .highlight .mi,
+.notebook-content .highlight .mf { color: #d19a66; }
+.notebook-content .highlight .nb { color: #e5c07b; }
+.notebook-content .highlight .bp { color: #e5c07b; }
+.notebook-content .highlight .ow { color: #c678dd; }
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .docs-layout {

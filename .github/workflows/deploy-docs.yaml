@@ -54,19 +54,19 @@ jobs:
           from pathlib import Path
 
           notebooks_dir = Path('docs/case_studies')
-          output_dir = Path('docs-site/public/notebooks')
+          output_dir = Path('docs-site/src/notebooks')
           output_dir.mkdir(parents=True, exist_ok=True)
 
           for notebook in notebooks_dir.glob('*/notebook.ipynb'):
               case_study_name = notebook.parent.name
-              case_output_dir = output_dir / case_study_name
-              case_output_dir.mkdir(exist_ok=True)
 
+              # Use basic template for body-only HTML (no <html>/<head>)
               subprocess.run([
                   'jupyter', 'nbconvert',
                   '--to', 'html',
-                  '--output-dir', str(case_output_dir),
-                  '--output', 'index',
+                  '--template', 'basic',
+                  '--output-dir', str(output_dir),
+                  '--output', case_study_name,
                   str(notebook)
               ], check=True)
               print(f'Converted: {case_study_name}')
