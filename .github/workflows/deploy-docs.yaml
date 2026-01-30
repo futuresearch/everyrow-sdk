@@ -36,13 +36,21 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./docs-site
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --- Python setup for notebook conversion ---
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Convert notebooks to HTML
+        run: uv run --group case-studies python docs-site/scripts/convert-notebooks.py
+
+      # --- Node.js setup for docs site ---
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -56,9 +64,11 @@ jobs:
           cache-dependency-path: "docs-site/pnpm-lock.yaml"
 
       - name: Install dependencies
+        working-directory: ./docs-site
         run: pnpm install --frozen-lockfile
 
       - name: Build static site
+        working-directory: ./docs-site
         run: pnpm build
 
       - name: Log in to Google Cloud
@@ -73,5 +83,6 @@ jobs:
 
       - name: Deploy docs site to GCS
         if: ${{ github.ref == 'refs/heads/main' || inputs.deploy_production }}
+        working-directory: ./docs-site
         run: |
           gsutil -m -h "Cache-Control:max-age=300" rsync -r -d ./out/ gs://${{ env.DOCS_BUCKET }}

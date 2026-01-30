@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "cd .. && uv run --group case-studies python docs-site/scripts/convert-notebooks.py",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

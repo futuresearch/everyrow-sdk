@@ -36,16 +36,14 @@ a:hover {
 /* Documentation layout */
 .docs-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .docs-sidebar {
   width: 280px;
   padding: 2rem 1.5rem;
   border-right: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  height: 100vh;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -103,6 +101,7 @@ a:hover {
   flex: 1;
   padding: 3rem 4rem;
   max-width: 900px;
+  overflow-y: auto;
 }
 
 /* Prose styles for markdown content */
