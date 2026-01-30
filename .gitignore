@@ -223,3 +223,6 @@ __marimo__/
 
 # MCP registry tokens
 .mcpregistry_*
+
+# Claude Code local instructions
+CLAUDE.local.md
