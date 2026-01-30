@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import "highlight.js/styles/github-dark.min.css";
+import "@/styles/notebook.css";
 import "./globals.css";
 import { PostHogProvider } from "@/components/providers/PostHogProvider";
 
