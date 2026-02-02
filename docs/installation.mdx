@@ -15,12 +15,34 @@ Select your platform and integration method below.
 
 <InstallationTabs>
 
-<TabContent agent="python-sdk" type="sdk">
-
-Install the Python SDK:
+<TabContent agent="python-sdk" type="pip">
 
 ```bash
 pip install everyrow
+```
+
+Requires Python 3.12+.
+
+**Quick example:**
+
+```python
+import everyrow
+
+df = everyrow.research(
+    "companies.csv",
+    {"industry": "What industry is this company in?"}
+)
+df.to_csv("companies_enriched.csv")
+```
+
+See the [API Reference](/docs/reference/AGENT) for full documentation.
+
+</TabContent>
+
+<TabContent agent="python-sdk" type="uv">
+
+```bash
+uv add everyrow
 ```
 
 Requires Python 3.12+.
