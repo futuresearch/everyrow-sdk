@@ -1,15 +1,11 @@
 ---
-title: Claude Code Integration
-description: Use everyrow with Claude Code for AI-powered data processing in your terminal
+title: Skills vs MCP
+description: Compare the two ways to use everyrow with Claude Code
 ---
 
-# Claude Code Integration
+# Skills vs MCP
 
-Claude Code is Anthropic's official CLI for Claude. everyrow integrates with Claude Code through **Skills** (recommended) or **MCP server**, letting you process data files directly in your terminal conversations.
-
-## Skills vs MCP: Which to Use?
-
-everyrow offers two integration methods for Claude Code. Here's how they compare:
+everyrow integrates with Claude Code through **Skills** (recommended) or **MCP server**. Here's how they compare:
 
 ### Skills (Recommended)
 

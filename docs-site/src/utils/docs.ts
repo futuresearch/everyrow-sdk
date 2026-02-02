@@ -108,7 +108,7 @@ export function getNavigation(): NavSection[] {
       title: "Getting Started",
       items: [
         { slug: "installation", title: "Installation" },
-        { slug: "claude-code-integration", title: "Claude Code Integration" },
+        { slug: "claude-code-integration", title: "Skills vs MCP" },
       ],
     },
     {
