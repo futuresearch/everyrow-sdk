@@ -187,30 +187,36 @@ Config file location:
 
 <TabContent agent="gemini" type="skills">
 
-Requires Gemini CLI version >= 0.25.0.
+Install the skill directly from GitHub:
 
 ```bash
-gemini extensions install https://github.com/futuresearch/everyrow-sdk
-gemini extensions enable everyrow [--scope <user or workspace>]
+gemini skills install https://github.com/futuresearch/everyrow-sdk --path skills/everyrow-sdk
 ```
 
-Then within the CLI:
+Use `--scope workspace` to install to `.gemini/skills/` (project-level) instead of `~/.gemini/skills/` (user-level).
+
+Then enable skills within the CLI:
 
 ```
 /settings > Preview Features > Enable
 /settings > Agent Skills > Enable
 /skills enable everyrow-sdk
 /skills reload
-/model > Manual > gemini-3-pro-preview
 ```
 
-[Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension)
+[Official Docs](https://geminicli.com/docs/cli/skills/)
 
 </TabContent>
 
 <TabContent agent="gemini" type="mcp">
 
-Add everyrow to your Gemini CLI MCP config (requires [uv](https://docs.astral.sh/uv/)):
+Add via CLI (requires [uv](https://docs.astral.sh/uv/)):
+
+```bash
+gemini mcp add -e EVERYROW_API_KEY=$EVERYROW_API_KEY everyrow uvx everyrow-mcp
+```
+
+Or add manually to `~/.gemini/settings.json` (user) or `.gemini/settings.json` (project):
 
 ```json
 {
@@ -219,7 +225,7 @@ Add everyrow to your Gemini CLI MCP config (requires [uv](https://docs.astral.sh
       "command": "uvx",
       "args": ["everyrow-mcp"],
       "env": {
-        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+        "EVERYROW_API_KEY": "$EVERYROW_API_KEY"
       }
     }
   }
@@ -232,11 +238,28 @@ Add everyrow to your Gemini CLI MCP config (requires [uv](https://docs.astral.sh
 
 <TabContent agent="gemini" type="plugin">
 
-Install the everyrow extension:
+This installs both the MCP server and skills together.
 
 ```bash
-gemini extensions install https://github.com/futuresearch/everyrow-sdk
+gemini extensions install https://github.com/futuresearch/everyrow-sdk --ref main
+```
+
+When prompted with `Would you like to attempt to install via "git clone" instead?`, type `Y` to confirm.
+
+Then enable the extension:
+
+```bash
 gemini extensions enable everyrow [--scope <user or workspace>]
+```
+
+To use skills, enable them within the CLI:
+
+```
+/settings > Preview Features > Enable
+/settings > Agent Skills > Enable
+/skills enable everyrow-sdk
+/skills reload
+/model > Manual > gemini-3-pro-preview
 ```
 
 [Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension)
