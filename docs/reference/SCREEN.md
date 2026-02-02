@@ -1,21 +1,8 @@
 # Screen
 
-Filter rows based on criteria that require research.
+`screen` takes a DataFrame and a natural-language filter predicate, evaluates each row using web research agents, and returns only the rows that pass. The filter condition does not need to be computable from existing columns. Agents can research external information to make the determination.
 
-## The problem
-
-You want to find S&P 500 companies that:
-- Have >75% recurring revenue
-- Would benefit from Taiwan tensions (CHIPS Act, defense, cybersecurity)
-- Aren't dependent on Taiwan for manufacturing
-
-None of this is in a database. Bloomberg can filter on P/E ratio. It can't filter on "benefits from geopolitical tensions."
-
-Even simpler stuff fails with traditional methods. Filtering job postings for "remote-friendly" with regex gets 68% precision—hundreds of false positives to sort through manually.
-
-## How it works
-
-You describe what should pass. Agents research each row (pulling 10-Ks, earnings calls, news) and decide.
+## Examples
 
 ```python
 from everyrow.ops import screen

@@ -1,21 +1,8 @@
 # Merge
 
-Join two tables when the keys don't match exactly—or at all.
+`merge` left-joins two DataFrames using LLM-powered agents to resolve the key mapping instead of requiring exact or fuzzy key matches. Agents resolve semantic relationships by reasoning over the data and, when needed, searching the web for external information to establish matches: subsidiaries, regional names, abbreviations, and product-to-parent-company mappings.
 
-## The problem
-
-You've got a list of software products and a list of approved vendors. You need to match them up. But:
-
-- "Photoshop" → "Adobe" (zero string similarity)
-- "Genentech" → "Roche" (subsidiary)
-- "MSD" → "Merck" (regional name)
-- "VS Code" → "Microsoft" (product vs company)
-
-Fuzzy matching won't help—these aren't typos, they're semantic relationships. And the relationships aren't in any lookup table you can buy.
-
-## How it works
-
-You describe how the tables should match. Agents figure out the mapping.
+## Examples
 
 ```python
 from everyrow.ops import merge
