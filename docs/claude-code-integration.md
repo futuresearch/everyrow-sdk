@@ -7,23 +7,6 @@ description: Use everyrow with Claude Code for AI-powered data processing in you
 
 Claude Code is Anthropic's official CLI for Claude. everyrow integrates with Claude Code through **Skills** (recommended) or **MCP server**, letting you process data files directly in your terminal conversations.
 
-## Quick Start
-
-```bash
-# Install the everyrow skill
-claude plugin marketplace add futuresearch/everyrow-sdk
-claude plugin install everyrow@futuresearch
-```
-
-Then ask Claude Code to process your data:
-
-```
-You: I have leads.csv with company names. Can you research each company's
-funding status and employee count?
-
-Claude: I'll use everyrow to research each company...
-```
-
 ## Skills vs MCP: Which to Use?
 
 everyrow offers two integration methods for Claude Code. Here's how they compare:
@@ -72,51 +55,6 @@ MCP provides **direct tool calls** without code generation.
 | Multi-step workflows | Excellent | Basic |
 | Works in Claude Desktop | No | Yes (Chat mode only) |
 | Debugging | Easy (see all code) | Harder (opaque calls) |
-
-## Installation
-
-### Method 1: Skills (Recommended)
-
-1. **Add from marketplace:**
-   ```bash
-   claude plugin marketplace add futuresearch/everyrow-sdk
-   ```
-
-2. **Install the skill:**
-   ```bash
-   claude plugin install everyrow@futuresearch
-   ```
-
-3. **Set your API key:**
-   ```bash
-   export EVERYROW_API_KEY=your_key_here
-   ```
-
-Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit included).
-
-### Method 2: MCP Server
-
-1. **Set your API key:**
-   ```bash
-   export EVERYROW_API_KEY=your_key_here
-   ```
-
-2. **Download the bundle** from [GitHub Releases](https://github.com/futuresearch/everyrow-sdk/releases) and double-click to install.
-
-   Or add manually to your MCP config:
-   ```json
-   {
-     "mcpServers": {
-       "everyrow": {
-         "command": "uvx",
-         "args": ["everyrow-mcp"],
-         "env": {
-           "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
-         }
-       }
-     }
-   }
-   ```
 
 ## Example Workflows
 
@@ -172,43 +110,8 @@ Claude: I'll screen using everyrow:
 Screened 500 companies, 23 passed the criteria.
 ```
 
-## Troubleshooting
-
-### "Skill not found" error
-
-Ensure the skill is installed:
-```bash
-claude plugin list
-# Should show: everyrow@futuresearch
-```
-
-If not listed, reinstall:
-```bash
-claude plugin install everyrow@futuresearch
-```
-
-### API key not working
-
-1. Check your key is exported:
-   ```bash
-   echo $EVERYROW_API_KEY
-   ```
-
-2. Verify at [everyrow.io/api-key](https://everyrow.io/api-key) that your key is active and has credits.
-
-### MCP server not connecting
-
-1. Test the server manually:
-   ```bash
-   uvx everyrow-mcp
-   ```
-
-2. Check your MCP config path:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Linux: `~/.config/Claude/claude_desktop_config.json`
-
 ## Next Steps
 
-- [Installation Guide](/installation) - Full setup for all platforms
+- [Installation Guide](/installation) - Full setup instructions
 - [API Reference](/reference/AGENT) - Detailed function documentation
 - [Case Studies](/notebooks/dedupe-crm-company-records) - Real-world examples
