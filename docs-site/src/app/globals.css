@@ -99,9 +99,12 @@ a:hover {
 
 .docs-content {
   flex: 1;
-  padding: 3rem 4rem;
-  max-width: 900px;
   overflow-y: auto;
+}
+
+.docs-content-inner {
+  max-width: 900px;
+  padding: 3rem 4rem;
 }
 
 /* Prose styles for markdown content */
@@ -340,7 +343,7 @@ a:hover {
     border-bottom: 1px solid var(--border);
   }
 
-  .docs-content {
+  .docs-content-inner {
     padding: 2rem 1.5rem;
   }
 
