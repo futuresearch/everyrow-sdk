@@ -158,6 +158,29 @@ Restart Codex to pick up the new skill.
 
 </TabContent>
 
+<TabContent agent="codex" type="mcp">
+
+Add everyrow to your Codex MCP config (requires [uv](https://docs.astral.sh/uv/)):
+
+```toml
+[mcp_servers.everyrow]
+command = "uvx"
+args = ["everyrow-mcp"]
+
+[mcp_servers.everyrow.env]
+EVERYROW_API_KEY = "${EVERYROW_API_KEY}"
+```
+
+Or use the CLI: `codex mcp add everyrow`
+
+Config file location:
+- **User scope:** `~/.codex/config.toml`
+- **Project scope:** `.codex/config.toml`
+
+[Official Docs](https://developers.openai.com/codex/mcp/)
+
+</TabContent>
+
 <TabContent agent="gemini" type="skills">
 
 Requires Gemini CLI version >= 0.25.0.

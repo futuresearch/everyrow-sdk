@@ -35,7 +35,7 @@ const AGENT_TYPES: Record<Agent, IntegrationType[]> = {
   "python-sdk": ["pip", "uv"],
   "claude-code": ["plugin", "mcp"],
   "claude-desktop": ["mcp"],
-  "codex": ["skills"],
+  "codex": ["skills", "mcp"],
   "gemini": ["skills", "mcp", "plugin"],
   "cursor": ["skills", "mcp"],
 };
