@@ -33,7 +33,7 @@ const TYPES: { id: IntegrationType; label: string }[] = [
 // Which integration types are available for each agent
 const AGENT_TYPES: Record<Agent, IntegrationType[]> = {
   "python-sdk": ["pip", "uv"],
-  "claude-code": ["skills", "mcp", "plugin"],
+  "claude-code": ["plugin", "mcp"],
   "claude-desktop": ["mcp"],
   "codex": ["skills"],
   "gemini": ["skills", "mcp", "plugin"],

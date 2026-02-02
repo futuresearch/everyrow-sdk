@@ -63,19 +63,6 @@ See the [API Reference](/docs/reference/AGENT) for full documentation.
 
 </TabContent>
 
-<TabContent agent="claude-code" type="skills">
-
-Install the everyrow skill from the plugin marketplace:
-
-```bash
-claude plugin marketplace add futuresearch/everyrow-sdk
-claude plugin install everyrow@futuresearch
-```
-
-[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
-
-</TabContent>
-
 <TabContent agent="claude-code" type="mcp">
 
 Add everyrow to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
@@ -100,12 +87,14 @@ Or install with pip and use `"command": "everyrow-mcp"` instead of uvx.
 
 <TabContent agent="claude-code" type="plugin">
 
-Add the everyrow plugin to your Claude Code configuration:
+Install the everyrow plugin from the marketplace:
 
 ```bash
 claude plugin marketplace add futuresearch/everyrow-sdk
 claude plugin install everyrow@futuresearch
 ```
+
+This installs both the skill and MCP server together. You can toggle each on/off in Claude Code settings.
 
 [Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 
