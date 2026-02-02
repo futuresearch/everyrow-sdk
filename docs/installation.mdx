@@ -15,6 +15,32 @@ Select your platform and integration method below.
 
 <InstallationTabs>
 
+<TabContent agent="python-sdk" type="sdk">
+
+Install the Python SDK:
+
+```bash
+pip install everyrow
+```
+
+Requires Python 3.12+.
+
+**Quick example:**
+
+```python
+import everyrow
+
+df = everyrow.research(
+    "companies.csv",
+    {"industry": "What industry is this company in?"}
+)
+df.to_csv("companies_enriched.csv")
+```
+
+See the [API Reference](/docs/reference/AGENT) for full documentation.
+
+</TabContent>
+
 <TabContent agent="claude-code" type="skills">
 
 Install the everyrow skill from the plugin marketplace:
@@ -47,6 +73,19 @@ Add everyrow to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
 ```
 
 Or install with pip and use `"command": "everyrow-mcp"` instead of uvx.
+
+</TabContent>
+
+<TabContent agent="claude-code" type="plugin">
+
+Add the everyrow plugin to your Claude Code configuration:
+
+```bash
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
+
+[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 
 </TabContent>
 
@@ -118,6 +157,19 @@ Then within the CLI:
 
 </TabContent>
 
+<TabContent agent="gemini" type="plugin">
+
+Install the everyrow extension:
+
+```bash
+gemini extensions install https://github.com/futuresearch/everyrow-sdk
+gemini extensions enable everyrow [--scope <user or workspace>]
+```
+
+[Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension)
+
+</TabContent>
+
 <TabContent agent="cursor" type="skills">
 
 1. Open Cursor Settings → Rules
@@ -126,32 +178,6 @@ Then within the CLI:
 4. Enter: `https://github.com/futuresearch/everyrow-sdk.git`
 
 [Official Docs](https://cursor.com/docs/context/skills#installing-skills-from-github)
-
-</TabContent>
-
-<TabContent agent="other" type="sdk">
-
-Install the Python SDK:
-
-```bash
-pip install everyrow
-```
-
-Requires Python 3.12+.
-
-**Quick example:**
-
-```python
-import everyrow
-
-df = everyrow.research(
-    "companies.csv",
-    {"industry": "What industry is this company in?"}
-)
-df.to_csv("companies_enriched.csv")
-```
-
-See the [API Reference](/docs/reference/AGENT) for full documentation.
 
 </TabContent>
 
