@@ -213,6 +213,119 @@ a:hover {
   margin: 2rem 0;
 }
 
+/* Landing page styles */
+.landing-hero {
+  margin-bottom: 2.5rem;
+}
+
+.landing-title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin-bottom: 0.75rem;
+  line-height: 1.2;
+}
+
+.landing-subtitle {
+  font-size: 1.125rem;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 600px;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.landing-card {
+  display: block;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  color: var(--foreground);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.landing-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+  text-decoration: none;
+}
+
+.landing-card-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.landing-card-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.landing-card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--foreground);
+}
+
+.landing-card-description {
+  font-size: 0.875rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.landing-card-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.landing-quickstart {
+  padding: 1.5rem;
+  background: var(--code-bg);
+  border-radius: 0.75rem;
+}
+
+.landing-quickstart h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--foreground);
+}
+
+.landing-quickstart pre {
+  background: var(--code-block-bg);
+  color: #e2e8f0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+}
+
+.landing-quickstart p {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.landing-quickstart a {
+  color: var(--accent);
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .docs-layout {
@@ -229,5 +342,13 @@ a:hover {
 
   .docs-content {
     padding: 2rem 1.5rem;
+  }
+
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-title {
+    font-size: 1.75rem;
   }
 }
