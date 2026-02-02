@@ -36,7 +36,7 @@ const AGENT_TYPES: Record<Agent, IntegrationType[]> = {
   "claude-code": ["skills", "mcp", "plugin"],
   "claude-desktop": ["mcp"],
   "codex": ["skills"],
-  "gemini": ["skills", "plugin"],
+  "gemini": ["skills", "mcp", "plugin"],
   "cursor": ["skills", "mcp"],
 };
 
