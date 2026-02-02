@@ -331,6 +331,117 @@ a:hover {
   color: var(--accent);
 }
 
+/* Installation tabs */
+.installation-tabs {
+  margin-top: 1.5rem;
+}
+
+.tab-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: var(--code-bg);
+  border-radius: 0.5rem;
+}
+
+.tab-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tab-selector-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  min-width: 5rem;
+}
+
+.tab-selector-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tab-option {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-option:hover:not(.disabled) {
+  border-color: var(--accent);
+}
+
+.tab-option.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.tab-option.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.tab-content-heading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--foreground);
+}
+
+/* No-JS fallback: show all tab contents */
+@supports (scripting: none) {
+  .tab-selectors {
+    display: none;
+  }
+  .tab-content {
+    display: block;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    margin-top: 1.5rem;
+  }
+  .tab-content:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+  }
+}
+
+/* Fallback for browsers that don't support scripting media query */
+noscript + .installation-tabs .tab-selectors {
+  display: none;
+}
+
+noscript + .installation-tabs .tab-content {
+  display: block;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+}
+
+noscript + .installation-tabs .tab-content:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .docs-layout {
@@ -355,5 +466,15 @@ a:hover {
 
   .landing-title {
     font-size: 1.75rem;
+  }
+
+  .tab-selector-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .tab-selector-label {
+    min-width: unset;
   }
 }

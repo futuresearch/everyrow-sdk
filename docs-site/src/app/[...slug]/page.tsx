@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { DocsLayout } from "@/components/DocsLayout";
 import { getDocBySlug, getDocSlugs, getNavigation } from "@/utils/docs";
 import { markdownToHtml } from "@/utils/markdown";
+import { MDXContent } from "@/components/MDXContent";
 
 interface PageProps {
   params: Promise<{ slug: string[] }>;
@@ -39,6 +40,15 @@ export default async function DocPage({ params }: PageProps) {
   }
 
   const navigation = getNavigation();
+
+  if (doc.format === "mdx") {
+    return (
+      <DocsLayout navigation={navigation}>
+        <MDXContent source={doc.content} />
+      </DocsLayout>
+    );
+  }
+
   const htmlContent = await markdownToHtml(doc.content);
 
   return (
