@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 
 type Agent = "python-sdk" | "claude-code" | "claude-desktop" | "codex" | "gemini" | "cursor";
 type IntegrationType = "pip" | "uv" | "skills" | "mcp" | "plugin";
@@ -40,6 +40,20 @@ const AGENT_TYPES: Record<Agent, IntegrationType[]> = {
   "cursor": ["skills", "mcp"],
 };
 
+// Hash format: #tab-{agent}-{type}
+function parseHash(hash: string): { agent: Agent; type: IntegrationType } | null {
+  const match = hash.match(/^#tab-([a-z-]+)-([a-z]+)$/);
+  if (!match) return null;
+  const agent = match[1] as Agent;
+  const type = match[2] as IntegrationType;
+  if (!AGENT_TYPES[agent]?.includes(type)) return null;
+  return { agent, type };
+}
+
+function buildHash(agent: Agent, type: IntegrationType): string {
+  return `#tab-${agent}-${type}`;
+}
+
 interface InstallationTabsProps {
   children: ReactNode;
 }
@@ -47,6 +61,15 @@ interface InstallationTabsProps {
 export function InstallationTabs({ children }: InstallationTabsProps) {
   const [selectedAgent, setSelectedAgent] = useState<Agent>("python-sdk");
   const [selectedType, setSelectedType] = useState<IntegrationType>("pip");
+
+  // Read hash on mount (client-side only, after hydration)
+  useEffect(() => {
+    const parsed = parseHash(window.location.hash);
+    if (parsed) {
+      setSelectedAgent(parsed.agent);
+      setSelectedType(parsed.type);
+    }
+  }, []);
 
   // Get available types for selected agent
   const availableTypes = AGENT_TYPES[selectedAgent];
@@ -56,12 +79,22 @@ export function InstallationTabs({ children }: InstallationTabsProps) {
     ? selectedType
     : availableTypes[0];
 
+  const updateHash = (agent: Agent, type: IntegrationType) => {
+    window.history.replaceState(null, "", buildHash(agent, type));
+  };
+
   const handleAgentChange = (agent: Agent) => {
+    const newType = AGENT_TYPES[agent].includes(selectedType)
+      ? selectedType
+      : AGENT_TYPES[agent][0];
     setSelectedAgent(agent);
-    // Auto-select first available type if current isn't valid
-    if (!AGENT_TYPES[agent].includes(selectedType)) {
-      setSelectedType(AGENT_TYPES[agent][0]);
-    }
+    setSelectedType(newType);
+    updateHash(agent, newType);
+  };
+
+  const handleTypeChange = (type: IntegrationType) => {
+    setSelectedType(type);
+    updateHash(selectedAgent, type);
   };
 
   const isActive = (agent: Agent, type: IntegrationType) => {
@@ -95,7 +128,7 @@ export function InstallationTabs({ children }: InstallationTabsProps) {
                   <button
                     key={type.id}
                     className={`tab-option ${effectiveType === type.id ? "active" : ""} ${!isAvailable ? "disabled" : ""}`}
-                    onClick={() => isAvailable && setSelectedType(type.id)}
+                    onClick={() => isAvailable && handleTypeChange(type.id)}
                     disabled={!isAvailable}
                     title={!isAvailable ? `${type.label} not available for ${AGENTS.find(a => a.id === selectedAgent)?.label}` : undefined}
                   >
