@@ -44,23 +44,7 @@ Skills give Claude Code **guided workflows** with best practices built in.
 - Integration with your existing Python scripts
 - Full control over execution
 
-```
-┌─────────────┐    reads     ┌─────────────────┐
-│ Claude Code │ ──────────► │  Skill Prompts  │
-└─────────────┘              └─────────────────┘
-       │
-       │ writes
-       ▼
-┌─────────────┐    calls     ┌─────────────────┐
-│ Python Code │ ──────────► │  everyrow API   │
-└─────────────┘              └─────────────────┘
-       │
-       │ saves
-       ▼
-┌─────────────┐
-│  Your CSV   │
-└─────────────┘
-```
+![Skills workflow](/docs/images/skills-flow.svg)
 
 ### MCP Server
 
@@ -76,17 +60,7 @@ MCP provides **direct tool calls** without code generation.
 - Simple lookups and enrichments
 - Environments where code execution is restricted
 
-```
-┌─────────────┐   tool call   ┌─────────────────┐
-│ Claude Code │ ───────────► │  MCP Server     │
-└─────────────┘              └─────────────────┘
-                                     │
-                              calls  │
-                                     ▼
-                             ┌─────────────────┐
-                             │  everyrow API   │
-                             └─────────────────┘
-```
+![MCP workflow](/docs/images/mcp-flow.svg)
 
 ### Comparison Table
 
