@@ -171,7 +171,11 @@ args = ["everyrow-mcp"]
 EVERYROW_API_KEY = "${EVERYROW_API_KEY}"
 ```
 
-Or use the CLI: `codex mcp add everyrow`
+Or use the CLI:
+
+```bash
+codex mcp add everyrow --env EVERYROW_API_KEY=${EVERYROW_API_KEY} -- uvx everyrow-mcp
+```
 
 Config file location:
 - **User scope:** `~/.codex/config.toml`
