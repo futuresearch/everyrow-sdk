@@ -37,7 +37,7 @@ const AGENT_TYPES: Record<Agent, IntegrationType[]> = {
   "claude-desktop": ["mcp"],
   "codex": ["skills"],
   "gemini": ["skills", "plugin"],
-  "cursor": ["skills"],
+  "cursor": ["skills", "mcp"],
 };
 
 interface InstallationTabsProps {
