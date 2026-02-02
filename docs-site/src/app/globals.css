@@ -92,9 +92,11 @@ a:hover {
 }
 
 .docs-sidebar-nav a.active {
-  background-color: var(--accent-light);
-  color: var(--accent);
+  background-color: var(--code-bg);
+  color: var(--foreground);
   font-weight: 500;
+  border-left: 2px solid var(--accent);
+  margin-left: -2px;
 }
 
 .docs-content {
