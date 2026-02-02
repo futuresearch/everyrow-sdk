@@ -26,4 +26,4 @@ async def get_billing_balance() -> BillingResponse:
     response = await get_billing_balance_billing_get.asyncio(client=client)
     if response is None:
         raise RuntimeError("Failed to get billing balance")
-    return BillingResponse(current_balance_dollars=response.current_balance_dollars / 100)
+    return BillingResponse(current_balance_dollars=response.current_balance_dollars)
