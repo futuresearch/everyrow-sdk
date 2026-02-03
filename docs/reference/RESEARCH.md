@@ -1,3 +1,8 @@
+---
+title: agent_map
+description: API reference for agent_map and single_agent operations, which run web research agents on entire DataFrames or single inputs.
+---
+
 # Research
 
 `single_agent` runs one web research agent on a single input (or no input). `agent_map` runs an agent on every row of a DataFrame in parallel. Both dispatch agents that search the web, read pages, and return structured results. The transform is live web research: agents fetch and synthesize external information to populate new columns.

@@ -1,3 +1,8 @@
+---
+title: Classify DataFrame Rows with LLMs
+description: Label and classify DataFrame rows using LLMs at scale with structured output, handling batching, parallelism, and error handling automatically.
+---
+
 # How to Classify DataFrame Rows with an LLM
 
 Labeling data with an LLM at scale requires orchestration and can get very expensive. EveryRow can classify each row of a dataframe using LLMs or LLM web agents at low cost, by handling the batching, parallelism, task queues, error handling, and consistency, in a single function call.

@@ -1,3 +1,8 @@
+---
+title: Installation
+description: Install the EveryRow SDK, coding agent plugins for Claude Code, Gemini CLI, Codex, and Cursor, or the MCP server for Claude Desktop.
+---
+
 # Installation
 
 ## SDK

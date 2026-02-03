@@ -1,3 +1,8 @@
+---
+title: Filter DataFrames with LLMs
+description: Filter pandas DataFrames using natural language criteria that require judgment, like "remote-friendly senior roles with disclosed salary".
+---
+
 # How to Filter a DataFrame with an LLM
 
 Here we show how to filter a pandas dataframe by qualitative criteria, when normal filtering like df[df['column'] == value] won't work.

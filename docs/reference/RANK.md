@@ -1,3 +1,8 @@
+---
+title: rank
+description: API reference for the rank operation, which sorts a DataFrame by a metric computed through web research agents.
+---
+
 # Rank
 
 `rank` takes a DataFrame and a natural-language scoring criterion, dispatches web research agents to compute a score for each row, and returns the DataFrame sorted by that score. The sort key does not need to exist in your data. Agents derive it at runtime by searching the web, reading pages, and reasoning over what they find.
