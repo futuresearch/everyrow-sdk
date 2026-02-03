@@ -1,6 +1,6 @@
 ---
-title: Filter DataFrames with LLMs
-description: Filter pandas DataFrames using natural language criteria that require judgment, like "remote-friendly senior roles with disclosed salary".
+title: Filter a Pandas DataFrame with LLMs
+description: How to screen data by criteria that require research in Python. LLM research agents will cheaply and accurately research every row to screen, filter, or qualify.
 ---
 
 # How to Filter a DataFrame with an LLM

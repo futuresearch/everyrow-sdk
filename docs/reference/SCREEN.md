@@ -1,6 +1,6 @@
 ---
-title: screen
-description: API reference for the screen operation, which filters a DataFrame using natural language criteria evaluated by web research agents.
+title: Use LLM agents to filter any dataset on any criteria
+description: API reference for the EveryRow screen tool, which filters a DataFrame using natural language criteria evaluated by web research agents.
 ---
 
 # Screen

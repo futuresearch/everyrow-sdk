@@ -1,6 +1,6 @@
 ---
-title: Rank DataFrames by External Metrics
-description: Rank or sort a DataFrame by criteria that don't exist in your data, using web research agents to look up metrics like release dates or contributor counts.
+title: How to sort a dataset using web data in Python
+description: Rank or sort a Pandas DataFrame by criteria that don't exist in your data, using LLM research agents to look up data.
 ---
 
 # How to Rank a DataFrame by a Metric That Requires The Web

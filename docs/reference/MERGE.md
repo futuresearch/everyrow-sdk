@@ -1,6 +1,6 @@
 ---
-title: merge
-description: API reference for the merge operation, which left-joins two DataFrames using LLM-powered agents to resolve key mappings.
+title: Use LLMs to Merge Datasets in Python
+description: API reference for EveryRow merge tool, which left-joins two Python Pandas DataFrames using LLM-powered agents to resolve key mappings.
 ---
 
 # Merge

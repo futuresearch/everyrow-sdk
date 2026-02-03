@@ -1,6 +1,6 @@
 ---
-title: Add Columns with Web Lookup
-description: Add a new column to a pandas DataFrame using LLM-powered web research agents to find data that isn't available through APIs.
+title: How to Add A Column to a DataFrame with Web Research
+description: Step-by-step guide to enriching a pandas DataFrame with new columns using LLM-powered web research agents to find and add any data.
 ---
 
 # How to Add a Column to a DataFrame Using Web Lookup
