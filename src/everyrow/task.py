@@ -21,7 +21,7 @@ from everyrow.generated.models import (
     TaskStatusResponse,
 )
 from everyrow.generated.types import Unset
-from everyrow.result import ScalarResult, TableResult
+from everyrow.result import MergeBreakdown, MergeResult, ScalarResult, TableResult
 
 LLM = PublicLLM
 
@@ -180,6 +180,96 @@ def _extract_scalar_data[T: BaseModel](
     if isinstance(result.data, list) and len(result.data) == 1:
         return response_model(**result.data[0].additional_properties)
     raise EveryrowError("Expected scalar result, but got table or null")
+
+
+def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
+    """Extract merge breakdown from task result response."""
+    # The merge_breakdown is on the response, check if it exists
+    mb = getattr(result, "merge_breakdown", None)
+    if mb is None or isinstance(mb, Unset):
+        # Return empty breakdown if not present
+        return MergeBreakdown(
+            exact=[],
+            fuzzy=[],
+            llm=[],
+            web=[],
+            unmatched_left=[],
+            unmatched_right=[],
+        )
+
+    # Convert from generated model to our MergeBreakdown
+    # The generated model should have these fields as lists
+    return MergeBreakdown(
+        exact=[tuple(p) for p in getattr(mb, "exact", []) or []],
+        fuzzy=[tuple(p) for p in getattr(mb, "fuzzy", []) or []],
+        llm=[tuple(p) for p in getattr(mb, "llm", []) or []],
+        web=[tuple(p) for p in getattr(mb, "web", []) or []],
+        unmatched_left=list(getattr(mb, "unmatched_left", []) or []),
+        unmatched_right=list(getattr(mb, "unmatched_right", []) or []),
+    )
+
+
+class MergeTask:
+    """Task class specifically for merge operations that returns MergeResult."""
+
+    def __init__(self) -> None:
+        self.task_id: UUID | None = None
+        self.session_id: UUID | None = None
+        self._client: AuthenticatedClient | None = None
+
+    def set_submitted(
+        self,
+        task_id: UUID,
+        session_id: UUID,
+        client: AuthenticatedClient,
+    ) -> None:
+        self.task_id = task_id
+        self.session_id = session_id
+        self._client = client
+
+    async def get_status(
+        self, client: AuthenticatedClient | None = None
+    ) -> TaskStatusResponse:
+        if self.task_id is None:
+            raise EveryrowError("Task must be submitted before fetching status")
+        client = client or self._client
+        if client is None:
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
+        return await get_task_status(self.task_id, client)
+
+    async def await_result(
+        self, client: AuthenticatedClient | None = None
+    ) -> MergeResult:
+        if self.task_id is None:
+            raise EveryrowError("Task must be submitted before awaiting result")
+        client = client or self._client
+        if client is None:
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
+        final_status = await await_task_completion(self.task_id, client)
+
+        result_response = await get_task_result(self.task_id, client)
+        artifact_id = result_response.artifact_id
+
+        if isinstance(artifact_id, Unset) or artifact_id is None:
+            raise EveryrowError("Task result has no artifact ID")
+
+        error = (
+            final_status.error if not isinstance(final_status.error, Unset) else None
+        )
+
+        data = _extract_table_data(result_response)
+        breakdown = _extract_merge_breakdown(result_response)
+
+        return MergeResult(
+            artifact_id=artifact_id,
+            data=data,
+            error=error,
+            breakdown=breakdown,
+        )
 
 
 async def fetch_task_data(

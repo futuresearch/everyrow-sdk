@@ -41,9 +41,9 @@ from everyrow.generated.models import (
     SingleAgentOperationResponseSchemaType0,
 )
 from everyrow.generated.types import UNSET
-from everyrow.result import Result, ScalarResult, TableResult
+from everyrow.result import MergeResult, Result, ScalarResult, TableResult
 from everyrow.session import Session, create_session
-from everyrow.task import LLM, EffortLevel, EveryrowTask
+from everyrow.task import LLM, EffortLevel, EveryrowTask, MergeTask
 
 T = TypeVar("T", bound=BaseModel)
 InputData = UUID | list[dict[str, Any]] | dict[str, Any]
@@ -495,7 +495,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-) -> TableResult:
+) -> MergeResult:
     """Merge two tables using AI.
 
     Args:
@@ -508,13 +508,19 @@ async def merge(
         use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
 
     Returns:
-        TableResult containing the merged table
+        MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
+
+    Example:
+        result = await merge(task="...", left_table=df_left, right_table=df_right)
+        print(f"Exact matches: {len(result.breakdown.exact)}")
+        print(f"LLM matches: {len(result.breakdown.llm)}")
+        print(f"Unmatched left rows: {result.breakdown.unmatched_left}")
     """
     if left_table is None or right_table is None:
         raise EveryrowError("left_table and right_table are required for merge")
     if session is None:
         async with create_session() as internal_session:
-            cohort_task = await merge_async(
+            merge_task = await merge_async(
                 task=task,
                 session=internal_session,
                 left_table=left_table,
@@ -523,11 +529,8 @@ async def merge(
                 merge_on_right=merge_on_right,
                 use_web_search=use_web_search,
             )
-            result = await cohort_task.await_result()
-            if isinstance(result, TableResult):
-                return result
-            raise EveryrowError("Merge task did not return a table result")
-    cohort_task = await merge_async(
+            return await merge_task.await_result()
+    merge_task = await merge_async(
         task=task,
         session=session,
         left_table=left_table,
@@ -536,10 +539,7 @@ async def merge(
         merge_on_right=merge_on_right,
         use_web_search=use_web_search,
     )
-    result = await cohort_task.await_result()
-    if isinstance(result, TableResult):
-        return result
-    raise EveryrowError("Merge task did not return a table result")
+    return await merge_task.await_result()
 
 
 async def merge_async(
@@ -550,8 +550,12 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-) -> EveryrowTask[BaseModel]:
-    """Submit a merge task asynchronously."""
+) -> MergeTask:
+    """Submit a merge task asynchronously.
+
+    Returns:
+        MergeTask that can be awaited for a MergeResult with match breakdown
+    """
     left_data = _prepare_table_input(left_table, MergeOperationLeftInputType1Item)
     right_data = _prepare_table_input(right_table, MergeOperationRightInputType1Item)
 
@@ -570,9 +574,9 @@ async def merge_async(
     )
     response = handle_response(response)
 
-    cohort_task = EveryrowTask(response_model=BaseModel, is_map=True, is_expand=False)
-    cohort_task.set_submitted(response.task_id, response.session_id, session.client)
-    return cohort_task
+    merge_task = MergeTask()
+    merge_task.set_submitted(response.task_id, response.session_id, session.client)
+    return merge_task
 
 
 # --- Dedupe ---
