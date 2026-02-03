@@ -1,6 +1,6 @@
 ---
-title: rank
-description: API reference for the rank operation, which sorts a DataFrame by a metric computed through web research agents.
+title: Use LLM agents to sort any dataset by any criteria
+description: API reference for the EveryRow rank tool, which sorts a DataFrame by a metric computed through web research agents.
 ---
 
 # Rank

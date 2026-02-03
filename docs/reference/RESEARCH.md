@@ -1,6 +1,6 @@
 ---
-title: agent_map
-description: API reference for agent_map and single_agent operations, which run web research agents on entire DataFrames or single inputs.
+title: Use LLM agents to add data to any dataset in Python
+description: API reference for the EveryRow agent_map and single_agent tools, which run web research agents on entire DataFrames or single inputs.
 ---
 
 # Research
