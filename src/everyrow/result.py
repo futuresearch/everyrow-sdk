@@ -53,10 +53,29 @@ class MergeResult:
     """Result of a merge operation including match breakdown.
 
     Example:
-        result = await merge(task="...", left_table=df_left, right_table=df_right)
-        print(f"Exact matches: {len(result.breakdown.exact)}")
-        print(f"LLM matches: {len(result.breakdown.llm)}")
-        print(f"Unmatched left rows: {result.breakdown.unmatched_left}")
+        >>> result = await merge(
+        ...     task="Match subsidiaries to parent companies",
+        ...     left_table=subsidiaries_df,   # 5 rows
+        ...     right_table=parents_df,       # 4 rows
+        ...     merge_on_left="subsidiary",
+        ...     merge_on_right="parent_company",
+        ... )
+        >>> result.breakdown
+        MergeBreakdown(
+            exact=[(0, 2)],           # Row 0 matched row 2 via exact string
+            fuzzy=[(1, 0)],           # Row 1 matched row 0 via fuzzy match
+            llm=[(2, 1), (3, 3)],     # Rows 2,3 matched via LLM
+            web=[],                   # No web-assisted matches
+            unmatched_left=[4],       # Left row 4 had no match
+            unmatched_right=[],       # All right rows were matched
+        )
+        >>> # Access match counts
+        >>> print(f"Exact: {len(result.breakdown.exact)}")
+        Exact: 1
+        >>> print(f"LLM: {len(result.breakdown.llm)}")
+        LLM: 2
+        >>> # Find unmatched rows in original data
+        >>> unmatched = subsidiaries_df.iloc[result.breakdown.unmatched_left]
     """
 
     artifact_id: UUID
