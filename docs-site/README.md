@@ -22,26 +22,33 @@ The `src/notebooks/` directory is gitignored since files are generated at build 
 
 ### Notebook Metadata
 
-Page titles and descriptions for SEO are extracted from the **first markdown cell** of each notebook:
+Page titles and descriptions for SEO are extracted from each notebook:
 
-```markdown
-# This Becomes the Page Title
+- **Title**: From the first H1 (`# Title`) in the first markdown cell
+- **Description**: From `metadata.everyrow.description` in the notebook JSON
 
-This first paragraph becomes the meta description for search engines.
-
-## Setup
-...
+```json
+{
+  "metadata": {
+    "everyrow": {
+      "description": "A concise description for search engines (under 160 chars)."
+    },
+    "kernelspec": { ... }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": ["# This Becomes the Page Title\n", "\n", "..."]
+    }
+  ]
+}
 ```
 
-The extraction logic (`src/utils/notebooks.ts`):
-1. Parses the source `.ipynb` JSON
-2. Takes the H1 (`# Title`) as the page title
-3. Takes the first non-empty paragraph after the H1 as the description
+To edit metadata in Jupyter: **Edit > Edit Notebook Metadata**, then add the `everyrow` key.
 
 **Requirements** (enforced by `scripts/validate-notebooks.py` in CI):
-- First cell must be markdown
-- Must start with an H1 title (`# Title`)
-- Must have a description paragraph before any `##` heading or code
+- First cell must be markdown with an H1 title (`# Title`)
+- Must have `metadata.everyrow.description` (under 160 characters)
 
 ## Local Development
 

@@ -21,6 +21,11 @@ interface NotebookCell {
 
 interface NotebookJson {
   cells: NotebookCell[];
+  metadata?: {
+    everyrow?: {
+      description?: string;
+    };
+  };
 }
 
 function extractMetadataFromSource(slug: string): { title: string; description: string } {
@@ -35,29 +40,19 @@ function extractMetadataFromSource(slug: string): { title: string; description: 
     const notebook: NotebookJson = JSON.parse(content);
     const cells = notebook.cells || [];
 
-    if (cells.length === 0 || cells[0].cell_type !== "markdown") {
-      return { title: slugToTitle(slug), description: "" };
-    }
-
-    const source = cells[0].source;
-    const cellContent = Array.isArray(source) ? source.join("") : source;
-    const lines = cellContent.trim().split("\n");
-
-    // Extract title from first H1
+    // Extract title from first markdown cell's H1
     let title = slugToTitle(slug);
-    if (lines.length > 0 && lines[0].startsWith("# ")) {
-      title = lines[0].slice(2).trim();
+    if (cells.length > 0 && cells[0].cell_type === "markdown") {
+      const source = cells[0].source;
+      const cellContent = Array.isArray(source) ? source.join("") : source;
+      const firstLine = cellContent.trim().split("\n")[0];
+      if (firstLine.startsWith("# ")) {
+        title = firstLine.slice(2).trim();
+      }
     }
 
-    // Extract description: first non-empty, non-heading line after title
-    let description = "";
-    for (const line of lines.slice(1)) {
-      const stripped = line.trim();
-      if (!stripped) continue;
-      if (stripped.startsWith("#")) break;
-      description = stripped;
-      break;
-    }
+    // Extract description from notebook metadata
+    const description = notebook.metadata?.everyrow?.description || "";
 
     return { title, description };
   } catch {

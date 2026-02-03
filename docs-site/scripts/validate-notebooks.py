@@ -4,7 +4,7 @@
 Each notebook must:
 1. Start with a markdown cell
 2. Have an H1 title (# Title) as the first line
-3. Have a description paragraph immediately after the title (before any code or ## heading)
+3. Have a description in metadata.everyrow.description
 """
 
 import json
@@ -63,28 +63,18 @@ def validate_notebook(notebook_path: Path) -> list[str]:
         errors.append(f"{slug}: H1 title is empty")
         return errors
 
-    # Check for description paragraph after title
-    # Skip empty lines, then expect non-heading text before any ## or code
-    found_description = False
-    for line in lines[1:]:
-        stripped = line.strip()
-        if not stripped:
-            continue  # Skip empty lines
-        if stripped.startswith("## "):
-            errors.append(
-                f"{slug}: Found section heading before description paragraph. "
-                f"Add a description after the title."
-            )
-            break
-        if stripped.startswith("# "):
-            errors.append(f"{slug}: Found another H1 before description paragraph")
-            break
-        # Found non-empty, non-heading text - this is the description
-        found_description = True
-        break
+    # Check for description in metadata
+    metadata = nb.get("metadata", {})
+    everyrow_meta = metadata.get("everyrow", {})
+    description = everyrow_meta.get("description", "")
 
-    if not found_description and not errors:
-        errors.append(f"{slug}: No description paragraph found after title")
+    if not description:
+        errors.append(f"{slug}: Missing metadata.everyrow.description")
+    elif len(description) > 160:
+        errors.append(
+            f"{slug}: Description too long ({len(description)} chars). "
+            f"Keep under 160 for SEO."
+        )
 
     return errors
 
