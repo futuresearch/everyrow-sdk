@@ -1,3 +1,8 @@
+---
+title: screen
+description: API reference for the screen operation, which filters a DataFrame using natural language criteria evaluated by web research agents.
+---
+
 # Screen
 
 `screen` takes a DataFrame and a natural-language filter predicate, evaluates each row using web research agents, and returns only the rows that pass. The filter condition does not need to be computable from existing columns. Agents can research external information to make the determination.

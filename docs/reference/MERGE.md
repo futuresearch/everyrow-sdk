@@ -1,3 +1,8 @@
+---
+title: merge
+description: API reference for the merge operation, which left-joins two DataFrames using LLM-powered agents to resolve key mappings.
+---
+
 # Merge
 
 `merge` left-joins two DataFrames using LLM-powered agents to resolve the key mapping instead of requiring exact or fuzzy key matches. Agents resolve semantic relationships by reasoning over the data and, when needed, searching the web for external information to establish matches: subsidiaries, regional names, abbreviations, and product-to-parent-company mappings.

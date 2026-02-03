@@ -1,3 +1,8 @@
+---
+title: Resolve Duplicate Entities
+description: Identify and merge duplicate records representing the same entity across messy data, handling spelling variations, abbreviations, and nicknames.
+---
+
 # How to Resolve Duplicate Entities in Python
 
 Identifying matching records that represent the same entity across messy data typically requires labeled training data, manual blocking rules, or extensive threshold tuning.

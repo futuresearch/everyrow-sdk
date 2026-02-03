@@ -1,3 +1,8 @@
+---
+title: Add Columns with Web Lookup
+description: Add a new column to a pandas DataFrame using LLM-powered web research agents to find data that isn't available through APIs.
+---
+
 # How to Add a Column to a DataFrame Using Web Lookup
 
 `pandas.apply()` runs a local function on each row. But it can't use LLM judgment or do web research to find new values. And doing this by hand can be very slow or expensive. EveryRow provides a one-line utility to do this cheaply and at scale.

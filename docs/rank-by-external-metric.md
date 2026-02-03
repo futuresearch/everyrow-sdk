@@ -1,3 +1,8 @@
+---
+title: Rank DataFrames by External Metrics
+description: Rank or sort a DataFrame by criteria that don't exist in your data, using web research agents to look up metrics like release dates or contributor counts.
+---
+
 # How to Rank a DataFrame by a Metric That Requires The Web
 
 `pandas.sort_values()` requires the column to already exist. EveryRow can rank or sort data on criteria you don't have in your dataset, if it can find it on the web. It's designed to do this as cost efficiently as possible.

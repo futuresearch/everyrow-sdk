@@ -1,3 +1,8 @@
+---
+title: dedupe
+description: API reference for the dedupe operation, which groups duplicate rows in a DataFrame using LLM-powered semantic matching.
+---
+
 # Dedupe
 
 `dedupe` groups duplicate rows in a DataFrame based on a natural-language equivalence relation, assigns cluster IDs, and selects a canonical row per cluster. The duplicate criterion is semantic and LLM-powered: agents reason over the data and, when needed, search the web for external information to establish equivalence. This handles abbreviations, name variations, job changes, and entity relationships that no string similarity threshold can capture.
