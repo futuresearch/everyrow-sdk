@@ -17,14 +17,15 @@ from .error_response import ErrorResponse
 from .error_response_details_type_0 import ErrorResponseDetailsType0
 from .http_validation_error import HTTPValidationError
 from .insufficient_balance_error import InsufficientBalanceError
+from .llm_enum_public import LLMEnumPublic
 from .merge_operation import MergeOperation
 from .merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
 from .merge_operation_left_input_type_2 import MergeOperationLeftInputType2
 from .merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
 from .merge_operation_right_input_type_2 import MergeOperationRightInputType2
+from .merge_operation_use_web_search_type_0 import MergeOperationUseWebSearchType0
 from .operation_response import OperationResponse
 from .public_effort_level import PublicEffortLevel
-from .public_llm import PublicLLM
 from .public_task_type import PublicTaskType
 from .rank_operation import RankOperation
 from .rank_operation_input_type_1_item import RankOperationInputType1Item
@@ -64,14 +65,15 @@ __all__ = (
     "ErrorResponseDetailsType0",
     "HTTPValidationError",
     "InsufficientBalanceError",
+    "LLMEnumPublic",
     "MergeOperation",
     "MergeOperationLeftInputType1Item",
     "MergeOperationLeftInputType2",
     "MergeOperationRightInputType1Item",
     "MergeOperationRightInputType2",
+    "MergeOperationUseWebSearchType0",
     "OperationResponse",
     "PublicEffortLevel",
-    "PublicLLM",
     "PublicTaskType",
     "RankOperation",
     "RankOperationInputType1Item",

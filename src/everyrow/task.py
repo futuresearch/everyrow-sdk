@@ -14,7 +14,7 @@ from everyrow.generated.api.tasks import (
 )
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models import (
-    PublicLLM,
+    LLMEnumPublic,
     TaskResultResponse,
     TaskResultResponseDataType1,
     TaskStatus,
@@ -23,10 +23,9 @@ from everyrow.generated.models import (
 from everyrow.generated.types import Unset
 from everyrow.result import ScalarResult, TableResult
 
-LLM = PublicLLM
+LLM = LLMEnumPublic
 
 
-# TODO: Re-enable effort_level once the API supports it.
 class EffortLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
