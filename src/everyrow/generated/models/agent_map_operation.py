@@ -42,6 +42,10 @@ class AgentMapOperation:
             not set.
         include_research (bool | None | Unset): Include research notes in the response. Required when effort_level is
             not set.
+        enforce_row_independence (bool | Unset): If True, each agent runs completely independently without being
+            affected by other agents. Disables adaptive budget adjustment and straggler management, ensuring agents are not
+            hurried or given iteration limits based on other agents' progress. Use this when consistent per-row behavior is
+            more important than overall throughput. Default: False.
     """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
@@ -53,6 +57,7 @@ class AgentMapOperation:
     join_with_input: bool | Unset = True
     iteration_budget: int | None | Unset = UNSET
     include_research: bool | None | Unset = UNSET
+    enforce_row_independence: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -118,6 +123,8 @@ class AgentMapOperation:
         else:
             include_research = self.include_research
 
+        enforce_row_independence = self.enforce_row_independence
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -140,6 +147,8 @@ class AgentMapOperation:
             field_dict["iteration_budget"] = iteration_budget
         if include_research is not UNSET:
             field_dict["include_research"] = include_research
+        if enforce_row_independence is not UNSET:
+            field_dict["enforce_row_independence"] = enforce_row_independence
 
         return field_dict
 
@@ -271,6 +280,8 @@ class AgentMapOperation:
 
         include_research = _parse_include_research(d.pop("include_research", UNSET))
 
+        enforce_row_independence = d.pop("enforce_row_independence", UNSET)
+
         agent_map_operation = cls(
             input_=input_,
             task=task,
@@ -281,6 +292,7 @@ class AgentMapOperation:
             join_with_input=join_with_input,
             iteration_budget=iteration_budget,
             include_research=include_research,
+            enforce_row_independence=enforce_row_independence,
         )
 
         agent_map_operation.additional_properties = d
