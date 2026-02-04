@@ -27,6 +27,7 @@ def create_client() -> AuthenticatedClient:
         base_url=os.environ.get("EVERYROW_API_URL", DEFAULT_EVERYROW_API_URL),
         token=os.environ["EVERYROW_API_KEY"],
         raise_on_unexpected_status=True,
+        follow_redirects=True,
     )
 
 

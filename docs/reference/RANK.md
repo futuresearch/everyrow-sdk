@@ -1,24 +1,13 @@
+---
+title: Use LLM agents to sort any dataset by any criteria
+description: API reference for the EveryRow rank tool, which sorts a DataFrame by a metric computed through web research agents.
+---
+
 # Rank
 
-AI-powered ranking using natural language criteria
-
-## The problem
-
-If your dataset already contains the data you want to rank by, then sorting is easy.
-
-But what do you do if your data is in an unstructured format? Or what if it requires researching every row to find what you need?
-
-For instance, let's say you're trying to prioritize sales leads. You may have employee count, industry code, and funding stage. But "likelihood to need data integration tools" isn't in any database.
-
-## How it works
-
-`rank` uses AI research agents to find the metric you specify for each row of your dataset. Then it sorts the rows by that metric.
-
-Our research agents can search the internet, read webpages and documents, extract relevant information, and reason with nuance about what they find.
+`rank` takes a DataFrame and a natural-language scoring criterion, dispatches web research agents to compute a score for each row, and returns the DataFrame sorted by that score. The sort key does not need to exist in your data. Agents derive it at runtime by searching the web, reading pages, and reasoning over what they find.
 
 ## Examples
-
-You describe the metric you want to rank by in plain English.
 
 ```python
 from everyrow.ops import rank

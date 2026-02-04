@@ -1,3 +1,8 @@
+---
+title: How to Classify and Label Data with an LLM in Python
+description: Create and add to ML training datasets using web research agents at scale. The everyrow SDK handles batching, parallelism, structured output, and retries automatically.
+---
+
 # How to Classify DataFrame Rows with an LLM
 
 Labeling data with an LLM at scale requires orchestration and can get very expensive. EveryRow can classify each row of a dataframe using LLMs or LLM web agents at low cost, by handling the batching, parallelism, task queues, error handling, and consistency, in a single function call.

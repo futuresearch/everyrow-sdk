@@ -1,16 +1,13 @@
+---
+title: Use LLMs to deduplicate a Pandas DataFrame
+description: API reference for the EveryRow dedupe tool, which groups duplicate rows in a Python Pandas DataFrame using LLM-powered semantic matching.
+---
+
 # Dedupe
 
-Deduplicate when fuzzy matching can't cut it.
+`dedupe` groups duplicate rows in a DataFrame based on a natural-language equivalence relation, assigns cluster IDs, and selects a canonical row per cluster. The duplicate criterion is semantic and LLM-powered: agents reason over the data and, when needed, search the web for external information to establish equivalence. This handles abbreviations, name variations, job changes, and entity relationships that no string similarity threshold can capture.
 
-## The problem
-
-You've got a messy CRM export. "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are obviously the same company. So are "Big Blue" and "IBM Corporation". A person who was at "BAIR Lab" last year and "Google DeepMind" this year is still the same person.
-
-Fuzzy matching forces you to pick a threshold. Set it high (0.9) and you miss "Big Blue" ↔ "IBM" (completely different strings). Set it low (0.7) and you false-positive on "John Smith" ↔ "Jane Smith". There's no threshold that works.
-
-## How it works
-
-You describe what "duplicate" means for your data. The system figures out which rows match.
+## Examples
 
 ```python
 from everyrow.ops import dedupe

@@ -21,8 +21,8 @@ export async function generateMetadata({ params }: PageProps) {
   }
 
   return {
-    title: `${notebook.title} | Everyrow Docs`,
-    description: `Case study notebook: ${notebook.title}`,
+    title: notebook.title,
+    description: notebook.description || `Case study: ${notebook.title}`,
   };
 }
 

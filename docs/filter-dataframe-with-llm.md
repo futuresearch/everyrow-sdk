@@ -1,3 +1,8 @@
+---
+title: Filter a Pandas DataFrame with LLMs
+description: How to screen data by criteria that require research in Python. LLM research agents will cheaply and accurately research every row to screen, filter, or qualify.
+---
+
 # How to Filter a DataFrame with an LLM
 
 Here we show how to filter a pandas dataframe by qualitative criteria, when normal filtering like df[df['column'] == value] won't work.

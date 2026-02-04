@@ -1,3 +1,8 @@
+---
+title: Remove Duplicates from ML Training Data in Python
+description: Find and remove semantic duplicates from ML training datasets to prevent data leakage and overfitting. Use LLMs and LLM Research Agents to get maximum accuracy.
+---
+
 # How to Deduplicate Training Data in Python
 
 Near-duplicates in ML training data cause data leakage, overfitting, and memorization. This guide shows how to find and remove semantically similar examples that aren't exact matches—paraphrases, reformatted text, or records conveying the same information with different words.

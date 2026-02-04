@@ -1,3 +1,8 @@
+---
+title: How to Fuzzy Join DataFrames in Python
+description: Merge two pandas DataFrames when there's no shared ID column, using LLM-powered semantic matching for company names, tickers, and more.
+---
+
 # How to Merge DataFrames Without a Matching Column in Python
 
 When you need to join two pandas DataFrames but there's no shared ID column, `pd.merge()` won't help. Some techniques exist to do fuzzy matching on single columns, but this will miss the harder cases requiring semantic knowledge, and doesn't take advantage of data in other columns that give clues to which rows match.

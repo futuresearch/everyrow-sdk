@@ -1,26 +1,15 @@
-# Agent
+---
+title: Use LLM agents to add data to any dataset in Python
+description: API reference for the EveryRow agent_map and single_agent tools, which run web research agents on entire DataFrames or single inputs.
+---
 
-Run AI agents to research information that isn't in your data.
+# Research
 
-## The problem
+`single_agent` runs one web research agent on a single input (or no input). `agent_map` runs an agent on every row of a DataFrame in parallel. Both dispatch agents that search the web, read pages, and return structured results. The transform is live web research: agents fetch and synthesize external information to populate new columns.
 
-You want to enrich your data with information from the internet:
+## Examples
 
-- Find a company's latest funding round
-- Look up the CEO for an organization
-- Research competitive positioning for a product
-- Get pricing information from a website
-
-This isn't a database lookup. It requires an agent that can search, read, extract, and reason.
-
-| Function | Use when... |
-| -------- | ----------- |
-| `single_agent` | You have zero or one inputs to research |
-| `agent_map` | You have a table and need to research each row in parallel |
-
-## `single_agent`
-
-Run an agent on a single input.
+### `single_agent`
 
 ```python
 from pydantic import BaseModel
@@ -50,9 +39,7 @@ result = await single_agent(
 print(result.data.head())
 ```
 
-## `agent_map`
-
-Run an agent on every row of a table.
+### `agent_map`
 
 ```python
 from pandas import DataFrame
