@@ -25,6 +25,7 @@ from everyrow.generated.models import (
     CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
+    LLMEnumPublic,
     MergeOperation,
     MergeOperationLeftInputType1Item,
     MergeOperationRightInputType1Item,
@@ -139,8 +140,10 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: Literal[False] = False,
 ) -> ScalarResult[T]: ...
@@ -151,8 +154,10 @@ async def single_agent(
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table: Literal[True] = True,
 ) -> TableResult: ...
@@ -162,11 +167,30 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
 ) -> ScalarResult[T] | TableResult:
+    """Execute an AI agent task on the provided input.
+
+    Args:
+        task: Instructions for the AI agent to execute.
+        session: Optional session. If not provided, one will be created automatically.
+        input: Input data (BaseModel, DataFrame, UUID, or Result).
+        effort_level: Effort level preset (low/medium/high). Mutually exclusive with
+            custom params (llm, iteration_budget, include_research). Default: low.
+        llm: LLM to use. Required when effort_level is None.
+        iteration_budget: Number of agent iterations (0-20). Required when effort_level is None.
+        include_research: Include research notes. Required when effort_level is None.
+        response_model: Pydantic model for the response schema.
+        return_table: If True, return a TableResult instead of ScalarResult.
+
+    Returns:
+        ScalarResult or TableResult depending on return_table parameter.
+    """
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await single_agent_async(
@@ -175,6 +199,8 @@ async def single_agent[T: BaseModel](
                 input=input,
                 effort_level=effort_level,
                 llm=llm,
+                iteration_budget=iteration_budget,
+                include_research=include_research,
                 response_model=response_model,
                 return_table=return_table,
             )
@@ -185,6 +211,8 @@ async def single_agent[T: BaseModel](
         input=input,
         effort_level=effort_level,
         llm=llm,
+        iteration_budget=iteration_budget,
+        include_research=include_research,
         response_model=response_model,
         return_table=return_table,
     )
@@ -195,15 +223,19 @@ async def single_agent_async[T: BaseModel](
     task: str,
     session: Session,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
 ) -> EveryrowTask[T]:
+    """Submit a single_agent task asynchronously."""
     input_data = _prepare_single_input(
         input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2
     )
 
+    # Build the operation body with either preset or custom params
     body = SingleAgentOperation(
         input_=input_data,  # type: ignore
         task=task,
@@ -211,8 +243,12 @@ async def single_agent_async[T: BaseModel](
         response_schema=SingleAgentOperationResponseSchemaType0.from_dict(
             response_model.model_json_schema()
         ),
-        llm=llm if llm is not None else UNSET,
-        effort_level=PublicEffortLevel(effort_level.value),
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
+        llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
+        iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
+        include_research=include_research if include_research is not None else UNSET,
         return_list=return_table,
     )
 
@@ -235,23 +271,55 @@ async def agent_map(
     task: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
 ) -> TableResult:
+    """Execute an AI agent task on each row of the input table.
+
+    Args:
+        task: Instructions for the AI agent to execute per row.
+        session: Optional session. If not provided, one will be created automatically.
+        input: The input table (DataFrame, UUID, or TableResult).
+        effort_level: Effort level preset (low/medium/high). Mutually exclusive with
+            custom params (llm, iteration_budget, include_research). Default: low.
+        llm: LLM to use for each agent. Required when effort_level is None.
+        iteration_budget: Number of agent iterations per row (0-20). Required when effort_level is None.
+        include_research: Include research notes. Required when effort_level is None.
+        response_model: Pydantic model for the response schema.
+
+    Returns:
+        TableResult containing the agent results merged with input rows.
+    """
     if input is None:
         raise EveryrowError("input is required for agent_map")
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await agent_map_async(
-                task, internal_session, input, effort_level, llm, response_model
+                task=task,
+                session=internal_session,
+                input=input,
+                effort_level=effort_level,
+                llm=llm,
+                iteration_budget=iteration_budget,
+                include_research=include_research,
+                response_model=response_model,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
                 return result
             raise EveryrowError("Agent map task did not return a table result")
     cohort_task = await agent_map_async(
-        task, session, input, effort_level, llm, response_model
+        task=task,
+        session=session,
+        input=input,
+        effort_level=effort_level,
+        llm=llm,
+        iteration_budget=iteration_budget,
+        include_research=include_research,
+        response_model=response_model,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -263,12 +331,16 @@ async def agent_map_async(
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
-    effort_level: EffortLevel = EffortLevel.LOW,
+    effort_level: EffortLevel | None = EffortLevel.LOW,
     llm: LLM | None = None,
+    iteration_budget: int | None = None,
+    include_research: bool | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
 ) -> EveryrowTask[BaseModel]:
+    """Submit an agent_map task asynchronously."""
     input_data = _prepare_table_input(input, AgentMapOperationInputType1Item)
 
+    # Build the operation body with either preset or custom params
     body = AgentMapOperation(
         input_=input_data,  # type: ignore
         task=task,
@@ -276,9 +348,13 @@ async def agent_map_async(
         response_schema=AgentMapOperationResponseSchemaType0.from_dict(
             response_model.model_json_schema()
         ),
-        llm=llm if llm is not None else UNSET,
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
+        llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
+        iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
+        include_research=include_research if include_research is not None else UNSET,
         join_with_input=True,
-        effort_level=PublicEffortLevel(effort_level.value),
     )
 
     response = await agent_map_operations_agent_map_post.asyncio(
@@ -561,7 +637,7 @@ async def merge_async(
         task=task,
         left_key=merge_on_left or UNSET,
         right_key=merge_on_right or UNSET,
-        use_web_search=use_web_search or UNSET,
+        use_web_search=use_web_search or UNSET,  # type: ignore
         session_id=session.session_id,
     )
 

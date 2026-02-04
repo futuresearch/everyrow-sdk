@@ -9,7 +9,9 @@ from pydantic import BaseModel
 
 from everyrow.generated.models import (
     CreateArtifactResponse,
+    LLMEnumPublic,
     OperationResponse,
+    PublicEffortLevel,
     PublicTaskType,
     TaskResultResponse,
     TaskResultResponseDataType0Item,
@@ -17,6 +19,7 @@ from everyrow.generated.models import (
     TaskStatus,
     TaskStatusResponse,
 )
+from everyrow.generated.types import UNSET
 from everyrow.ops import (
     agent_map,
     create_scalar_artifact,
@@ -26,6 +29,7 @@ from everyrow.ops import (
 )
 from everyrow.result import ScalarResult, TableResult
 from everyrow.session import Session
+from everyrow.task import LLM, EffortLevel
 
 
 @pytest.fixture
@@ -375,3 +379,215 @@ async def test_create_table_artifact_preserves_valid_values(mocker, mock_session
     body = call_args.kwargs["body"]
     records = [item.additional_properties for item in body.data]
     assert records == [{"name": "Alice", "age": 30}]
+
+
+# --- Tests for new agent parameters ---
+
+
+@pytest.mark.asyncio
+async def test_single_agent_with_effort_level_preset(mocker, mock_session):
+    """Test that effort_level preset sends correct parameters to API."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.ops.single_agent_operations_single_agent_post.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
+    )
+
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_result.return_value = _make_scalar_result(
+        task_id, {"answer": "Paris"}, artifact_id
+    )
+
+    await single_agent(
+        task="What is the capital of France?",
+        session=mock_session,
+        effort_level=EffortLevel.MEDIUM,
+    )
+
+    # Verify the body sent to the API
+    call_args = mock_submit.call_args
+    body = call_args.kwargs["body"]
+
+    assert body.effort_level == PublicEffortLevel.MEDIUM
+    # Custom params should be UNSET when using preset
+    assert body.llm is UNSET
+    assert body.iteration_budget is UNSET
+    assert body.include_research is UNSET
+
+
+@pytest.mark.asyncio
+async def test_single_agent_with_custom_params(mocker, mock_session):
+    """Test that custom params (llm, iteration_budget, include_research) are sent correctly."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.ops.single_agent_operations_single_agent_post.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
+    )
+
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_result.return_value = _make_scalar_result(
+        task_id, {"answer": "Paris"}, artifact_id
+    )
+
+    await single_agent(
+        task="What is the capital of France?",
+        session=mock_session,
+        effort_level=None,
+        llm=LLM.CLAUDE_4_5_HAIKU,
+        iteration_budget=5,
+        include_research=True,
+    )
+
+    # Verify the body sent to the API
+    call_args = mock_submit.call_args
+    body = call_args.kwargs["body"]
+
+    # effort_level should be UNSET when using custom params
+    assert body.effort_level is UNSET
+    # Custom params should have the specified values
+    assert body.llm == LLMEnumPublic.CLAUDE_4_5_HAIKU
+    assert body.iteration_budget == 5
+    assert body.include_research is True
+
+
+@pytest.mark.asyncio
+async def test_agent_map_with_effort_level_preset(mocker, mock_session):
+    """Test that agent_map with effort_level preset sends correct parameters."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.ops.agent_map_operations_agent_map_post.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
+    )
+
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [{"country": "France", "answer": "Paris"}],
+        artifact_id,
+    )
+
+    input_df = pd.DataFrame([{"country": "France"}])
+    await agent_map(
+        task="What is the capital?",
+        session=mock_session,
+        input=input_df,
+        effort_level=EffortLevel.HIGH,
+    )
+
+    # Verify the body sent to the API
+    call_args = mock_submit.call_args
+    body = call_args.kwargs["body"]
+
+    assert body.effort_level == PublicEffortLevel.HIGH
+    assert body.llm is UNSET
+    assert body.iteration_budget is UNSET
+    assert body.include_research is UNSET
+
+
+@pytest.mark.asyncio
+async def test_agent_map_with_custom_params(mocker, mock_session):
+    """Test that agent_map with custom params sends correct parameters."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "everyrow.ops.agent_map_operations_agent_map_post.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = OperationResponse(
+        task_id=task_id,
+        session_id=mock_session.session_id,
+        status=TaskStatus.PENDING,
+    )
+
+    mock_status = mocker.patch(
+        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
+    )
+
+    mock_result = mocker.patch(
+        "everyrow.task.get_task_result_tasks_task_id_result_get.asyncio",
+        new_callable=AsyncMock,
+    )
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [{"country": "France", "answer": "Paris"}],
+        artifact_id,
+    )
+
+    input_df = pd.DataFrame([{"country": "France"}])
+    await agent_map(
+        task="What is the capital?",
+        session=mock_session,
+        input=input_df,
+        effort_level=None,
+        llm=LLM.GPT_5_MINI,
+        iteration_budget=10,
+        include_research=False,
+    )
+
+    # Verify the body sent to the API
+    call_args = mock_submit.call_args
+    body = call_args.kwargs["body"]
+
+    assert body.effort_level is UNSET
+    assert body.llm == LLMEnumPublic.GPT_5_MINI
+    assert body.iteration_budget == 10
+    assert body.include_research is False

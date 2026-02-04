@@ -7,8 +7,8 @@ from uuid import UUID
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.llm_enum_public import LLMEnumPublic
 from ..models.public_effort_level import PublicEffortLevel
-from ..models.public_llm import PublicLLM
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -31,19 +31,28 @@ class AgentMapOperation:
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
         response_schema (AgentMapOperationResponseSchemaType0 | None | Unset): JSON Schema for the response format. If
             not provided, use default answer schema.
-        llm (PublicLLM | Unset):
-        effort_level (PublicEffortLevel | Unset):
+        llm (LLMEnumPublic | None | Unset): LLM to use for each agent. Required when effort_level is not set.
+        effort_level (None | PublicEffortLevel | Unset): Effort level preset: low (quick), medium (balanced), high
+            (thorough). Mutually exclusive with llm/iteration_budget/include_research - use either a preset or custom
+            params, not both. If not specified, you must provide all individual parameters (llm, iteration_budget,
+            include_research).
         join_with_input (bool | Unset): If True, merge agent output with input row. If False, output only agent results.
             Default: True.
+        iteration_budget (int | None | Unset): Number of agent iterations per row (0-20). Required when effort_level is
+            not set.
+        include_research (bool | None | Unset): Include research notes in the response. Required when effort_level is
+            not set.
     """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
     task: str
     session_id: None | Unset | UUID = UNSET
     response_schema: AgentMapOperationResponseSchemaType0 | None | Unset = UNSET
-    llm: PublicLLM | Unset = UNSET
-    effort_level: PublicEffortLevel | Unset = UNSET
+    llm: LLMEnumPublic | None | Unset = UNSET
+    effort_level: None | PublicEffortLevel | Unset = UNSET
     join_with_input: bool | Unset = True
+    iteration_budget: int | None | Unset = UNSET
+    include_research: bool | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,15 +88,35 @@ class AgentMapOperation:
         else:
             response_schema = self.response_schema
 
-        llm: str | Unset = UNSET
-        if not isinstance(self.llm, Unset):
+        llm: None | str | Unset
+        if isinstance(self.llm, Unset):
+            llm = UNSET
+        elif isinstance(self.llm, LLMEnumPublic):
             llm = self.llm.value
+        else:
+            llm = self.llm
 
-        effort_level: str | Unset = UNSET
-        if not isinstance(self.effort_level, Unset):
+        effort_level: None | str | Unset
+        if isinstance(self.effort_level, Unset):
+            effort_level = UNSET
+        elif isinstance(self.effort_level, PublicEffortLevel):
             effort_level = self.effort_level.value
+        else:
+            effort_level = self.effort_level
 
         join_with_input = self.join_with_input
+
+        iteration_budget: int | None | Unset
+        if isinstance(self.iteration_budget, Unset):
+            iteration_budget = UNSET
+        else:
+            iteration_budget = self.iteration_budget
+
+        include_research: bool | None | Unset
+        if isinstance(self.include_research, Unset):
+            include_research = UNSET
+        else:
+            include_research = self.include_research
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -107,6 +136,10 @@ class AgentMapOperation:
             field_dict["effort_level"] = effort_level
         if join_with_input is not UNSET:
             field_dict["join_with_input"] = join_with_input
+        if iteration_budget is not UNSET:
+            field_dict["iteration_budget"] = iteration_budget
+        if include_research is not UNSET:
+            field_dict["include_research"] = include_research
 
         return field_dict
 
@@ -184,21 +217,59 @@ class AgentMapOperation:
 
         response_schema = _parse_response_schema(d.pop("response_schema", UNSET))
 
-        _llm = d.pop("llm", UNSET)
-        llm: PublicLLM | Unset
-        if isinstance(_llm, Unset):
-            llm = UNSET
-        else:
-            llm = PublicLLM(_llm)
+        def _parse_llm(data: object) -> LLMEnumPublic | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                llm_type_0 = LLMEnumPublic(data)
 
-        _effort_level = d.pop("effort_level", UNSET)
-        effort_level: PublicEffortLevel | Unset
-        if isinstance(_effort_level, Unset):
-            effort_level = UNSET
-        else:
-            effort_level = PublicEffortLevel(_effort_level)
+                return llm_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(LLMEnumPublic | None | Unset, data)
+
+        llm = _parse_llm(d.pop("llm", UNSET))
+
+        def _parse_effort_level(data: object) -> None | PublicEffortLevel | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                effort_level_type_0 = PublicEffortLevel(data)
+
+                return effort_level_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | PublicEffortLevel | Unset, data)
+
+        effort_level = _parse_effort_level(d.pop("effort_level", UNSET))
 
         join_with_input = d.pop("join_with_input", UNSET)
+
+        def _parse_iteration_budget(data: object) -> int | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(int | None | Unset, data)
+
+        iteration_budget = _parse_iteration_budget(d.pop("iteration_budget", UNSET))
+
+        def _parse_include_research(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        include_research = _parse_include_research(d.pop("include_research", UNSET))
 
         agent_map_operation = cls(
             input_=input_,
@@ -208,6 +279,8 @@ class AgentMapOperation:
             llm=llm,
             effort_level=effort_level,
             join_with_input=join_with_input,
+            iteration_budget=iteration_budget,
+            include_research=include_research,
         )
 
         agent_map_operation.additional_properties = d
