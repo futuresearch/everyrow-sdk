@@ -50,5 +50,5 @@ MCP provides **direct tool calls** without code generation.
 ## Next Steps
 
 - [Installation Guide](/docs/installation) - Full setup instructions
-- [API Reference](/docs/reference/AGENT) - Detailed function documentation
+- [API Reference](/docs/reference/RESEARCH) - Detailed function documentation
 - [Case Studies](/docs/notebooks/dedupe-crm-company-records) - Real-world examples
