@@ -13,6 +13,7 @@
     "gray-matter": "^4.0.3",
     "highlight.js": "^11.11.1",
     "next": "16.1.6",
+    "next-mdx-remote": "^5.0.0",
     "posthog-js": "^1.336.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

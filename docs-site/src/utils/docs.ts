@@ -11,6 +11,7 @@ export interface DocMeta {
   title: string;
   description?: string;
   category: string;
+  format: "md" | "mdx";
 }
 
 export interface Doc extends DocMeta {
@@ -45,9 +46,10 @@ export function getAllDocs(): DocMeta[] {
         // Skip data directory
         if (entry.name === "data") continue;
         scanDir(fullPath, path.join(prefix, entry.name));
-      } else if (entry.name.endsWith(".md")) {
+      } else if (entry.name.endsWith(".md") || entry.name.endsWith(".mdx")) {
+        const isMdx = entry.name.endsWith(".mdx");
         const relativePath = path.join(prefix, entry.name);
-        const slug = relativePath.replace(/\.md$/, "");
+        const slug = relativePath.replace(/\.mdx?$/, "");
         const content = fs.readFileSync(fullPath, "utf-8");
         const { data } = matter(content);
 
@@ -56,6 +58,7 @@ export function getAllDocs(): DocMeta[] {
           title: data.title || slugToTitle(path.basename(slug)),
           description: data.description,
           category: getCategory(relativePath),
+          format: isMdx ? "mdx" : "md",
         });
       }
     }
@@ -66,24 +69,28 @@ export function getAllDocs(): DocMeta[] {
 }
 
 export function getDocBySlug(slug: string): Doc | null {
-  // Handle both with and without .md extension
-  const slugPath = slug.endsWith(".md") ? slug : `${slug}.md`;
-  const fullPath = path.join(DOCS_DIR, slugPath);
+  // Try .mdx first, then .md
+  const baseSlug = slug.replace(/\.mdx?$/, "");
 
-  if (!fs.existsSync(fullPath)) {
-    return null;
+  for (const ext of [".mdx", ".md"] as const) {
+    const fullPath = path.join(DOCS_DIR, `${baseSlug}${ext}`);
+
+    if (fs.existsSync(fullPath)) {
+      const fileContent = fs.readFileSync(fullPath, "utf-8");
+      const { data, content } = matter(fileContent);
+
+      return {
+        slug: baseSlug,
+        title: data.title || slugToTitle(path.basename(baseSlug)),
+        description: data.description,
+        category: getCategory(baseSlug),
+        format: ext === ".mdx" ? "mdx" : "md",
+        content,
+      };
+    }
   }
 
-  const fileContent = fs.readFileSync(fullPath, "utf-8");
-  const { data, content } = matter(fileContent);
-
-  return {
-    slug: slug.replace(/\.md$/, ""),
-    title: data.title || slugToTitle(path.basename(slug)),
-    description: data.description,
-    category: getCategory(slug),
-    content,
-  };
+  return null;
 }
 
 export function getDocSlugs(): string[] {
@@ -108,12 +115,13 @@ export function getNavigation(): NavSection[] {
       title: "Getting Started",
       items: [
         { slug: "installation", title: "Installation" },
+        { slug: "skills-vs-mcp", title: "Skills vs MCP" },
       ],
     },
     {
       title: "Guides",
       items: guides
-        .filter((d) => d.slug !== "installation")
+        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp")
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {

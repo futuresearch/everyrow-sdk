@@ -1,0 +1,306 @@
+---
+title: "Install EveryRow: Python SDK, Claude Code Plugin, and MCP Server"
+description: Get started with everyrow. Install the Python SDK via pip, add the coding agent plugin for Claude Code, Gemini CLI, Codex, or Cursor, or configure the MCP server.
+---
+
+# Installation
+
+Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit included).
+
+```bash
+export EVERYROW_API_KEY=your_key_here
+```
+
+Select your platform and integration method below.
+
+<InstallationTabs>
+
+<TabContent agent="python-sdk" type="pip">
+
+```bash
+pip install everyrow
+```
+
+Requires Python 3.12+.
+
+**Quick example:**
+
+```python
+import everyrow
+
+df = everyrow.research(
+    "companies.csv",
+    {"industry": "What industry is this company in?"}
+)
+df.to_csv("companies_enriched.csv")
+```
+
+See the [API Reference](/docs/reference/RESEARCH) for full documentation.
+
+</TabContent>
+
+<TabContent agent="python-sdk" type="uv">
+
+```bash
+uv add everyrow
+```
+
+Requires Python 3.12+.
+
+**Quick example:**
+
+```python
+import everyrow
+
+df = everyrow.research(
+    "companies.csv",
+    {"industry": "What industry is this company in?"}
+)
+df.to_csv("companies_enriched.csv")
+```
+
+See the [API Reference](/docs/reference/RESEARCH) for full documentation.
+
+</TabContent>
+
+<TabContent agent="claude-code" type="mcp">
+
+Add everyrow to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
+
+```json
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Or install with pip and use `"command": "everyrow-mcp"` instead of uvx.
+
+Config file location:
+- **User scope:** `~/.claude.json` (in the `mcpServers` field)
+- **Project scope:** `.mcp.json` in your project root
+
+[Choosing the right scope](https://code.claude.com/docs/en/mcp#choosing-the-right-scope)
+
+</TabContent>
+
+<TabContent agent="claude-code" type="plugin">
+
+Install the everyrow plugin from the marketplace:
+
+```bash
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
+
+This installs both the skill and MCP server together. You can toggle each on/off in Claude Code settings.
+
+[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
+
+</TabContent>
+
+<TabContent agent="claude-desktop" type="mcp">
+
+Download the latest `.mcpb` bundle from [GitHub Releases](https://github.com/futuresearch/everyrow-sdk/releases) and double-click to install. You'll be prompted for your API key during setup.
+
+> **Note:** Works in Claude Desktop's **Chat** mode only (not Cowork mode due to a [known limitation](https://github.com/anthropics/claude-code/issues/20377)).
+
+**Manual installation:**
+
+Add to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
+
+```json
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Config file location:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+</TabContent>
+
+<TabContent agent="codex" type="skills">
+
+Ask Codex in natural language:
+
+```
+>>> codex
+>>> Install the skill from github.com/futuresearch/everyrow-sdk found under skills/everyrow-sdk
+```
+
+Or install manually:
+
+```bash
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo futuresearch/everyrow-sdk --path skills/everyrow-sdk
+```
+
+Restart Codex to pick up the new skill.
+
+[Official Docs](https://developers.openai.com/codex/skills#install-new-skills)
+
+</TabContent>
+
+<TabContent agent="codex" type="mcp">
+
+Add everyrow to your Codex MCP config (requires [uv](https://docs.astral.sh/uv/)):
+
+```toml
+[mcp_servers.everyrow]
+command = "uvx"
+args = ["everyrow-mcp"]
+
+[mcp_servers.everyrow.env]
+EVERYROW_API_KEY = "${EVERYROW_API_KEY}"
+```
+
+Or use the CLI:
+
+```bash
+codex mcp add everyrow --env EVERYROW_API_KEY=${EVERYROW_API_KEY} -- uvx everyrow-mcp
+```
+
+Config file location:
+- **User scope:** `~/.codex/config.toml`
+- **Project scope:** `.codex/config.toml`
+
+[Official Docs](https://developers.openai.com/codex/mcp/)
+
+</TabContent>
+
+<TabContent agent="gemini" type="skills">
+
+Install the skill directly from GitHub:
+
+```bash
+gemini skills install https://github.com/futuresearch/everyrow-sdk --path skills/everyrow-sdk
+```
+
+Use `--scope workspace` to install to `.gemini/skills/` (project-level) instead of `~/.gemini/skills/` (user-level).
+
+Then enable skills within the CLI:
+
+```
+/settings > Preview Features > Enable
+/settings > Agent Skills > Enable
+/skills enable everyrow-sdk
+/skills reload
+```
+
+[Official Docs](https://geminicli.com/docs/cli/skills/)
+
+</TabContent>
+
+<TabContent agent="gemini" type="mcp">
+
+Add via CLI (requires [uv](https://docs.astral.sh/uv/)):
+
+```bash
+gemini mcp add -e EVERYROW_API_KEY=$EVERYROW_API_KEY everyrow uvx everyrow-mcp
+```
+
+Or add manually to `~/.gemini/settings.json` (user) or `.gemini/settings.json` (project):
+
+```json
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "$EVERYROW_API_KEY"
+      }
+    }
+  }
+}
+```
+
+[Official Docs](https://geminicli.com/docs/tools/mcp-server/)
+
+</TabContent>
+
+<TabContent agent="gemini" type="plugin">
+
+This installs both the MCP server and skills together.
+
+```bash
+gemini extensions install https://github.com/futuresearch/everyrow-sdk --ref main
+```
+
+When prompted with `Would you like to attempt to install via "git clone" instead?`, type `Y` to confirm.
+
+Then enable the extension:
+
+```bash
+gemini extensions enable everyrow [--scope <user or workspace>]
+```
+
+To use skills, enable them within the CLI:
+
+```
+/settings > Preview Features > Enable
+/settings > Agent Skills > Enable
+/skills enable everyrow-sdk
+/skills reload
+/model > Manual > gemini-3-pro-preview
+```
+
+[Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension)
+
+</TabContent>
+
+<TabContent agent="cursor" type="skills">
+
+1. Open Cursor Settings → Rules
+2. In the Project Rules section, click Add Rule
+3. Select Remote Rule (Github)
+4. Enter: `https://github.com/futuresearch/everyrow-sdk.git`
+
+[Official Docs](https://cursor.com/docs/context/skills#installing-skills-from-github)
+
+</TabContent>
+
+<TabContent agent="cursor" type="mcp">
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=everyrow&config=eyJlbnYiOnsiRVZFUllST1dfQVBJX0tFWSI6IiR7ZW52OkVWRVJZUk9XX0FQSV9LRVl9In0sImNvbW1hbmQiOiJ1dnggZXZlcnlyb3ctbWNwIn0%3D)
+
+Or add manually to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
+
+```json
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "${env:EVERYROW_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Config file location:
+- macOS: `~/.cursor/mcp.json`
+- Windows: `%USERPROFILE%\.cursor\mcp.json`
+
+</TabContent>
+
+</InstallationTabs>

@@ -11,7 +11,9 @@ export function DocsLayout({ navigation, children }: DocsLayoutProps) {
     <div className="docs-layout">
       <Sidebar navigation={navigation} />
       <main className="docs-content">
-        {children}
+        <div className="docs-content-inner">
+          {children}
+        </div>
       </main>
     </div>
   );

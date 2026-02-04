@@ -200,7 +200,7 @@ result = await agent_map(
 print(result.data.head())
 ```
 
-**More:** [docs](docs/AGENT.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
+**More:** [docs](docs/reference/RESEARCH.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
 
 ### Derive
 

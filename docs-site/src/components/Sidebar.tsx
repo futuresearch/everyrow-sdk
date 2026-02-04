@@ -11,8 +11,9 @@ interface SidebarProps {
 export function Sidebar({ navigation }: SidebarProps) {
   const pathname = usePathname();
 
-  // Remove /docs prefix and trailing slash for comparison
-  const currentSlug = pathname.replace(/^\/docs\/?/, "").replace(/\/$/, "");
+  // Remove leading/trailing slashes for comparison
+  // Note: usePathname() returns path without basePath, so no need to strip /docs
+  const currentSlug = pathname.replace(/^\//, "").replace(/\/$/, "");
 
   return (
     <aside className="docs-sidebar">
