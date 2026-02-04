@@ -184,8 +184,8 @@ def _extract_scalar_data[T: BaseModel](
 
 def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
     """Extract merge breakdown from task result response."""
-    # The merge_breakdown is on the response, check if it exists
-    mb = getattr(result, "merge_breakdown", None)
+    # The merge_breakdown is stored in additional_properties, not as a direct attribute
+    mb = result.additional_properties.get("merge_breakdown", None)
     if mb is None or isinstance(mb, Unset):
         # Return empty breakdown if not present
         return MergeBreakdown(
@@ -197,15 +197,14 @@ def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
             unmatched_right=[],
         )
 
-    # Convert from generated model to our MergeBreakdown
-    # The generated model should have these fields as lists
+    # mb is a dict from additional_properties, access fields with .get()
     return MergeBreakdown(
-        exact=[tuple(p) for p in getattr(mb, "exact", []) or []],
-        fuzzy=[tuple(p) for p in getattr(mb, "fuzzy", []) or []],
-        llm=[tuple(p) for p in getattr(mb, "llm", []) or []],
-        web=[tuple(p) for p in getattr(mb, "web", []) or []],
-        unmatched_left=list(getattr(mb, "unmatched_left", []) or []),
-        unmatched_right=list(getattr(mb, "unmatched_right", []) or []),
+        exact=[tuple(p) for p in mb.get("exact", []) or []],
+        fuzzy=[tuple(p) for p in mb.get("fuzzy", []) or []],
+        llm=[tuple(p) for p in mb.get("llm", []) or []],
+        web=[tuple(p) for p in mb.get("web", []) or []],
+        unmatched_left=list(mb.get("unmatched_left", []) or []),
+        unmatched_right=list(mb.get("unmatched_right", []) or []),
     )
 
 
