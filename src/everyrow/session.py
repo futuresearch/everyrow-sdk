@@ -63,9 +63,7 @@ async def create_session(
     try:
         response = await create_session_endpoint_sessions_post.asyncio(
             client=client,
-            body=CreateSession(
-                name=name or f"everyrow-sdk-session-{datetime.now().isoformat()}"
-            ),
+            body=CreateSession(name=name or f"everyrow-sdk-session-{datetime.now().isoformat()}"),
         )
         response = handle_response(response)
         session = Session(client=client, session_id=response.session_id)
