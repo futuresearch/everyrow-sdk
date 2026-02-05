@@ -1,0 +1,94 @@
+# SDK Skills vs MCP
+
+everyrow integrates with your agent through **SDK Skills** or **MCP server**. Here's how they compare:
+
+### SDK skills
+
+Skills give your agent **guided workflows** with best practices built in.
+
+**How it works:**
+1. Your agent reads your skill instructions
+2. Your agent writes Python code using the everyrow SDK following everyrow patterns
+3. The code runs in your local environment
+4. Results save to your filesystem
+
+**Best for:**
+- Complex multi-step workflows (dedupe → merge → research)
+- Custom data transformations
+- Integration with your existing Python scripts
+- Full control over execution
+
+<svg width="420" height="320" viewBox="0 0 420 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead-skills" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#868e96"/>
+    </marker>
+  </defs>
+  <rect x="20" y="30" width="120" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="80" y="55" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>Claude Code</text>
+  <rect x="260" y="30" width="140" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="330" y="55" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>Skill Prompts</text>
+  <path d="M140 50 L250 50" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-skills)"/>
+  <text x="195" y="42" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>reads</text>
+  <rect x="20" y="130" width="120" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="80" y="155" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>Python Code</text>
+  <path d="M80 70 L80 120" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-skills)"/>
+  <text x="95" y="100" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>writes</text>
+  <rect x="260" y="130" width="140" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="330" y="155" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>everyrow API</text>
+  <path d="M140 150 L250 150" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-skills)"/>
+  <text x="195" y="142" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>calls</text>
+  <rect x="20" y="230" width="120" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="80" y="255" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>Your CSV</text>
+  <path d="M80 170 L80 220" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-skills)"/>
+  <text x="95" y="200" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>saves</text>
+</svg>
+
+### MCP Server
+
+MCP provides **direct tool calls** without code generation.
+
+**How it works:**
+1. Your agent calls everyrow MCP tools directly
+2. Results saved to your filesystem and returned in the conversation
+3. No intermediate Python code
+
+**Best for:**
+- Quick one-off operations
+- Simple lookups and enrichments
+- Environments where code execution is restricted, or more guarantees are needed
+
+<svg width="420" height="220" viewBox="0 0 420 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead-mcp" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#868e96"/>
+    </marker>
+  </defs>
+  <rect x="20" y="30" width="120" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="80" y="55" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>Claude Code</text>
+  <rect x="260" y="30" width="140" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="330" y="55" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>MCP Server</text>
+  <path d="M140 50 L250 50" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-mcp)"/>
+  <text x="195" y="42" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>tool call</text>
+  <rect x="260" y="130" width="140" height="40" rx="6" fill="#f8f9fa" stroke="#343a40" strokeWidth="1.5"/>
+  <text x="330" y="155" textAnchor="middle" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '13px', fill: '#343a40'}}>everyrow API</text>
+  <path d="M330 70 L330 120" stroke="#868e96" strokeWidth="1.5" fill="none" markerEnd="url(#arrowhead-mcp)"/>
+  <text x="345" y="100" style={{fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: '11px', fill: '#868e96'}}>calls</text>
+</svg>
+
+### Comparison Table
+
+| Feature | SDK skills | MCP Server |
+|---------|--------|------------|
+| Setup complexity | Requires python environment | Requires MCP client (e.g. Claude Desktop) |
+| Code visibility | Full Python code shown | Tool calls only |
+| Customization | High (edit generated code) | Limited |
+| Multi-step workflows | Excellent | Basic |
+| Works in Claude Desktop | Cowork mode only | Yes (For now, Chat mode only) |
+| Debugging | Requires some python knowledge | Not needed |
+
+## Next Steps
+
+- [Installation Guide](/docs/installation) - Full setup instructions
+- [API Reference](/docs/reference/RESEARCH) - Detailed function documentation
+- [Case Studies](/docs/notebooks/dedupe-crm-company-records) - Real-world examples
