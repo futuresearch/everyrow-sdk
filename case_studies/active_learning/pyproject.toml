@@ -1,0 +1,17 @@
+[project]
+name = "active-learning-tutorial"
+version = "0.1.0"
+description = "Active learning with an LLM oracle using everyrow"
+requires-python = ">=3.12"
+dependencies = [
+    "everyrow",
+    "datasets",
+    "lightgbm",
+    "scikit-learn",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "python-dotenv",
+    "pydantic",
+    "ipykernel",
+]
