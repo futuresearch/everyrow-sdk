@@ -4,13 +4,13 @@ import pandas as pd
 import pytest
 
 from everyrow.ops import merge
-from everyrow.result import TableResult
+from everyrow.result import MergeResult
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 async def test_merge_returns_joined_table(trials_df, pharma_df):
-    """Test that merge returns a TableResult with joined data."""
+    """Test that merge returns a MergeResult with joined data and breakdown."""
     result = await merge(
         task="""
             Merge clinical trial sponsors with parent pharmaceutical companies.
@@ -23,12 +23,14 @@ async def test_merge_returns_joined_table(trials_df, pharma_df):
         merge_on_right="company",
     )
 
-    assert isinstance(result, TableResult)
+    assert isinstance(result, MergeResult)
     assert result.artifact_id is not None
     # Should have columns from both tables
     assert "trial_id" in result.data.columns
     assert "sponsor" in result.data.columns
     assert "hq_country" in result.data.columns
+    # Should have breakdown
+    assert result.breakdown is not None
 
 
 async def test_merge_subsidiary_to_parent():
@@ -61,7 +63,7 @@ async def test_merge_subsidiary_to_parent():
         merge_on_right="parent_company",
     )
 
-    assert isinstance(result, TableResult)
+    assert isinstance(result, MergeResult)
     assert len(result.data) == 3
     # Verify correct matches
     instagram_row = result.data[result.data["subsidiary"] == "Instagram"]
@@ -102,7 +104,32 @@ async def test_merge_fuzzy_matches_abbreviations():
         merge_on_right="department",
     )
 
-    assert isinstance(result, TableResult)
+    assert isinstance(result, MergeResult)
     # Both employees should be matched
     assert len(result.data) == 2
     assert "budget" in result.data.columns
+
+
+async def test_merge_breakdown_structure():
+    """Test that merge returns a proper breakdown structure."""
+    # Create small tables for a simple merge
+    left = pd.DataFrame([{"id": "A", "value": 1}, {"id": "B", "value": 2}])
+    right = pd.DataFrame([{"id": "A", "extra": "x"}, {"id": "C", "extra": "z"}])
+
+    result = await merge(
+        task="Match rows by ID column",
+        left_table=left,
+        right_table=right,
+        merge_on_left="id",
+        merge_on_right="id",
+    )
+
+    assert isinstance(result, MergeResult)
+    assert result.breakdown is not None
+    # Breakdown should have all expected fields
+    assert isinstance(result.breakdown.exact, list)
+    assert isinstance(result.breakdown.fuzzy, list)
+    assert isinstance(result.breakdown.llm, list)
+    assert isinstance(result.breakdown.web, list)
+    assert isinstance(result.breakdown.unmatched_left, list)
+    assert isinstance(result.breakdown.unmatched_right, list)
