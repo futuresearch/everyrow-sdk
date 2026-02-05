@@ -1,6 +1,23 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { DocsLayout } from "@/components/DocsLayout";
 import { getNavigation, type NavSection } from "@/utils/docs";
+
+export const metadata: Metadata = {
+  title: "Everyrow Documentation",
+  description:
+    "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+  alternates: {
+    canonical: "https://everyrow.io/docs",
+  },
+  openGraph: {
+    title: "Everyrow Documentation",
+    description:
+      "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+    url: "https://everyrow.io/docs",
+    images: [{ url: "https://everyrow.io/everyrow-og.png" }],
+  },
+};
 
 const SECTION_ICONS: Record<string, string> = {
   "Getting Started": "rocket",
