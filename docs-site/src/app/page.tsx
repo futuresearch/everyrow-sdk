@@ -111,6 +111,14 @@ export default function DocsHome() {
           your API key and start processing data.
         </p>
       </div>
+
+      <div className="landing-quickstart">
+        <h2>For Autonomous Agents</h2>
+        <p>
+          If you&apos;re an autonomous agent, please head to the appropriate API
+          reference page before starting to write code.
+        </p>
+      </div>
     </DocsLayout>
   );
 }
