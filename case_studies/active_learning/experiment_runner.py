@@ -242,7 +242,6 @@ async def _run_active_learning(
             iteration_result.session_url = oracle_result.session_url
             iteration_result.session_id = oracle_result.session_id
             iteration_result.query_latency_seconds = oracle_result.latency_seconds
-            iteration_result.query_cost_usd = oracle_result.cost_usd
 
             if oracle_failures > 0:
                 log.warning(

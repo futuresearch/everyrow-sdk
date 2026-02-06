@@ -19,7 +19,6 @@ class OracleQueryResult(BaseModel):
     session_url: str
     session_id: str
     latency_seconds: float | None = None
-    cost_usd: float | None = None
 
 
 class IterationResult(BaseModel):
@@ -34,7 +33,6 @@ class IterationResult(BaseModel):
     session_url: str | None = None
     session_id: str | None = None
     query_latency_seconds: float | None = None  # Time taken for LLM query
-    query_cost_usd: float | None = None  # Cost of LLM query
 
 
 class ExperimentConfig(BaseModel, frozen=True):
@@ -73,7 +71,7 @@ class RepeatResult(BaseModel):
     llm_final_accuracy: float
     llm_final_f1: float
     llm_oracle_accuracy: float  # How accurate LLM was vs ground truth
-    session_ids: list[str]  # For cost tracking
+    session_ids: list[str]
 
 
 class ExperimentResult(BaseModel):
