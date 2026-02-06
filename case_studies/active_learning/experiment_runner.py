@@ -59,7 +59,10 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 # Force unbuffered stdout so logs appear in real time
-sys.stdout.reconfigure(line_buffering=True)
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except AttributeError:
+    pass  # Not available in some environments (e.g. Jupyter)
 
 
 async def query_llm_oracle(
@@ -90,7 +93,7 @@ async def query_llm_oracle(
         for i in range(len(input_df)):
             try:
                 category = result.data["category"].iloc[i]
-                label_id = dataset_config.category_to_id.get(category, -1)
+                label_id = dataset_config.category_to_id.get(category)
                 all_labels.append(
                     OracleLabelResult(
                         label=label_id,
@@ -99,7 +102,7 @@ async def query_llm_oracle(
                 )
             except Exception as e:
                 log.warning("  Failed to parse result for row %d: %s", i, e)
-                all_labels.append(OracleLabelResult(label=-1, category="unknown"))
+                all_labels.append(OracleLabelResult(label=None, category="unknown"))
 
     return OracleQueryResult(
         labels=all_labels,
@@ -227,10 +230,10 @@ async def _run_active_learning(
             # Calculate oracle accuracy vs ground truth
             true_labels = train_df.iloc[query_indices]["label"].tolist()
             oracle_correct = sum(
-                o == t for o, t in zip(oracle_labels, true_labels) if o >= 0
+                o == t for o, t in zip(oracle_labels, true_labels) if o is not None
             )
-            oracle_valid = sum(1 for o in oracle_labels if o >= 0)
-            oracle_failures = sum(1 for o in oracle_labels if o < 0)
+            oracle_valid = sum(1 for o in oracle_labels if o is not None)
+            oracle_failures = sum(1 for o in oracle_labels if o is None)
 
             iteration_result.oracle_queried = len(query_indices)
             iteration_result.oracle_valid = oracle_valid
@@ -269,7 +272,7 @@ async def _run_active_learning(
         # Update labeled set with oracle responses
         for idx, label in zip(query_indices, oracle_labels):
             unlabeled_set.discard(idx)
-            if label >= 0:
+            if label is not None:
                 labeled_indices.append(idx)
                 labels[idx] = label
 
@@ -282,11 +285,16 @@ def _build_result(
     config: ExperimentConfig,
     repeat_results: list[RepeatResult],
     start_time: datetime,
+    experiment_id: str | None = None,
 ) -> ExperimentResult:
     """Build an ExperimentResult from accumulated repeat results."""
     gt_accs = [r.ground_truth_final_accuracy for r in repeat_results]
     llm_accs = [r.llm_final_accuracy for r in repeat_results]
     oracle_accs = [r.llm_oracle_accuracy for r in repeat_results]
+
+    kwargs = {}
+    if experiment_id is not None:
+        kwargs["experiment_id"] = experiment_id
 
     return ExperimentResult(
         config=config,
@@ -298,6 +306,7 @@ def _build_result(
         std_llm_accuracy=float(np.std(llm_accs)),
         mean_llm_oracle_accuracy=float(np.mean(oracle_accs)),
         total_duration_seconds=(datetime.now() - start_time).total_seconds(),
+        **kwargs,
     )
 
 
@@ -349,6 +358,7 @@ async def run_experiment(
     if existing_result:
         repeat_results = list(existing_result.repeat_results)
         start_repeat = existing_result.repeats_completed
+        experiment_id = existing_result.experiment_id
         log.info(
             "Resuming from repeat %d (already completed %d)",
             start_repeat + 1,
@@ -357,6 +367,7 @@ async def run_experiment(
     else:
         repeat_results = []
         start_repeat = 0
+        experiment_id = None
 
     for repeat_idx in range(start_repeat, config.repeats):
         # Each repeat uses a different seed for the initial labeled set
@@ -436,7 +447,11 @@ async def run_experiment(
 
         # Save after each repeat so partial results are preserved
         if output_path:
-            partial_result = _build_result(config, repeat_results, start_time)
+            partial_result = _build_result(
+                config, repeat_results, start_time, experiment_id
+            )
+            # Preserve the experiment_id from the first save onwards
+            experiment_id = partial_result.experiment_id
             _save_result(partial_result, output_path)
             log.info(
                 "  Saved partial result (%d/%d repeats) to %s",
@@ -445,7 +460,7 @@ async def run_experiment(
                 output_path,
             )
 
-    return _build_result(config, repeat_results, start_time)
+    return _build_result(config, repeat_results, start_time, experiment_id)
 
 
 async def async_main():

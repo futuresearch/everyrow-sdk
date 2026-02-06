@@ -1,14 +1,19 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score, f1_score
 
+# Suppress sklearn feature name validation warning when using sparse matrices with LightGBM
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+
 
 class TextClassifier:
     """Text classifier using TF-IDF + LightGBM.
 
-    The vectorizer should be fit once on the full corpus (labeled + unlabeled)
+    The vectorizer should be fit once on the full training pool (labeled + unlabeled)
     to ensure consistent features across iterations.
     """
 

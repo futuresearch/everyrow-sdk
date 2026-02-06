@@ -10,7 +10,7 @@ class OracleType(str, Enum):
 
 
 class OracleLabelResult(BaseModel):
-    label: int = Field(description="Label ID (-1 if failed)")
+    label: int | None = Field(description="Label ID (None if failed)")
     category: str = Field(description="Category name")
 
 
