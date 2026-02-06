@@ -1,11 +1,11 @@
-name: Publish to PyPI
+name: Publish
 
 on:
   release:
     types: [published]
 
 jobs:
-  publish:
+  publish-pypi:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
@@ -54,3 +54,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: everyrow-mcp/everyrow-mcp.mcpb
+
+  publish-mcp-registry:
+    name: Publish to MCP Registry
+    runs-on: ubuntu-latest
+    needs: publish-pypi # Wait for PyPI publish since registry validates package exists
+    permissions:
+      id-token: write # Required for OIDC authentication
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Wait for PyPI propagation
+        run: sleep 30
+
+      - name: Publish to MCP Registry
+        working-directory: everyrow-mcp
+        run: ../mcp-publisher publish
