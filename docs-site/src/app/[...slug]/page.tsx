@@ -24,9 +24,20 @@ export async function generateMetadata({ params }: PageProps) {
     return { title: "Not Found" };
   }
 
+  const canonicalUrl = `https://everyrow.io/docs/${slugPath}`;
+
   return {
     title: doc.title,
     description: doc.description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: doc.title,
+      description: doc.description,
+      url: canonicalUrl,
+      images: [{ url: "https://everyrow.io/everyrow-og.png" }],
+    },
   };
 }
 
