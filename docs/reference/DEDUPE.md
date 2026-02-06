@@ -1,5 +1,5 @@
 ---
-title: Use LLMs to deduplicate a Pandas DataFrame
+title: dedupe
 description: API reference for the EveryRow dedupe tool, which groups duplicate rows in a Python Pandas DataFrame using LLM-powered semantic matching.
 ---
 

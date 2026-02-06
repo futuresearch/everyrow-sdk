@@ -1,5 +1,5 @@
 ---
-title: Use LLM agents to filter any dataset on any criteria
+title: screen
 description: API reference for the EveryRow screen tool, which filters a DataFrame using natural language criteria evaluated by web research agents.
 ---
 
