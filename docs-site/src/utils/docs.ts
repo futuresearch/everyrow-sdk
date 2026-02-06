@@ -121,17 +121,17 @@ export function getNavigation(): NavSection[] {
       ],
     },
     {
-      title: "Guides",
-      items: guides
-        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp"].includes(d.slug))
-        .map((d) => ({ slug: d.slug, title: d.title })),
-    },
-    {
       title: "API Reference",
       items: reference.map((d) => ({
         slug: d.slug,
         title: d.title.replace(/^reference\//, ""),
       })),
+    },
+    {
+      title: "Guides",
+      items: guides
+        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp"].includes(d.slug))
+        .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
       title: "Case Studies",
