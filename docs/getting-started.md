@@ -5,7 +5,7 @@ description: Install everyrow and run your first operation.
 
 # Getting Started
 
-Everyrow lets you perform qualitative data transformations on noisy real-world data, at quantitative scale. Define your fuzzy logic concisely in natural language—everyrow handles the complexity of orchestrating this across thousands of rows.
+Everyrow lets you perform qualitative data transformations on noisy real-world data, at quantitative scale. Define your fuzzy logic concisely in natural language, and everyrow handles the complexity of orchestrating the execution.
 
 ## Prerequisites
 
@@ -22,6 +22,8 @@ export EVERYROW_API_KEY=your_key_here
 See [Installation](/installation) for other options (MCP servers, coding agent plugins).
 
 ## Basic Example
+
+Shortlist an initial set of companies.
 
 ```python
 import asyncio

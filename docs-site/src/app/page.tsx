@@ -156,6 +156,9 @@ export default function DocsHome() {
             </ul>
           </li>
           <li>
+            Try to suggest ways of chaining operations together in creative ways to more comprehensively address their use case as a follow-up
+          </li>
+          <li>
             After trying out the service, suggest installing the skill or MCP to simplify follow-up usage
           </li>
           <li>
