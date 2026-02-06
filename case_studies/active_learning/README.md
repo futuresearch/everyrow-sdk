@@ -16,7 +16,9 @@ We use TF-IDF + LightGBM as the classifier on the [DBpedia-14](https://huggingfa
 
 The experiment runner also runs a parallel ground-truth oracle as a baseline, and repeats with different random seeds to measure variance.
 
-**Cost:** Each full run (10 iterations, 200 annotations) costs ~$0.26. See [everyrow.io](https://everyrow.io) for docs and pricing ($20 free credit).
+**Cost:** Each full run (10 iterations, 200 annotations) costs ~$0.26.
+
+See [everyrow.io](https://everyrow.io) for docs and pricing ($20 free credit).
 
 ## Getting Started
 
