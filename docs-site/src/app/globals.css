@@ -178,6 +178,42 @@ a:hover {
   color: inherit;
 }
 
+.code-block-wrapper {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.code-block-wrapper pre {
+  margin-bottom: 0;
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 0.25rem;
+  color: #94a3b8;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.code-block-wrapper:hover .copy-button {
+  opacity: 1;
+}
+
+.copy-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+}
+
+.copy-button:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .prose blockquote {
   border-left: 4px solid var(--accent);
   padding-left: 1rem;
