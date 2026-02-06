@@ -1,5 +1,5 @@
 ---
-title: Use LLM agents to sort any dataset by any criteria
+title: "RANK: Lead Scoring and Priority Ranking for Your Data"
 description: API reference for the EveryRow rank tool, which sorts a DataFrame by a metric computed through web research agents.
 ---
 

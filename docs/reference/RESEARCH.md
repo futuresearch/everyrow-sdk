@@ -1,5 +1,5 @@
 ---
-title: Use LLM agents to add data to any dataset in Python
+title: "Enrich DataFrames with Web Research: Python API Reference"
 description: API reference for the EveryRow agent_map and single_agent tools, which run web research agents on entire DataFrames or single inputs.
 ---
 

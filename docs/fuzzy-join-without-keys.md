@@ -1,5 +1,5 @@
 ---
-title: How to Fuzzy Join DataFrames in Python
+title: "Merge DataFrames Without Matching Keys in Python"
 description: Merge two pandas DataFrames when there's no shared ID column, using LLM-powered semantic matching for company names, tickers, and more.
 ---
 

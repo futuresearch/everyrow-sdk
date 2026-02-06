@@ -1,5 +1,5 @@
 ---
-title: How to Add A Column to a DataFrame with Web Research
+title: "Web Data Enrichment for DataFrames: Automated Column Addition"
 description: Step-by-step guide to enriching a pandas DataFrame with new columns using LLM-powered web research agents to find and add any data.
 ---
 
