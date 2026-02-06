@@ -5,6 +5,8 @@ description: Install everyrow and run your first operation.
 
 # Getting Started
 
+Everyrow lets you perform qualitative data transformations on noisy real-world data, at quantitative scale. Define your fuzzy logic concisely in natural language—everyrow handles the complexity of orchestrating this across thousands of rows.
+
 ## Prerequisites
 
 - Python 3.12+
@@ -19,9 +21,7 @@ export EVERYROW_API_KEY=your_key_here
 
 See [Installation](/installation) for other options (MCP servers, coding agent plugins).
 
-## Example
-
-Screen rows using natural language criteria:
+## Basic Example
 
 ```python
 import asyncio
@@ -35,7 +35,6 @@ jobs = pd.DataFrame([
     {"company": "Notion",     "post": "In-office SF. Staff eng, $200K + equity"},
     {"company": "Linear",     "post": "Bootcamp grads welcome! $85K, remote-friendly"},
     {"company": "Descript",   "post": "Work from anywhere. Principal architect, $250K"},
-    {"company": "Retool",     "post": "Flexible location. Building infra. Comp TBD"},
 ])
 
 class JobScreenResult(BaseModel):
@@ -45,29 +44,92 @@ async def main():
     result = await screen(
         task="""
             Qualifies if ALL THREE are met:
-            1. Remote-friendly (allows remote, hybrid, or distributed)
-            2. Senior-level (5+ yrs exp OR title includes Senior/Staff/Principal)
-            3. Salary disclosed (specific numbers like "$150K", not "competitive" or "DOE")
+            1. Remote-friendly
+            2. Senior-level (5+ yrs exp OR Senior/Staff/Principal in title)
+            3. Salary disclosed (specific numbers, not "competitive" or "DOE")
         """,
         input=jobs,
         response_model=JobScreenResult,
     )
-    print(result.data.head())  # Airtable, Descript pass. Others fail one or more.
+    print(result.data)
 
 asyncio.run(main())
 ```
 
-This handles cases where string matching fails—e.g., "DOE" means salary is *not* disclosed, "bootcamp grads welcome" implies *not* senior-level.
+## Sessions
+
+Every operation runs within a **session**. Sessions group related operations together and appear in your [everyrow.io](https://everyrow.io) session list.
+
+When you call an operation without an explicit session, one is created automatically. For multiple related operations, create an explicit session:
+
+```python
+from everyrow import create_session
+from everyrow.ops import screen, rank
+
+async with create_session(name="Lead Qualification") as session:
+    # Get the URL to view this session in the dashboard
+    print(f"View at: {session.get_url()}")
+
+    # All operations share this session
+    screened = await screen(
+        session=session,
+        task="Has a company email domain (not gmail, yahoo, etc.)",
+        input=leads,
+        response_model=ScreenResult,
+    )
+
+    ranked = await rank(
+        session=session,
+        task="Score by likelihood to convert",
+        input=screened.data,
+        field_name="conversion_score",
+    )
+```
+
+The session URL lets you monitor progress and inspect results in the web UI while your script runs.
+
+## Async Operations
+
+For long-running jobs, use the `_async` variants to submit work and continue without blocking:
+
+```python
+from everyrow import create_session
+from everyrow.ops import rank_async
+
+async with create_session(name="Background Ranking") as session:
+    task = await rank_async(
+        session=session,
+        task="Score by revenue potential",
+        input=large_dataframe,
+        field_name="score",
+    )
+
+    # Task is now running server-side
+    print(f"Task ID: {task.task_id}")
+
+    # Do other work...
+
+    # Wait for result when ready
+    result = await task.await_result()
+```
+
+**Print the task ID.** If your script crashes, recover the result later:
+
+```python
+from everyrow import fetch_task_data
+
+df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
+```
 
 ## Operations
 
-| Operation | Description |
-|-----------|-------------|
-| [Screen](/reference/SCREEN) | Filter rows by criteria requiring judgment |
-| [Rank](/reference/RANK) | Score rows by qualitative factors |
-| [Dedupe](/reference/DEDUPE) | Deduplicate when fuzzy matching fails |
-| [Merge](/reference/MERGE) | Join tables when keys don't match exactly |
-| [Research](/reference/RESEARCH) | Run web agents to research each row |
+| Operation                       | Description                                |
+| ------------------------------- | ------------------------------------------ |
+| [Screen](/reference/SCREEN)     | Filter rows by criteria requiring judgment |
+| [Rank](/reference/RANK)         | Score rows by qualitative factors          |
+| [Dedupe](/reference/DEDUPE)     | Deduplicate when fuzzy matching fails      |
+| [Merge](/reference/MERGE)       | Join tables when keys don't match exactly  |
+| [Research](/reference/RESEARCH) | Run web agents to research each row        |
 
 ## See Also
 
