@@ -19,7 +19,7 @@ The experiment runner also runs a parallel ground-truth oracle as a baseline, an
 **Cost:** Each full run (10 iterations, 200 annotations) costs ~$0.26.
 
 - Get your API key from [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit)
-- [everyrow docs](https://everyrow.io)
+- [everyrow](https://everyrow.io)
 - [everyrow SDK on GitHub](https://github.com/futuresearch/everyrow-sdk)
 
 ## Getting Started
