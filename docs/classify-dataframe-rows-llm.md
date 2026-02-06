@@ -1,5 +1,5 @@
 ---
-title: How to Classify and Label Data with an LLM in Python
+title: "Build ML Training Datasets by Classifying Text and Data with AI"
 description: Create and add to ML training datasets using web research agents at scale. The everyrow SDK handles batching, parallelism, structured output, and retries automatically.
 ---
 
