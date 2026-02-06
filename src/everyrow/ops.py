@@ -582,6 +582,8 @@ async def dedupe(
     equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using AI.
 
@@ -589,6 +591,9 @@ async def dedupe(
         equivalence_relation: Description of what makes items equivalent
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
+        strategy: Strategy for handling duplicates: 'identify' (cluster only),
+            'select' (pick best, default), 'combine' (synthesize combined row)
+        strategy_prompt: Optional instructions guiding how selection or combining is performed
 
     Returns:
         TableResult containing the deduped table
@@ -601,6 +606,8 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                strategy=strategy,
+                strategy_prompt=strategy_prompt,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -610,6 +617,8 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        strategy=strategy,
+        strategy_prompt=strategy_prompt,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -621,6 +630,8 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
@@ -629,6 +640,8 @@ async def dedupe_async(
         input_=input_data,  # type: ignore
         equivalence_relation=equivalence_relation,
         session_id=session.session_id,
+        strategy=strategy if strategy is not None else UNSET,
+        strategy_prompt=strategy_prompt if strategy_prompt is not None else UNSET,
     )
 
     response = await dedupe_operations_dedupe_post.asyncio(
