@@ -1,4 +1,4 @@
-"""Active Learning Experiment Runner using EveryRow SDK.
+"""Active Learning Experiment Runner using everyrow SDK.
 
 Compares LLM oracle vs ground truth oracle using repeated random seed draws.
 Uses a fixed train/test split and varies only the seed dataset across repeats,
@@ -19,7 +19,7 @@ Usage (from case_studies/active_learning/):
         python -m experiment_runner --config config.json
 
 Required environment variables:
-    EVERYROW_API_KEY - Your EveryRow API key (get from everyrow.io dashboard)
+    EVERYROW_API_KEY - Your everyrow API key (get from everyrow.io/api-key)
 """
 
 import asyncio
