@@ -112,7 +112,7 @@ export function getNavigation(): NavSection[] {
 
   return [
     {
-      title: "Getting Started",
+      title: "Overview",
       items: [
         { slug: "getting-started", title: "Getting Started" },
         { slug: "chaining-operations", title: "Chaining Operations" },
