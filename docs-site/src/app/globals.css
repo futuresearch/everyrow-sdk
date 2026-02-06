@@ -508,7 +508,6 @@ noscript + .installation-tabs .tab-content:first-child {
 .chained-ops-stepper {
   display: flex;
   gap: 0;
-  margin-bottom: 1.5rem;
 }
 
 .chained-ops-step {
@@ -520,7 +519,7 @@ noscript + .installation-tabs .tab-content:first-child {
   font-size: 0.875rem;
   font-weight: 500;
   color: white;
-  transition: filter 0.15s;
+  transition: filter 0.15s, transform 0.15s;
   clip-path: polygon(0 0, calc(100% - var(--arrow-depth)) 0, 100% 50%, calc(100% - var(--arrow-depth)) 100%, 0 100%, var(--arrow-depth) 50%);
 }
 
@@ -544,21 +543,43 @@ noscript + .installation-tabs .tab-content:first-child {
 .chained-ops-step:nth-child(4) { background: #4d4fc4; }
 .chained-ops-step:nth-child(5) { background: #cfcfff; color: #0f125b; }
 
-.chained-ops-step:hover {
+.chained-ops-step:hover:not(.active) {
   filter: brightness(1.1);
+  transform: scale(1.03);
 }
 
 .chained-ops-step.active {
-  filter: brightness(1.2);
+  filter: none;
+}
+
+.chained-ops-step.active .chained-ops-step-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.chained-ops-step.pulse {
+  animation: tabPulse 0.35s ease-in-out 2;
+}
+
+@keyframes tabPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.25);
+  }
 }
 
 .chained-ops-step-label {
   position: relative;
   z-index: 1;
+  transition: font-size 0.15s ease;
 }
 
 .chained-ops-content {
-  padding: 1rem 0;
+  padding: 0;
 }
 
 .chained-ops-step-content {

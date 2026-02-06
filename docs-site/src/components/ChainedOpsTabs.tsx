@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 
 type Step = "screen" | "dedupe" | "merge" | "rank" | "research";
 
@@ -25,6 +25,19 @@ interface ChainedOpsTabsProps {
 
 export function ChainedOpsTabs({ children }: ChainedOpsTabsProps) {
   const [activeStep, setActiveStep] = useState<Step>("screen");
+  const [pulseStep, setPulseStep] = useState<Step | null>(null);
+
+  // Pulse the next tab after switching or on mount
+  useEffect(() => {
+    const activeIndex = STEPS.findIndex((s) => s.id === activeStep);
+    const nextStep = STEPS[activeIndex + 1];
+
+    if (nextStep) {
+      setPulseStep(nextStep.id);
+      const timer = setTimeout(() => setPulseStep(null), 850); // 2 pulses at 0.4s each
+      return () => clearTimeout(timer);
+    }
+  }, [activeStep]);
 
   return (
     <StepperContext.Provider value={{ activeStep, setActiveStep }}>
@@ -33,7 +46,7 @@ export function ChainedOpsTabs({ children }: ChainedOpsTabsProps) {
           {STEPS.map((step, index) => (
             <button
               key={step.id}
-              className={`chained-ops-step ${activeStep === step.id ? "active" : ""}`}
+              className={`chained-ops-step ${activeStep === step.id ? "active" : ""} ${pulseStep === step.id ? "pulse" : ""}`}
               onClick={() => setActiveStep(step.id)}
               data-step={index + 1}
             >
