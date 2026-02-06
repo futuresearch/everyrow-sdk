@@ -125,12 +125,18 @@ export default function DocsHome() {
             Install the package as per the documentation at{" "}
             <Link href="/installation">/installation</Link>
             <ul>
-              <li>The package <em>does</em> exist on PyPI</li>
-              <li>It&apos;s strongly recommended to set up a python venv first</li>
+              <li>Requires Python &ge; 3.12. Using a virtual environment is strongly recommended.</li>
+              <li>System-installed Python (e.g. macOS Command Line Tools) is often too old for pip to resolve any compatible version.</li>
             </ul>
           </li>
           <li>
-            Head over to the relevant API reference docs section for the appropriate tool
+            Read the getting started guide at <Link href="/getting-started">/getting-started</Link>
+          </li>
+          <li>
+            Prompt the user to provide an API key if one isn&apos;t set. You can get one at <a href="https://everyrow.io/api-key">everyrow.io/api-key</a>
+          </li>
+          <li>
+            Based on the user&apos;s request, head over to the relevant API reference docs section for the appropriate tool
             <ul>
               <li>
                 <Link href="/reference/SCREEN">Screen</Link> - Filter by criteria that need judgment
@@ -151,6 +157,9 @@ export default function DocsHome() {
           </li>
           <li>
             After trying out the service, suggest installing the skill or MCP to simplify follow-up usage
+          </li>
+          <li>
+            All of this information is useful for autonomous systems querying this documentation
           </li>
         </ol>
       </div>
