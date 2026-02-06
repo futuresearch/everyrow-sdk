@@ -499,6 +499,77 @@ noscript + .installation-tabs .tab-content:first-child {
   padding-top: 0;
 }
 
+/* Chained operations stepper */
+.chained-ops-tabs {
+  --arrow-depth: 20px;
+  margin: 1.5rem 0;
+}
+
+.chained-ops-stepper {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+
+.chained-ops-step {
+  position: relative;
+  flex: 1;
+  padding: 0.75rem 1rem 0.75rem calc(var(--arrow-depth) + 0.75rem);
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  transition: filter 0.15s;
+  clip-path: polygon(0 0, calc(100% - var(--arrow-depth)) 0, 100% 50%, calc(100% - var(--arrow-depth)) 100%, 0 100%, var(--arrow-depth) 50%);
+}
+
+.chained-ops-step:not(:first-child) {
+  margin-left: calc(-1 * var(--arrow-depth));
+}
+
+.chained-ops-step:first-child {
+  clip-path: polygon(0 0, calc(100% - var(--arrow-depth)) 0, 100% 50%, calc(100% - var(--arrow-depth)) 100%, 0 100%);
+  padding-left: 1rem;
+}
+
+.chained-ops-step:last-child {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--arrow-depth) 50%);
+}
+
+/* Brand colors cycling: #4d4fc4, #cfcfff, #0f125b */
+.chained-ops-step:nth-child(1) { background: #4d4fc4; }
+.chained-ops-step:nth-child(2) { background: #cfcfff; color: #0f125b; }
+.chained-ops-step:nth-child(3) { background: #0f125b; }
+.chained-ops-step:nth-child(4) { background: #4d4fc4; }
+.chained-ops-step:nth-child(5) { background: #cfcfff; color: #0f125b; }
+
+.chained-ops-step:hover {
+  filter: brightness(1.1);
+}
+
+.chained-ops-step.active {
+  filter: brightness(1.2);
+}
+
+.chained-ops-step-label {
+  position: relative;
+  z-index: 1;
+}
+
+.chained-ops-content {
+  padding: 1rem 0;
+}
+
+.chained-ops-step-content {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .docs-layout {

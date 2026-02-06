@@ -115,6 +115,7 @@ export function getNavigation(): NavSection[] {
       title: "Getting Started",
       items: [
         { slug: "getting-started", title: "Getting Started" },
+        { slug: "chaining-operations", title: "Chaining Operations" },
         { slug: "installation", title: "Installation" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
       ],
@@ -122,7 +123,7 @@ export function getNavigation(): NavSection[] {
     {
       title: "Guides",
       items: guides
-        .filter((d) => !["getting-started", "installation", "skills-vs-mcp"].includes(d.slug))
+        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp"].includes(d.slug))
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
