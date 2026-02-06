@@ -126,7 +126,7 @@ export default function DocsHome() {
             <Link href="/installation">/installation</Link>
             <ul>
               <li>Requires Python &ge; 3.12. Using a virtual environment is strongly recommended.</li>
-              <li>System-installed Python (e.g. macOS Command Line Tools) is often too old for pip to resolve any compatible version.</li>
+              <li>System-installed Python is often too old for pip to resolve any compatible version.</li>
             </ul>
           </li>
           <li>

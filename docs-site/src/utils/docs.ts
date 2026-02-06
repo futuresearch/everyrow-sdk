@@ -122,7 +122,7 @@ export function getNavigation(): NavSection[] {
     {
       title: "Guides",
       items: guides
-        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp")
+        .filter((d) => !["getting-started", "installation", "skills-vs-mcp"].includes(d.slug))
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
