@@ -1,52 +1,62 @@
-# Active Learning Experiments with EveryRow
+# Active Learning with an LLM Oracle
 
-This module runs active learning experiments comparing **LLM oracles** vs **ground truth oracles** for text classification tasks using the [EveryRow SDK](https://github.com/futuresearch/everyrow-sdk) ([docs](https://everyrow.io)).
+Use an LLM as a labeling oracle in an active learning pipeline for text classification, using the [EveryRow SDK](https://github.com/futuresearch/everyrow-sdk).
+
+Active learning iteratively selects the most informative samples to be labeled, rather than labeling all data upfront. At each iteration the model identifies examples it is most uncertain about and sends them to an **oracle** for labeling. Traditionally the oracle is a human annotator (or a group of them), making the process expensive and slow. Here we replace the human with an LLM via `everyrow.agent_map`, enabling fast, scalable, and cost-effective labeling.
 
 ## Overview
 
-Active learning is a machine learning technique where the model iteratively selects the most informative samples to label, reducing the total labeling effort needed to achieve good performance.
+We use TF-IDF + LightGBM as the classifier on the [DBpedia-14](https://huggingface.co/datasets/fancyzhx/dbpedia_14) text classification task (14 categories). The pipeline:
 
-This experiment framework compares two labeling strategies:
-- **Ground Truth Oracle**: Uses the dataset's actual labels (baseline)
-- **LLM Oracle**: Uses an LLM via EveryRow to generate labels
+1. **Seed** with a small balanced set of 700 ground-truth-labeled examples (50 per class)
+2. **Train** a TF-IDF + LightGBM classifier on the labeled data
+3. **Select** the 20 most uncertain samples from the unlabeled pool (entropy-based uncertainty sampling)
+4. **Label** selected samples using `everyrow.agent_map` (the LLM oracle)
+5. **Repeat** for 10 iterations, adding LLM-labeled samples to the training set each round
 
-The key question: *Can an LLM oracle achieve comparable results to ground truth labels while being more practical for real-world scenarios?*
+The experiment runner also runs a parallel ground-truth oracle as a baseline, and repeats with different random seeds to measure variance.
 
-## How It Works
+**Cost:** Each full run (10 iterations, 200 annotations) costs ~$0.26. See [everyrow.io](https://everyrow.io) for docs and pricing ($20 free credit).
 
-1. **Initial Seed**: Start with a small balanced set of labeled examples
-2. **Train Classifier**: Train a TF-IDF + LightGBM classifier on labeled data
-3. **Uncertainty Sampling**: Select the most uncertain samples from the unlabeled pool
-4. **Query Oracle**: Get labels from either ground truth or LLM
-5. **Repeat**: Add new labels to training set and iterate
-
-The experiment runs multiple repeats with different random seeds to measure variance.
-
-## Installation
-
-```bash
-cd case_studies/active_learning
-uv sync  # installs all dependencies
-```
-
-## Quick Start
+## Getting Started
 
 ### 1. Get an API Key
 
-Sign up at [everyrow.io](https://everyrow.io) and create an API key from your dashboard.
+Get your key from [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit).
 
-### 2. Run an Experiment
+### 2. Install Dependencies
 
 ```bash
-# Set your API key
+cd case_studies/active_learning
+uv sync
+```
+
+### 3. Try the Notebook
+
+The easiest way to get started is the interactive tutorial notebook:
+
+```bash
+export EVERYROW_API_KEY=<your-api-key>
+uv run python -m ipykernel install --user --name active-learning-tutorial
+```
+
+Then open `active_learning_tutorial.ipynb` in VS Code or JupyterLab and select the **active-learning-tutorial** kernel.
+
+The notebook also works on **Kaggle** and **Colab** — see the setup cells for instructions on configuring your API key in those environments.
+
+### 4. Run the CLI Experiment Runner
+
+For more rigorous experiments with multiple repeats and automated result saving:
+
+```bash
 export EVERYROW_API_KEY=<your-api-key>
 
-# Run a quick test (1 repeat, 3 iterations)
+# Quick test (1 repeat, 3 iterations)
 uv run python -m experiment_runner \
     --repeats 1 \
     --iterations 3
 
-# Run a full experiment (5 repeats, 10 iterations)
+# Full experiment (5 repeats, 10 iterations)
 uv run python -m experiment_runner \
     --repeats 5 \
     --seed-size 700 \
@@ -54,13 +64,29 @@ uv run python -m experiment_runner \
     --iterations 10
 ```
 
-### 3. View Results
+### 5. View Results
 
 ```bash
 uv run python -m view_results \
     --results-dir ./results \
     --show
 ```
+
+## Example Results
+
+From experiments on DBpedia-14 (5% stratified sample, 5 repeats):
+
+| Oracle | Final Accuracy | Final F1 |
+|--------|----------------|----------|
+| Ground Truth | 79.4% | 79.5% |
+| LLM | 79.7% | 79.6% |
+
+**LLM Oracle Label Accuracy**: ~97% agreement with ground truth
+
+Key findings:
+- LLM oracle achieves comparable performance to ground truth labels
+- High label accuracy (~97%) translates to nearly identical downstream classifier performance
+- Active learning with LLM labels is a practical alternative to manual annotation
 
 ## Configuration
 
@@ -77,11 +103,9 @@ uv run python -m view_results \
 | `--random-state` | `42` | Base random seed for reproducibility |
 | `--version` | `""` | Version tag for organizing results |
 | `--output-dir` | `./results` | Directory to save results |
-| `--resume` | `None` | Resume from existing experiment file |
+| `--resume` | `None` | Resume from an existing experiment file |
 
-### JSON Config File
-
-You can also use a JSON config file:
+### JSON Config
 
 ```json
 {
@@ -100,91 +124,9 @@ You can also use a JSON config file:
 uv run python -m experiment_runner --config config.json
 ```
 
-## Datasets
+### Resuming Experiments
 
-### DBpedia-14
-
-The default dataset is [DBpedia-14](https://huggingface.co/datasets/fancyzhx/dbpedia_14), a text classification dataset with 14 categories:
-
-| Category | Description |
-|----------|-------------|
-| Company | Business organizations |
-| Educational Institution | Schools, universities |
-| Artist | Musicians, painters, actors |
-| Athlete | Sports players |
-| Office Holder | Politicians, officials |
-| Mean Of Transportation | Vehicles, aircraft, ships |
-| Building | Structures, landmarks |
-| Natural Place | Geographic features |
-| Village | Small settlements |
-| Animal | Animal species |
-| Plant | Plant species |
-| Album | Music albums |
-| Film | Movies |
-| Written Work | Books, articles |
-
-- `dbpedia`: Full dataset (~560k train samples)
-- `dbpedia_tiny`: 5% stratified sample (~28k samples) - recommended for testing
-
-## Output
-
-### Results JSON
-
-Each experiment produces a JSON file in `./results/`:
-
-```
-experiment_v{version}_{dataset}_{repeats}repeats.json
-```
-
-Contains:
-- Configuration parameters
-- Per-repeat results (accuracy, F1, oracle accuracy at each iteration)
-- Aggregate statistics (mean/std across repeats)
-
-### Plots
-
-Running `view_results` generates:
-
-| Plot | Description |
-|------|-------------|
-| `learning_curves.png` | Accuracy and F1 vs labeled examples |
-| `learning_curve_accuracy.png` | Accuracy comparison with summary stats |
-| `oracle_accuracy.png` | LLM oracle accuracy over iterations |
-| `results.csv` | Full results as CSV for custom analysis |
-
-## Structure
-
-```
-active_learning/
-├── README.md
-├── pyproject.toml                # Dependencies (uv sync to install)
-├── experiment_runner.py          # Main experiment logic and CLI
-├── dataset_config.py             # Dataset configurations and loading
-├── model.py                      # TextClassifier (TF-IDF + LightGBM)
-├── types.py                      # Pydantic models for configs and results
-├── utils.py                      # CLI parsing and utility functions
-└── view_results.py               # Result visualization and plotting
-```
-
-## Example Results
-
-From experiments on DBpedia-14 (tiny):
-
-| Oracle | Final Accuracy | Final F1 |
-|--------|----------------|----------|
-| Ground Truth | 79.4% | 79.5% |
-| LLM | 79.7% | 79.6% |
-
-**LLM Oracle Label Accuracy**: ~97% agreement with ground truth
-
-Key findings:
-- LLM oracle achieves comparable performance to ground truth
-- High label accuracy (~97%) translates to nearly identical classifier performance
-- Active learning with LLM labels is a viable alternative to manual labeling
-
-## Resuming Experiments
-
-If an experiment is interrupted, you can resume it:
+If an experiment is interrupted, resume it:
 
 ```bash
 uv run python -m experiment_runner \
@@ -192,13 +134,47 @@ uv run python -m experiment_runner \
     --repeats 10  # Continue to 10 total repeats
 ```
 
+## Dataset
+
+The default dataset is [DBpedia-14](https://huggingface.co/datasets/fancyzhx/dbpedia_14), a text classification dataset with 14 categories: Company, Educational Institution, Artist, Athlete, Office Holder, Mean Of Transportation, Building, Natural Place, Village, Animal, Plant, Album, Film, Written Work.
+
+- `dbpedia`: Full dataset (~560k train samples)
+- `dbpedia_tiny`: 5% stratified sample (~28k samples) — recommended for testing
+
+## Output
+
+Results are saved as JSON in `./results/`:
+
+```
+experiment_v{version}_{dataset}_{repeats}repeats.json
+```
+
+Running `view_results` generates learning curve plots (accuracy, F1, oracle accuracy) and a CSV for custom analysis.
+
+## Structure
+
+```
+active_learning/
+├── README.md
+├── pyproject.toml                    # Dependencies (uv sync to install)
+├── active_learning_tutorial.ipynb    # Interactive tutorial notebook
+├── experiment_runner.py              # Main experiment logic and CLI
+├── dataset_config.py                 # Dataset configurations and loading
+├── model.py                          # TextClassifier (TF-IDF + LightGBM)
+├── experiment_types.py               # Pydantic models for configs and results
+├── utils.py                          # CLI parsing and utility functions
+└── view_results.py                   # Result visualization and plotting
+```
+
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `EVERYROW_API_KEY` | Yes | Your EveryRow API key |
+| `EVERYROW_API_KEY` | Yes | Your EveryRow API key ([get one here](https://everyrow.io/api-key)) |
 | `EVERYROW_API_URL` | No | API URL (defaults to production) |
 
-## License
+## Links
 
-See repository LICENSE file.
+- [EveryRow SDK on GitHub](https://github.com/futuresearch/everyrow-sdk)
+- [EveryRow docs](https://everyrow.io)
+- [DBpedia-14 dataset on HuggingFace](https://huggingface.co/datasets/fancyzhx/dbpedia_14)
