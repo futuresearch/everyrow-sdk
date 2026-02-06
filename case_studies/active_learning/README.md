@@ -1,4 +1,4 @@
-# Active Learning with an LLM Oracle
+# Active Learning with an LLM Oracle using `everyrow`
 
 Use an LLM as a labeling oracle in an active learning pipeline for text classification, using the [everyrow SDK](https://github.com/futuresearch/everyrow-sdk).
 
@@ -18,7 +18,9 @@ The experiment runner also runs a parallel ground-truth oracle as a baseline, an
 
 **Cost:** Each full run (10 iterations, 200 annotations) costs ~$0.26.
 
-See [everyrow.io](https://everyrow.io) for docs and pricing ($20 free credit).
+- Get your API key from [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit)
+- [everyrow docs](https://everyrow.io)
+- [everyrow SDK on GitHub](https://github.com/futuresearch/everyrow-sdk)
 
 ## Getting Started
 
@@ -173,7 +175,6 @@ active_learning/
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `EVERYROW_API_KEY` | Yes | Your everyrow API key ([get one here](https://everyrow.io/api-key)) |
-| `EVERYROW_API_URL` | No | API URL (defaults to production) |
 
 ## Links
 
