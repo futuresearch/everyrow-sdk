@@ -26,11 +26,16 @@ class DedupeOperation:
             list of JSON objects
         equivalence_relation (str): Description of what makes two rows equivalent/duplicates
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
+        strategy (str | Unset): Strategy for handling duplicates: 'identify' (cluster only), 'select' (pick best),
+            'combine' (synthesize combined row). Defaults to 'select'.
+        strategy_prompt (None | Unset | str): Optional instructions guiding how selection or combining is performed.
     """
 
     input_: DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID
     equivalence_relation: str
     session_id: None | Unset | UUID = UNSET
+    strategy: str | Unset = UNSET
+    strategy_prompt: None | Unset | str = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -56,6 +61,20 @@ class DedupeOperation:
         else:
             session_id = self.session_id
 
+        strategy: str | Unset
+        if isinstance(self.strategy, Unset):
+            strategy = UNSET
+        else:
+            strategy = self.strategy
+
+        strategy_prompt: None | str | Unset
+        if isinstance(self.strategy_prompt, Unset):
+            strategy_prompt = UNSET
+        elif self.strategy_prompt is None:
+            strategy_prompt = self.strategy_prompt
+        else:
+            strategy_prompt = self.strategy_prompt
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -66,6 +85,10 @@ class DedupeOperation:
         )
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
+        if strategy is not UNSET:
+            field_dict["strategy"] = strategy
+        if strategy_prompt is not UNSET:
+            field_dict["strategy_prompt"] = strategy_prompt
 
         return field_dict
 
@@ -125,10 +148,28 @@ class DedupeOperation:
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
 
+        def _parse_strategy(data: object) -> str | Unset:
+            if isinstance(data, Unset):
+                return data
+            return cast(str, data)
+
+        strategy = _parse_strategy(d.pop("strategy", UNSET))
+
+        def _parse_strategy_prompt(data: object) -> None | Unset | str:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(str, data)
+
+        strategy_prompt = _parse_strategy_prompt(d.pop("strategy_prompt", UNSET))
+
         dedupe_operation = cls(
             input_=input_,
             equivalence_relation=equivalence_relation,
             session_id=session_id,
+            strategy=strategy,
+            strategy_prompt=strategy_prompt,
         )
 
         dedupe_operation.additional_properties = d
