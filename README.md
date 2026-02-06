@@ -59,6 +59,39 @@ python example.py
 
 Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary *isn't* disclosed, and "bootcamp grads welcome" means it's *not* senior-level.
 
+## Pandas Accessor
+
+For a fluent API, use the `df.everyrow` accessor:
+
+```python
+import pandas as pd
+from everyrow import create_session  # Importing from everyrow registers the accessor
+from everyrow.task import EffortLevel
+
+jobs = pd.DataFrame([
+    {"company": "Airtable", "post": "Remote, 8+ yrs, $185-220K"},
+    {"company": "Vercel",   "post": "NYC only, competitive comp"},
+])
+
+# All methods are async
+qualified = await jobs.everyrow.screen("""
+    Remote-friendly AND senior-level AND salary disclosed
+""")
+
+ranked = await qualified.everyrow.rank(
+    "fit_score",
+    task="Rank by fit for ML engineer role",
+    ascending=False
+)
+
+# Access metadata
+print(jobs.everyrow.last_result.artifact_id)
+```
+
+**More:** [pandas accessor notebook](docs/in_progress/pandas-accessor/notebook.ipynb)
+
+---
+
 ## Operations
 
 | | |
