@@ -114,6 +114,7 @@ export function getNavigation(): NavSection[] {
     {
       title: "Getting Started",
       items: [
+        { slug: "getting-started", title: "Getting Started" },
         { slug: "installation", title: "Installation" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
       ],
