@@ -75,6 +75,20 @@ def sync_detailed(
 
      Run a single AI agent to perform research and generate a response.
 
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to one of:
+       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
+       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
+       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
+
+    2. **Fully customize** - set `effort_level=null` and provide ALL of:
+       - `llm`: The LLM model to use
+       - `iteration_budget`: Number of agent iterations (0-20)
+       - `include_research`: Whether to include research notes
+
+    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+
     Args:
         body (SingleAgentOperation):
 
@@ -106,6 +120,20 @@ def sync(
 
      Run a single AI agent to perform research and generate a response.
 
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to one of:
+       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
+       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
+       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
+
+    2. **Fully customize** - set `effort_level=null` and provide ALL of:
+       - `llm`: The LLM model to use
+       - `iteration_budget`: Number of agent iterations (0-20)
+       - `include_research`: Whether to include research notes
+
+    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+
     Args:
         body (SingleAgentOperation):
 
@@ -131,6 +159,20 @@ async def asyncio_detailed(
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
+
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to one of:
+       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
+       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
+       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
+
+    2. **Fully customize** - set `effort_level=null` and provide ALL of:
+       - `llm`: The LLM model to use
+       - `iteration_budget`: Number of agent iterations (0-20)
+       - `include_research`: Whether to include research notes
+
+    You cannot mix these approaches - either use a preset OR specify all custom parameters.
 
     Args:
         body (SingleAgentOperation):
@@ -160,6 +202,20 @@ async def asyncio(
     """Single AI research agent
 
      Run a single AI agent to perform research and generate a response.
+
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to one of:
+       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
+       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
+       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
+
+    2. **Fully customize** - set `effort_level=null` and provide ALL of:
+       - `llm`: The LLM model to use
+       - `iteration_budget`: Number of agent iterations (0-20)
+       - `include_research`: Whether to include research notes
+
+    You cannot mix these approaches - either use a preset OR specify all custom parameters.
 
     Args:
         body (SingleAgentOperation):

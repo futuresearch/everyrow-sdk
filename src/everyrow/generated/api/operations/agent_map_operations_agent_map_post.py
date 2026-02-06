@@ -75,6 +75,12 @@ def sync_detailed(
 
      Run an AI agent on each row in parallel to perform research and generate responses.
 
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to `low`, `medium`, or `high`
+    2. **Fully customize** - set `effort_level=null` and provide ALL of: `llm`, `iteration_budget`,
+    `include_research`
+
     Args:
         body (AgentMapOperation):
 
@@ -106,6 +112,12 @@ def sync(
 
      Run an AI agent on each row in parallel to perform research and generate responses.
 
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to `low`, `medium`, or `high`
+    2. **Fully customize** - set `effort_level=null` and provide ALL of: `llm`, `iteration_budget`,
+    `include_research`
+
     Args:
         body (AgentMapOperation):
 
@@ -131,6 +143,12 @@ async def asyncio_detailed(
     """Parallel AI research agents
 
      Run an AI agent on each row in parallel to perform research and generate responses.
+
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to `low`, `medium`, or `high`
+    2. **Fully customize** - set `effort_level=null` and provide ALL of: `llm`, `iteration_budget`,
+    `include_research`
 
     Args:
         body (AgentMapOperation):
@@ -160,6 +178,12 @@ async def asyncio(
     """Parallel AI research agents
 
      Run an AI agent on each row in parallel to perform research and generate responses.
+
+    **Configuration options** (mutually exclusive):
+
+    1. **Use a preset** - set `effort_level` to `low`, `medium`, or `high`
+    2. **Fully customize** - set `effort_level=null` and provide ALL of: `llm`, `iteration_budget`,
+    `include_research`
 
     Args:
         body (AgentMapOperation):
