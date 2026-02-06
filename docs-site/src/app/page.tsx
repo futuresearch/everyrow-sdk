@@ -20,17 +20,21 @@ export const metadata: Metadata = {
 };
 
 const SECTION_ICONS: Record<string, string> = {
-  "Getting Started": "rocket",
+  Overview: "rocket",
   Guides: "book",
   "API Reference": "code",
   "Case Studies": "lightbulb",
 };
 
 const SECTION_DESCRIPTIONS: Record<string, string> = {
-  "Getting Started": "Install everyrow and start processing data with AI",
+  Overview: "Install everyrow and start processing data with AI",
   Guides: "Step-by-step tutorials for common data processing tasks",
   "API Reference": "Detailed documentation for all everyrow functions",
   "Case Studies": "Real-world examples with Jupyter notebooks",
+};
+
+const SECTION_DISPLAY_TITLES: Record<string, string> = {
+  Overview: "Getting Started",
 };
 
 function SectionCard({ section }: { section: NavSection }) {
@@ -90,7 +94,7 @@ function SectionCard({ section }: { section: NavSection }) {
           </svg>
         )}
       </div>
-      <h2 className="landing-card-title">{section.title}</h2>
+      <h2 className="landing-card-title">{SECTION_DISPLAY_TITLES[section.title] || section.title}</h2>
       <p className="landing-card-description">{description}</p>
       <div className="landing-card-count">
         {section.items.length} {section.items.length === 1 ? "page" : "pages"}
