@@ -27,8 +27,8 @@ class IterationResult(BaseModel):
     accuracy: float
     f1_macro: float
     oracle_queried: int | None = None  # Total samples queried from oracle
-    oracle_valid: int | None = None  # Samples with valid labels (label >= 0)
-    oracle_failures: int | None = None  # Samples where oracle failed (label == -1)
+    oracle_valid: int | None = None  # Samples with valid labels (label is not None)
+    oracle_failures: int | None = None  # Samples where oracle failed (label is None)
     oracle_accuracy: float | None = None  # Accuracy on valid samples
     session_url: str | None = None
     session_id: str | None = None
