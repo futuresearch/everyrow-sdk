@@ -1,6 +1,6 @@
 # Active Learning with an LLM Oracle
 
-Use an LLM as a labeling oracle in an active learning pipeline for text classification, using the [EveryRow SDK](https://github.com/futuresearch/everyrow-sdk).
+Use an LLM as a labeling oracle in an active learning pipeline for text classification, using the [everyrow SDK](https://github.com/futuresearch/everyrow-sdk).
 
 Active learning iteratively selects the most informative samples to be labeled, rather than labeling all data upfront. At each iteration the model identifies examples it is most uncertain about and sends them to an **oracle** for labeling. Traditionally the oracle is a human annotator (or a group of them), making the process expensive and slow. Here we replace the human with an LLM via `everyrow.agent_map`, enabling fast, scalable, and cost-effective labeling.
 
@@ -170,11 +170,11 @@ active_learning/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `EVERYROW_API_KEY` | Yes | Your EveryRow API key ([get one here](https://everyrow.io/api-key)) |
+| `EVERYROW_API_KEY` | Yes | Your everyrow API key ([get one here](https://everyrow.io/api-key)) |
 | `EVERYROW_API_URL` | No | API URL (defaults to production) |
 
 ## Links
 
-- [EveryRow SDK on GitHub](https://github.com/futuresearch/everyrow-sdk)
-- [EveryRow docs](https://everyrow.io)
+- [everyrow SDK on GitHub](https://github.com/futuresearch/everyrow-sdk)
+- [everyrow docs](https://everyrow.io)
 - [DBpedia-14 dataset on HuggingFace](https://huggingface.co/datasets/fancyzhx/dbpedia_14)
