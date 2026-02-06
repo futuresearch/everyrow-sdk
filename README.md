@@ -200,7 +200,7 @@ result = await agent_map(
 print(result.data.head())
 ```
 
-**More:** [docs](docs/reference/RESEARCH.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
+**More:** [docs](docs/reference/RESEARCH.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [active learning with LLM oracle](case_studies/active_learning/) (97% label accuracy, $0.26/run)
 
 ### Derive
 

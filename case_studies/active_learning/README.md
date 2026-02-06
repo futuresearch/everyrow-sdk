@@ -1,8 +1,11 @@
 # Active Learning with an LLM Oracle using `everyrow`
 
-Use an LLM as a labeling oracle in an active learning pipeline for text classification, using the [everyrow SDK](https://github.com/futuresearch/everyrow-sdk).
+Replace human annotators with LLM-powered automated labeling in your active learning pipeline — 97% label accuracy at ~$0.26 per run.
 
-Active learning iteratively selects the most informative samples to be labeled, rather than labeling all data upfront. At each iteration the model identifies examples it is most uncertain about and sends them to an **oracle** for labeling. Traditionally the oracle is a human annotator (or a group of them), making the process expensive and slow. Here we replace the human with an LLM via `everyrow.agent_map`, enabling fast, scalable, and cost-effective labeling.
+[![Dataset: DBpedia-14](https://img.shields.io/badge/Dataset-DBpedia--14-yellow?logo=huggingface)](https://huggingface.co/datasets/fancyzhx/dbpedia_14)
+[![everyrow SDK](https://img.shields.io/pypi/v/everyrow.svg?label=everyrow)](https://pypi.org/project/everyrow/)
+
+This case study uses an LLM as a labeling oracle in an active learning pipeline for text classification, using the [everyrow SDK](https://github.com/futuresearch/everyrow-sdk). Instead of expensive, slow human annotation, we use `everyrow.agent_map` to label uncertain samples automatically — achieving comparable downstream classifier performance to ground truth labels.
 
 ## Overview
 
@@ -80,17 +83,17 @@ uv run python -m view_results \
 
 From experiments on DBpedia-14 (5% stratified sample, 5 repeats):
 
-| Oracle | Final Accuracy | Final F1 |
-|--------|----------------|----------|
-| Ground Truth | 79.4% | 79.5% |
-| LLM | 79.7% | 79.6% |
+| Oracle | Final Accuracy | Final F1 | Cost per run |
+|--------|----------------|----------|--------------|
+| Ground Truth | 79.4% | 79.5% | — (manual) |
+| LLM (everyrow) | 79.7% | 79.6% | ~$0.26 |
 
 **LLM Oracle Label Accuracy**: ~97% agreement with ground truth
 
 Key findings:
 - LLM oracle achieves comparable performance to ground truth labels
 - High label accuracy (~97%) translates to nearly identical downstream classifier performance
-- Active learning with LLM labels is a practical alternative to manual annotation
+- Active learning with automated LLM labeling is a practical, cost-effective alternative to manual annotation
 
 ## Configuration
 
