@@ -81,6 +81,28 @@ When specifying a response model, make sure that it contains `field_name`. Other
 | `ascending_order` | bool | True = lowest first (default) |
 | `preview` | bool | True = process only a few rows |
 
+## Async variant
+
+`rank_async` submits the operation and returns immediately:
+
+```python
+from everyrow import create_session
+from everyrow.ops import rank_async
+
+async with create_session(name="Background Ranking") as session:
+    task = await rank_async(
+        session=session,
+        task="Score by likelihood to need data integration solutions",
+        input=leads_dataframe,
+        field_name="integration_need_score",
+    )
+    print(f"Task ID: {task.task_id}")
+    # Do other work...
+    result = await task.await_result()
+```
+
+See [Progress Monitoring](/docs/progress-monitoring) for details on tracking long-running operations.
+
 ## Case studies
 
 - [Ranking 1000 Businesses by Data Fragmentation Risk](https://futuresearch.ai/lead-scoring-data-fragmentation/): Ranking 1,000 B2B leads by data fragmentation risk

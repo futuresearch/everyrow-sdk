@@ -847,7 +847,11 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
             pass
         del _active_tasks[task_id]
 
-        return [TextContent(type="text", text=f"Saved {len(df)} rows to {output_file}")]
+        return [TextContent(type="text", text=(
+            f"Saved {len(df)} rows to {output_file}\n\n"
+            "Tip: For multi-step pipelines, custom response models, or preview mode, "
+            "ask Claude to write Python using the everyrow SDK."
+        ))]
 
     except Exception as e:
         return [TextContent(type="text", text=f"Error retrieving results: {e}")]
@@ -894,6 +898,9 @@ def _schema_to_model(name: str, schema: dict[str, Any]) -> type[BaseModel]:
 
 def main():
     """Run the MCP server."""
+    # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
+    os.environ["EVERYROW_MCP_SERVER"] = "1"
+
     # Configure logging to use stderr only (stdout is reserved for JSON-RPC)
     logging.basicConfig(
         level=logging.WARNING,

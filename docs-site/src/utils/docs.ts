@@ -116,12 +116,13 @@ export function getNavigation(): NavSection[] {
       items: [
         { slug: "installation", title: "Installation" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
+        { slug: "progress-monitoring", title: "Progress Monitoring" },
       ],
     },
     {
       title: "Guides",
       items: guides
-        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp")
+        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp" && d.slug !== "progress-monitoring")
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {

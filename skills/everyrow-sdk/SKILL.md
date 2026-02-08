@@ -212,3 +212,33 @@ Everyrow operations have associated costs. To avoid re-running them unnecessaril
 - **Use intermediate checkpoints**: For multi-step pipelines, consider saving results after each everyrow operation.
     - You are able to chain multiple operations together without needing to download and re-upload intermediate results via the SDK. However for most control, implement each step as a dedicated job, possibly orchestrated by tools such as Apache Airflow or Prefect.
 - **Test with `preview=True`**: Operations like `rank`, `screen`, and `merge` support `preview=True` to process only a few rows first.
+
+## Status Line Setup
+
+If the user asks about progress bar setup, status line configuration, or how to see a progress bar during operations, add the following to their `.claude/settings.json` (project-level) or `~/.claude/settings.json` (user-level):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "<path-to-plugin>/everyrow-mcp/scripts/everyrow-statusline.sh",
+    "padding": 1
+  }
+}
+```
+
+Replace `<path-to-plugin>` with the absolute path to the installed plugin directory. If the everyrow-sdk repo is in the project tree, use:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "\"$CLAUDE_PROJECT_DIR\"/everyrow-sdk/everyrow-mcp/scripts/everyrow-statusline.sh",
+    "padding": 1
+  }
+}
+```
+
+The status line requires `jq` to be installed (`brew install jq` on macOS).
+
+After adding the config, the user must restart Claude Code for it to take effect.

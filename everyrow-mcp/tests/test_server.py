@@ -567,8 +567,8 @@ class TestResults:
         assert "Saved 2 rows to" in text
         assert "agent_companies.csv" in text
 
-        # Extract output path from result text and verify CSV was written
-        output_file = text.split("Saved 2 rows to ")[1].strip()
+        # Extract output path from result text (first line only) and verify CSV was written
+        output_file = text.split("Saved 2 rows to ")[1].split("\n")[0].strip()
         output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]

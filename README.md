@@ -3,20 +3,43 @@
 # everyrow SDK
 
 [![PyPI version](https://img.shields.io/pypi/v/everyrow.svg)](https://pypi.org/project/everyrow/)
-[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=fff)](#claude-code-plugin)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=fff)](#quick-start)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 Screen, rank, dedupe, and merge your dataframes using natural language. Or run web agents to research every row.
 
+## Quick Start
+
+The fastest way to use everyrow is through the Claude Code plugin, no Python needed.
+
+**1. Install the plugin:**
 ```bash
-# ideally inside a venv
-pip install everyrow
+claude plugin add futuresearch/everyrow-sdk
 ```
 
-## Try it
+**2. Set your API key** (get one at [everyrow.io/api-key](https://everyrow.io/api-key), comes with $20 of free credits):
+```bash
+export EVERYROW_API_KEY=your_key_here
+claude
+```
 
-Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit), then:
+**3. Ask Claude:**
+> "Research the latest funding round for each company in companies.csv"
+
+Claude will submit the operation, show progress updates every ~15 seconds, and save results as a CSV.
+
+> **Works with [Codex CLI](#codex-cli), [Gemini CLI](#gemini-cli), and [Cursor](#cursor) too.** See [Installation docs](https://everyrow.io/docs/installation) for all platforms.
+
+---
+
+## Python SDK
+
+For pipelines, custom response models, preview mode, and programmatic control, use the Python SDK directly.
+
+```bash
+pip install everyrow
+```
 
 ```python
 import asyncio
@@ -57,7 +80,17 @@ export EVERYROW_API_KEY=your_key_here
 python example.py
 ```
 
-Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary *isn't* disclosed, and "bootcamp grads welcome" means it's *not* senior-level.
+---
+
+## MCP vs SDK: When to Use Which
+
+Both interfaces use the same backend. The plugin ships both in one package. The MCP has higher quality status reporting and works better natively in Claude Code, while the SDK gives more control for building.
+
+We recommend starting with MCP. When you need `preview=True`, custom Pydantic models, or multi-step pipelines, ask Claude to "write a Python script instead".
+
+See [Skills vs MCP](https://everyrow.io/docs/skills-vs-mcp) for the full comparison.
+
+---
 
 ## Operations
 
@@ -220,6 +253,29 @@ print(result.data.head())
 
 **More:** [basic usage](docs/case_studies/basic-usage/notebook.ipynb)
 
+---
+
+## Progress Monitoring
+
+Operations take 1–10+ minutes depending on dataset size and operation type. Both MCP and SDK interfaces provide real-time progress.
+
+The MCP supports a `Submit` that returns immediately with a session URL. Progress updates appear in the conversation every ~15 seconds. If you configure the [status line](https://everyrow.io/docs/progress-monitoring), a progress bar shows in the terminal footer:
+
+```
+everyrow ████████░░░░░░░ 42/100 23s   view
+```
+
+The SDK prints to stderr every 2 seconds.
+
+```
+[11:16:55] Starting (50 agents)...
+[11:16:57]   [5/50]  10% | 5 running, 0 failed
+[11:18:20]   [50/50] 100% | Done (85.2s total)
+```
+
+See [Progress Monitoring docs](https://everyrow.io/docs/progress-monitoring) for setup details.
+
+---
 
 ## Advanced
 
@@ -266,15 +322,17 @@ from everyrow import fetch_task_data
 df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
 
-### Coding agent plugins
-#### Claude Code
+---
+
+## Coding Agent Plugins
+
+### Claude Code
 [Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 ```sh
-claude plugin marketplace add futuresearch/everyrow-sdk
-claude plugin install everyrow@futuresearch
+claude plugin add futuresearch/everyrow-sdk
 ```
 
-#### Gemini CLI
+### Gemini CLI
 [Official Docs](https://geminicli.com/docs/extensions/#installing-an-extension).
 Ensure that you're using version >= 0.25.0
 ```sh
@@ -291,7 +349,7 @@ Then within the CLI
 /model > Manual > gemini-3-pro-preview > (Optionally Remember model, tab)
 ```
 
-#### Codex CLI
+### Codex CLI
 [Official docs](https://developers.openai.com/codex/skills#install-new-skills).
 Install from GitHub using the built-in skill installer, requested via natural language:
 ```sh
@@ -305,7 +363,7 @@ python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github
 ```
 Restart Codex to pick up the new skill.
 
-#### Cursor
+### Cursor
 [Official docs](https://cursor.com/docs/context/skills#installing-skills-from-github).
 ```sh
 1. Open Cursor Settings → Rules
@@ -349,6 +407,8 @@ uv run ruff format .                                   # format
 uv run basedpyright                                    # type check
 ./generate_openapi.sh                                  # regenerate client
 ```
+
+See [TESTING.md](TESTING.md) for the full test suite documentation and [ARCHITECTURE.md](ARCHITECTURE.md) for technical details.
 
 ---
 

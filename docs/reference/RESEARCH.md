@@ -130,3 +130,24 @@ companies = await single_agent(
     return_table=True,  # Return a table of companies
 )
 ```
+
+### Async variant
+
+`agent_map_async` submits the operation and returns immediately, letting you do other work while agents run:
+
+```python
+from everyrow import create_session
+from everyrow.ops import agent_map_async
+
+async with create_session(name="Background Research") as session:
+    task = await agent_map_async(
+        session=session,
+        task="Find this company's latest funding round",
+        input=companies,
+    )
+    print(f"Task ID: {task.task_id}")
+    # Do other work...
+    result = await task.await_result()
+```
+
+See [Progress Monitoring](/docs/progress-monitoring) for details on tracking long-running operations.

@@ -32,6 +32,8 @@ from everyrow.result import MergeBreakdown, MergeResult, ScalarResult, TableResu
 
 LLM = LLMEnumPublic
 
+_plugin_hint_shown = False
+
 
 class EffortLevel(StrEnum):
     LOW = "low"
@@ -175,12 +177,27 @@ class EveryrowTask[T: BaseModel]:
             )
 
 
+def _maybe_show_plugin_hint() -> None:
+    """Show a one-time hint about the Claude Code plugin if not running inside the MCP server."""
+    global _plugin_hint_shown
+    if _plugin_hint_shown or os.environ.get("EVERYROW_MCP_SERVER"):
+        return
+    _plugin_hint_shown = True
+    print(
+        "Tip: For Claude Code / Codex, install the everyrow plugin for automatic progress tracking.\n"
+        "     See: https://everyrow.io/docs/installation",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 async def await_task_completion(
     task_id: UUID,
     client: AuthenticatedClient,
     session_url: str | None = None,
     on_progress: Callable[[ProgressInfo], None] | None = None,
 ) -> TaskStatusResponse:
+    _maybe_show_plugin_hint()
     max_retries = 3
     retries = 0
     last_snapshot: tuple[int, int, int, int] = (-1, -1, -1, -1)

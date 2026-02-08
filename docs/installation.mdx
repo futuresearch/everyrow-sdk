@@ -304,3 +304,33 @@ Config file location:
 </TabContent>
 
 </InstallationTabs>
+
+## What to Expect
+
+After installing, try an operation:
+
+> "Rank companies.csv by likelihood to need data integration solutions"
+
+Here's what happens:
+
+1. **Submit** (~1 second) — The operation starts and you get a session URL
+2. **Progress** (every ~15 seconds) — Updates appear in the conversation: "23/50 complete, 5 running"
+3. **Results** — A CSV file is saved with the output data
+
+Operations typically take **1–10 minutes** depending on dataset size and operation type. The agent handles the waiting automatically.
+
+For a persistent progress bar in your terminal, see [Progress Monitoring](/docs/progress-monitoring).
+
+## Dependencies
+
+The status line and hook scripts require **jq** for JSON parsing:
+
+```bash
+# macOS
+brew install jq
+
+# Linux
+apt install jq
+```
+
+The MCP server requires **uv** (if using `uvx`) or **pip** (if installed directly). The Python SDK requires **Python 3.12+**.
