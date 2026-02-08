@@ -32,6 +32,7 @@ from everyrow.ops import (
 )
 from everyrow.session import create_session
 from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 from everyrow_mcp.utils import (
@@ -64,6 +65,30 @@ mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
 _active_tasks: dict[str, dict[str, Any]] = {}
 
 PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
+TASK_STATE_FILE = "/tmp/everyrow-task.json"
+
+
+def _write_task_state(
+    task_id: str, session_url: str, total: int,
+    completed: int, failed: int, running: int, status: str,
+) -> None:
+    """Write task tracking state for hooks/status line to read."""
+    try:
+        import json as _json
+        state = {
+            "task_id": task_id,
+            "session_url": session_url,
+            "total": total,
+            "completed": completed,
+            "failed": failed,
+            "running": running,
+            "status": status,
+            "started_at": int(time.time()),
+        }
+        with open(TASK_STATE_FILE, "w") as f:
+            _json.dump(state, f)
+    except Exception:
+        pass  # Non-critical — hooks/status line just won't update
 
 
 class ScreenInput(BaseModel):
@@ -106,7 +131,7 @@ class ScreenInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_screen")
+@mcp.tool(name="everyrow_screen", structured_output=False)
 async def everyrow_screen(params: ScreenInput) -> str:
     """Filter rows in a CSV based on criteria that require judgment.
 
@@ -215,7 +240,7 @@ class RankInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_rank")
+@mcp.tool(name="everyrow_rank", structured_output=False)
 async def everyrow_rank(params: RankInput) -> str:
     """Score and sort rows in a CSV based on qualitative criteria.
 
@@ -303,7 +328,7 @@ class DedupeInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_dedupe")
+@mcp.tool(name="everyrow_dedupe", structured_output=False)
 async def everyrow_dedupe(params: DedupeInput) -> str:
     """Remove duplicate rows from a CSV using semantic equivalence.
 
@@ -398,7 +423,7 @@ class MergeInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_merge")
+@mcp.tool(name="everyrow_merge", structured_output=False)
 async def everyrow_merge(params: MergeInput) -> str:
     """Join two CSV files using intelligent entity matching.
 
@@ -483,7 +508,7 @@ class AgentInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_agent")
+@mcp.tool(name="everyrow_agent", structured_output=False)
 async def everyrow_agent(params: AgentInput) -> str:
     """Run web research agents on each row of a CSV.
 
@@ -609,8 +634,8 @@ class ResultsInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_agent_submit")
-async def everyrow_agent_submit(params: AgentSubmitInput) -> str:
+@mcp.tool(name="everyrow_agent_submit", structured_output=False)
+async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
     """Submit a web research agent task on each row of a CSV (returns immediately).
 
     Use this instead of everyrow_agent for long-running operations. Returns a task_id
@@ -639,27 +664,30 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> str:
     cohort_task = await agent_map_async(**kwargs)
 
     task_id = str(cohort_task.task_id)
+    started_at = time.monotonic()
     _active_tasks[task_id] = {
         "session": session,
         "session_ctx": session_ctx,
         "client": client,
         "total": total,
         "session_url": session_url,
-        "started_at": time.monotonic(),
+        "started_at": started_at,
         "input_csv": params.input_csv,
         "prefix": "agent",
     }
 
-    return json.dumps({
-        "task_id": task_id,
-        "session_url": session_url,
-        "total": total,
-        "instructions": f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').",
-    })
+    _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
+
+    return [TextContent(type="text", text=(
+        f"Submitted: {total} agents starting.\n"
+        f"Session: {session_url}\n"
+        f"Task ID: {task_id}\n\n"
+        f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+    ))]
 
 
-@mcp.tool(name="everyrow_rank_submit")
-async def everyrow_rank_submit(params: RankSubmitInput) -> str:
+@mcp.tool(name="everyrow_rank_submit", structured_output=False)
+async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
     """Submit a rank/score operation on a CSV (returns immediately).
 
     Use this instead of everyrow_rank for long-running operations. Returns a task_id
@@ -704,16 +732,18 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> str:
         "prefix": "ranked",
     }
 
-    return json.dumps({
-        "task_id": task_id,
-        "session_url": session_url,
-        "total": total,
-        "instructions": f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').",
-    })
+    _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
+
+    return [TextContent(type="text", text=(
+        f"Submitted: {total} rows for ranking.\n"
+        f"Session: {session_url}\n"
+        f"Task ID: {task_id}\n\n"
+        f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+    ))]
 
 
-@mcp.tool(name="everyrow_progress")
-async def everyrow_progress(params: ProgressInput) -> str:
+@mcp.tool(name="everyrow_progress", structured_output=False)
+async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     """Check progress of a running everyrow task. Blocks ~12s before returning.
 
     After receiving a status update, immediately call everyrow_progress again
@@ -724,13 +754,11 @@ async def everyrow_progress(params: ProgressInput) -> str:
     task_info = _active_tasks.get(task_id)
 
     if task_info is None:
-        return json.dumps({
-            "status": "error",
-            "error": f"Unknown task_id: {task_id}. It may have already been retrieved or the server restarted.",
-        })
+        return [TextContent(type="text", text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.")]
 
     client = task_info["client"]
     elapsed = time.monotonic() - task_info["started_at"]
+    session_url = task_info["session_url"]
 
     # Block server-side before polling — controls the cadence
     await asyncio.sleep(PROGRESS_POLL_DELAY)
@@ -742,50 +770,40 @@ async def everyrow_progress(params: ProgressInput) -> str:
         if status_response is None:
             raise RuntimeError("No response from status endpoint")
     except Exception as e:
-        return json.dumps({
-            "status": "error",
-            "error": f"Failed to get task status: {e}",
-            "instructions": f"Retry: call everyrow_progress(task_id='{task_id}').",
-        })
+        return [TextContent(type="text", text=f"Error polling task: {e}\nRetry: call everyrow_progress(task_id='{task_id}').")]
 
     status_str = status_response.status.value
     raw_progress = status_response.additional_properties.get("progress")
     progress = raw_progress if isinstance(raw_progress, dict) else None
 
-    result: dict[str, Any] = {
-        "status": status_str,
-        "elapsed_seconds": round(elapsed + PROGRESS_POLL_DELAY),
-    }
+    completed = progress.get("completed", 0) if progress else 0
+    failed = progress.get("failed", 0) if progress else 0
+    running = progress.get("running", 0) if progress else 0
+    total = progress.get("total", 0) if progress else 0
+    elapsed_s = round(elapsed + PROGRESS_POLL_DELAY)
 
-    if progress:
-        result.update({
-            "completed": progress.get("completed", 0),
-            "failed": progress.get("failed", 0),
-            "running": progress.get("running", 0),
-            "pending": progress.get("pending", 0),
-            "total": progress.get("total", 0),
-        })
+    _write_task_state(task_id, session_url, total, completed, failed, running, status_str)
 
     if status_str in ("completed", "failed", "revoked"):
         error = status_response.error
         if error and not isinstance(error, Unset):
-            result["error"] = str(error)
-        result["instructions"] = (
-            f"Call everyrow_results(task_id='{task_id}', output_path='...') to retrieve the output."
-            if status_str == "completed"
-            else f"The task {status_str}. Report the error to the user."
-        )
-    else:
-        result["instructions"] = (
-            f"Immediately call everyrow_progress(task_id='{task_id}'). "
-            "Do not break this tool call chain."
-        )
+            return [TextContent(type="text", text=f"Task {status_str}: {error}")]
+        if status_str == "completed":
+            return [TextContent(type="text", text=(
+                f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s.\n"
+                f"Call everyrow_results(task_id='{task_id}', output_path='...') to retrieve the output."
+            ))]
+        return [TextContent(type="text", text=f"Task {status_str}. Report the error to the user.")]
 
-    return json.dumps(result)
+    fail_part = f", {failed} failed" if failed else ""
+    return [TextContent(type="text", text=(
+        f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
+        f"Immediately call everyrow_progress(task_id='{task_id}'). Do not break this tool call chain."
+    ))]
 
 
-@mcp.tool(name="everyrow_results")
-async def everyrow_results(params: ResultsInput) -> str:
+@mcp.tool(name="everyrow_results", structured_output=False)
+async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     """Retrieve results from a completed everyrow task and save to CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
@@ -794,10 +812,7 @@ async def everyrow_results(params: ResultsInput) -> str:
     task_info = _active_tasks.get(task_id)
 
     if task_info is None:
-        return json.dumps({
-            "status": "error",
-            "error": f"Unknown task_id: {task_id}. It may have already been retrieved or the server restarted.",
-        })
+        return [TextContent(type="text", text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.")]
 
     client = task_info["client"]
     input_csv = task_info["input_csv"]
@@ -808,16 +823,13 @@ async def everyrow_results(params: ResultsInput) -> str:
             task_id=UUID(task_id), client=client,
         )
         if result_response is None:
-            return json.dumps({"status": "error", "error": "No response from result endpoint."})
+            return [TextContent(type="text", text="Error: No response from result endpoint.")]
 
         if isinstance(result_response.data, list):
             records = [item.additional_properties for item in result_response.data]
             df = pd.DataFrame(records)
         else:
-            return json.dumps({
-                "status": "error",
-                "error": "Task result has no table data.",
-            })
+            return [TextContent(type="text", text="Error: Task result has no table data.")]
 
         output_file = resolve_output_path(params.output_path, input_csv, prefix)
         save_result_to_csv(df, output_file)
@@ -835,17 +847,10 @@ async def everyrow_results(params: ResultsInput) -> str:
             pass
         del _active_tasks[task_id]
 
-        return json.dumps({
-            "status": "success",
-            "output_file": str(output_file),
-            "rows": len(df),
-        })
+        return [TextContent(type="text", text=f"Saved {len(df)} rows to {output_file}")]
 
     except Exception as e:
-        return json.dumps({
-            "status": "error",
-            "error": f"Failed to retrieve results: {e}",
-        })
+        return [TextContent(type="text", text=f"Error retrieving results: {e}")]
 
 
 JSON_TYPE_MAP = {

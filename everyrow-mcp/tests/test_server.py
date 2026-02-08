@@ -404,6 +404,7 @@ class TestAgentSubmit:
             patch("everyrow_mcp.server.agent_map_async", new_callable=AsyncMock) as mock_op,
             patch("everyrow_mcp.server.create_client", return_value=mock_client),
             patch("everyrow_mcp.server.create_session", return_value=mock_session_ctx),
+            patch("everyrow_mcp.server._write_task_state"),
         ):
             mock_op.return_value = mock_task
 
@@ -412,13 +413,11 @@ class TestAgentSubmit:
                 input_csv=companies_csv,
             )
             result = await everyrow_agent_submit(params)
-            data = json.loads(result)
+            text = result[0].text
 
-            assert data["task_id"] == str(mock_task.task_id)
-            assert "session_url" in data
-            assert data["total"] == 5  # companies.csv has 5 rows
-            assert "instructions" in data
-            assert "everyrow_progress" in data["instructions"]
+            assert str(mock_task.task_id) in text
+            assert "Session:" in text
+            assert "everyrow_progress" in text
 
             # Verify task was stored
             assert str(mock_task.task_id) in _active_tasks
@@ -433,13 +432,8 @@ class TestProgress:
     async def test_progress_unknown_task(self):
         """Test progress with unknown task_id."""
         params = ProgressInput(task_id="nonexistent-id")
-
-        with patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock):
-            result = await everyrow_progress(params)
-
-        data = json.loads(result)
-        assert data["status"] == "error"
-        assert "Unknown task_id" in data["error"]
+        result = await everyrow_progress(params)
+        assert "Unknown task_id" in result[0].text
 
     @pytest.mark.asyncio
     async def test_progress_running_task(self):
@@ -472,17 +466,16 @@ class TestProgress:
             with (
                 patch("everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio", new_callable=AsyncMock, return_value=mock_status),
                 patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+                patch("everyrow_mcp.server._write_task_state"),
             ):
                 params = ProgressInput(task_id=task_id)
                 result = await everyrow_progress(params)
+            text = result[0].text
 
-            data = json.loads(result)
-            assert data["status"] == "running"
-            assert data["completed"] == 4
-            assert data["failed"] == 1
-            assert data["running"] == 3
-            assert data["total"] == 10
-            assert "Immediately call everyrow_progress" in data["instructions"]
+            assert "4/10 complete" in text
+            assert "1 failed" in text
+            assert "3 running" in text
+            assert "everyrow_progress" in text
         finally:
             _active_tasks.pop(task_id, None)
 
@@ -515,14 +508,14 @@ class TestProgress:
             with (
                 patch("everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio", new_callable=AsyncMock, return_value=mock_status),
                 patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+                patch("everyrow_mcp.server._write_task_state"),
             ):
                 params = ProgressInput(task_id=task_id)
                 result = await everyrow_progress(params)
+            text = result[0].text
 
-            data = json.loads(result)
-            assert data["status"] == "completed"
-            assert data["completed"] == 5
-            assert "everyrow_results" in data["instructions"]
+            assert "Completed: 5/5" in text
+            assert "everyrow_results" in text
         finally:
             _active_tasks.pop(task_id, None)
 
@@ -535,8 +528,7 @@ class TestResults:
         """Test results with unknown task_id."""
         params = ResultsInput(task_id="nonexistent-id", output_path=str(tmp_path))
         result = await everyrow_results(params)
-        data = json.loads(result)
-        assert data["status"] == "error"
+        assert "Unknown task_id" in result[0].text
 
     @pytest.mark.asyncio
     async def test_results_saves_csv(self, companies_csv: str, tmp_path: Path):
@@ -570,14 +562,14 @@ class TestResults:
         with patch("everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio", new_callable=AsyncMock, return_value=mock_result):
             params = ResultsInput(task_id=task_id, output_path=str(tmp_path))
             result = await everyrow_results(params)
+        text = result[0].text
 
-        data = json.loads(result)
-        assert data["status"] == "success"
-        assert data["rows"] == 2
-        assert "agent_companies.csv" in data["output_file"]
+        assert "Saved 2 rows to" in text
+        assert "agent_companies.csv" in text
 
-        # Verify CSV was written
-        output_df = pd.read_csv(data["output_file"])
+        # Extract output path from result text and verify CSV was written
+        output_file = text.split("Saved 2 rows to ")[1].strip()
+        output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]
 

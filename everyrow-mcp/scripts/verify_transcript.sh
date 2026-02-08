@@ -93,7 +93,7 @@ for i, p in enumerate(er_pairs):
     print(f'  {p[\"name\"]:35s} dur={p[\"duration\"]:5.1f}s{gap}  ({p[\"start\"].strftime(\"%H:%M:%S\")})')
 
 # Verify polling cadence
-progress_pairs = [p for p in er_pairs if p['name'] == 'mcp__everyrow__everyrow_progress']
+progress_pairs = [p for p in er_pairs if 'everyrow_progress' in p['name']]
 if len(progress_pairs) >= 2:
     gaps = []
     for i in range(1, len(progress_pairs)):
