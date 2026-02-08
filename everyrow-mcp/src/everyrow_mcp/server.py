@@ -1,16 +1,36 @@
 """MCP server for everyrow SDK operations."""
 
+import asyncio
 import json
 import logging
 import os
 import sys
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Literal
+from uuid import UUID
 
 import pandas as pd
 from everyrow.api_utils import create_client
-from everyrow.generated.api.default.whoami_whoami_get import asyncio as whoami
-from everyrow.ops import agent_map, dedupe, merge, rank, screen
+from everyrow.generated.api.billing.get_billing_balance_billing_get import (
+    asyncio as get_billing,
+)
+from everyrow.generated.api.tasks import (
+    get_task_result_tasks_task_id_result_get,
+    get_task_status_tasks_task_id_status_get,
+)
+from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.types import Unset
+from everyrow.ops import (
+    agent_map,
+    agent_map_async,
+    dedupe,
+    merge,
+    rank,
+    rank_async,
+    screen,
+)
+from everyrow.session import create_session
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
@@ -28,7 +48,7 @@ async def lifespan(_server: FastMCP):
     try:
         client = create_client()
         async with client as c:
-            response = await whoami(client=c)
+            response = await get_billing(client=c)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
     except Exception as e:
@@ -38,6 +58,12 @@ async def lifespan(_server: FastMCP):
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
+
+# Track active tasks for the submit/poll pattern.
+# Maps task_id -> {session, client, total, session_url, started_at}
+_active_tasks: dict[str, dict[str, Any]] = {}
+
+PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
 
 
 class ScreenInput(BaseModel):
@@ -501,6 +527,325 @@ async def everyrow_agent(params: AgentInput) -> str:
         },
         indent=2,
     )
+
+
+# =============================================================================
+# Submit / Progress / Results tools (non-blocking pattern)
+# =============================================================================
+
+
+class AgentSubmitInput(BaseModel):
+    """Input for submitting an agent_map operation (non-blocking)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(..., description="Natural language task to perform on each row.", min_length=1)
+    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    response_schema: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional JSON schema for the agent's response per row.",
+    )
+
+    @field_validator("input_csv")
+    @classmethod
+    def validate_input_csv(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+
+class RankSubmitInput(BaseModel):
+    """Input for submitting a rank operation (non-blocking)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(..., description="Natural language ranking criteria.", min_length=1)
+    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    field_name: str = Field(..., description="Name of the field to sort by.")
+    field_type: str = Field(default="float", description="Type: 'float', 'int', 'str', or 'bool'")
+    ascending_order: bool = Field(default=True, description="Sort ascending (True) or descending (False).")
+    response_schema: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional JSON schema for the response model.",
+    )
+
+    @field_validator("input_csv")
+    @classmethod
+    def validate_input_csv(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+    @field_validator("field_type")
+    @classmethod
+    def validate_field_type(cls, v: str) -> str:
+        valid_types = {"float", "int", "str", "bool"}
+        if v not in valid_types:
+            raise ValueError(f"field_type must be one of {valid_types}")
+        return v
+
+
+class ProgressInput(BaseModel):
+    """Input for checking task progress."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task_id: str = Field(..., description="The task ID returned by a _submit tool.")
+
+
+class ResultsInput(BaseModel):
+    """Input for retrieving completed task results."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task_id: str = Field(..., description="The task ID of the completed task.")
+    output_path: str = Field(
+        ...,
+        description="Output path: either a directory or a full .csv file path.",
+    )
+
+    @field_validator("output_path")
+    @classmethod
+    def validate_output(cls, v: str) -> str:
+        validate_output_path(v)
+        return v
+
+
+@mcp.tool(name="everyrow_agent_submit")
+async def everyrow_agent_submit(params: AgentSubmitInput) -> str:
+    """Submit a web research agent task on each row of a CSV (returns immediately).
+
+    Use this instead of everyrow_agent for long-running operations. Returns a task_id
+    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+
+    After receiving a result from this tool, share the session_url with the user,
+    then immediately call everyrow_progress with the returned task_id.
+    """
+    df = pd.read_csv(params.input_csv)
+    total = len(df)
+
+    response_model: type[BaseModel] | None = None
+    if params.response_schema:
+        response_model = _schema_to_model("AgentResult", params.response_schema)
+
+    client = create_client()
+    await client.__aenter__()
+
+    session_ctx = create_session(client=client)
+    session = await session_ctx.__aenter__()
+    session_url = session.get_url()
+
+    kwargs: dict[str, Any] = {"task": params.task, "session": session, "input": df}
+    if response_model:
+        kwargs["response_model"] = response_model
+    cohort_task = await agent_map_async(**kwargs)
+
+    task_id = str(cohort_task.task_id)
+    _active_tasks[task_id] = {
+        "session": session,
+        "session_ctx": session_ctx,
+        "client": client,
+        "total": total,
+        "session_url": session_url,
+        "started_at": time.monotonic(),
+        "input_csv": params.input_csv,
+        "prefix": "agent",
+    }
+
+    return json.dumps({
+        "task_id": task_id,
+        "session_url": session_url,
+        "total": total,
+        "instructions": f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').",
+    })
+
+
+@mcp.tool(name="everyrow_rank_submit")
+async def everyrow_rank_submit(params: RankSubmitInput) -> str:
+    """Submit a rank/score operation on a CSV (returns immediately).
+
+    Use this instead of everyrow_rank for long-running operations. Returns a task_id
+    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+
+    After receiving a result from this tool, share the session_url with the user,
+    then immediately call everyrow_progress with the returned task_id.
+    """
+    df = pd.read_csv(params.input_csv)
+    total = len(df)
+
+    response_model: type[BaseModel] | None = None
+    if params.response_schema:
+        response_model = _schema_to_model("RankResult", params.response_schema)
+
+    client = create_client()
+    await client.__aenter__()
+
+    session_ctx = create_session(client=client)
+    session = await session_ctx.__aenter__()
+    session_url = session.get_url()
+
+    cohort_task = await rank_async(
+        task=params.task,
+        session=session,
+        input=df,
+        field_name=params.field_name,
+        field_type=params.field_type,  # type: ignore
+        response_model=response_model,
+        ascending_order=params.ascending_order,
+    )
+
+    task_id = str(cohort_task.task_id)
+    _active_tasks[task_id] = {
+        "session": session,
+        "session_ctx": session_ctx,
+        "client": client,
+        "total": total,
+        "session_url": session_url,
+        "started_at": time.monotonic(),
+        "input_csv": params.input_csv,
+        "prefix": "ranked",
+    }
+
+    return json.dumps({
+        "task_id": task_id,
+        "session_url": session_url,
+        "total": total,
+        "instructions": f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').",
+    })
+
+
+@mcp.tool(name="everyrow_progress")
+async def everyrow_progress(params: ProgressInput) -> str:
+    """Check progress of a running everyrow task. Blocks ~12s before returning.
+
+    After receiving a status update, immediately call everyrow_progress again
+    unless the task is completed or failed. The tool handles pacing internally.
+    Do not add commentary between progress calls — just call again immediately.
+    """
+    task_id = params.task_id
+    task_info = _active_tasks.get(task_id)
+
+    if task_info is None:
+        return json.dumps({
+            "status": "error",
+            "error": f"Unknown task_id: {task_id}. It may have already been retrieved or the server restarted.",
+        })
+
+    client = task_info["client"]
+    elapsed = time.monotonic() - task_info["started_at"]
+
+    # Block server-side before polling — controls the cadence
+    await asyncio.sleep(PROGRESS_POLL_DELAY)
+
+    try:
+        status_response = await get_task_status_tasks_task_id_status_get.asyncio(
+            task_id=UUID(task_id), client=client,
+        )
+        if status_response is None:
+            raise RuntimeError("No response from status endpoint")
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "error": f"Failed to get task status: {e}",
+            "instructions": f"Retry: call everyrow_progress(task_id='{task_id}').",
+        })
+
+    status_str = status_response.status.value
+    raw_progress = status_response.additional_properties.get("progress")
+    progress = raw_progress if isinstance(raw_progress, dict) else None
+
+    result: dict[str, Any] = {
+        "status": status_str,
+        "elapsed_seconds": round(elapsed + PROGRESS_POLL_DELAY),
+    }
+
+    if progress:
+        result.update({
+            "completed": progress.get("completed", 0),
+            "failed": progress.get("failed", 0),
+            "running": progress.get("running", 0),
+            "pending": progress.get("pending", 0),
+            "total": progress.get("total", 0),
+        })
+
+    if status_str in ("completed", "failed", "revoked"):
+        error = status_response.error
+        if error and not isinstance(error, Unset):
+            result["error"] = str(error)
+        result["instructions"] = (
+            f"Call everyrow_results(task_id='{task_id}', output_path='...') to retrieve the output."
+            if status_str == "completed"
+            else f"The task {status_str}. Report the error to the user."
+        )
+    else:
+        result["instructions"] = (
+            f"Immediately call everyrow_progress(task_id='{task_id}'). "
+            "Do not break this tool call chain."
+        )
+
+    return json.dumps(result)
+
+
+@mcp.tool(name="everyrow_results")
+async def everyrow_results(params: ResultsInput) -> str:
+    """Retrieve results from a completed everyrow task and save to CSV.
+
+    Only call this after everyrow_progress reports status 'completed'.
+    """
+    task_id = params.task_id
+    task_info = _active_tasks.get(task_id)
+
+    if task_info is None:
+        return json.dumps({
+            "status": "error",
+            "error": f"Unknown task_id: {task_id}. It may have already been retrieved or the server restarted.",
+        })
+
+    client = task_info["client"]
+    input_csv = task_info["input_csv"]
+    prefix = task_info["prefix"]
+
+    try:
+        result_response = await get_task_result_tasks_task_id_result_get.asyncio(
+            task_id=UUID(task_id), client=client,
+        )
+        if result_response is None:
+            return json.dumps({"status": "error", "error": "No response from result endpoint."})
+
+        if isinstance(result_response.data, list):
+            records = [item.additional_properties for item in result_response.data]
+            df = pd.DataFrame(records)
+        else:
+            return json.dumps({
+                "status": "error",
+                "error": "Task result has no table data.",
+            })
+
+        output_file = resolve_output_path(params.output_path, input_csv, prefix)
+        save_result_to_csv(df, output_file)
+
+        # Clean up session and client
+        session_ctx = task_info.get("session_ctx")
+        if session_ctx:
+            try:
+                await session_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+        try:
+            await client.__aexit__(None, None, None)
+        except Exception:
+            pass
+        del _active_tasks[task_id]
+
+        return json.dumps({
+            "status": "success",
+            "output_file": str(output_file),
+            "rows": len(df),
+        })
+
+    except Exception as e:
+        return json.dumps({
+            "status": "error",
+            "error": f"Failed to retrieve results: {e}",
+        })
 
 
 JSON_TYPE_MAP = {

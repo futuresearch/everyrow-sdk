@@ -14,5 +14,57 @@
         "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
       }
     }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "mcp__everyrow__everyrow_.*_submit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/everyrow-mcp/scripts/everyrow-track-submit.sh\"",
+            "statusMessage": "Tracking everyrow task..."
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__everyrow__everyrow_progress",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/everyrow-mcp/scripts/everyrow-track-progress.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__everyrow__everyrow_results",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/everyrow-mcp/scripts/everyrow-track-results.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/everyrow-mcp/scripts/everyrow-stop-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rm -f /tmp/everyrow-task.json"
+          }
+        ]
+      }
+    ]
   }
 }

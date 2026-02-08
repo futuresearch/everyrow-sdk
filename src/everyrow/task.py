@@ -1,6 +1,13 @@
 import asyncio
+import json
+import os
+import sys
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypeVar
+from pathlib import Path
+from typing import Any, TypeVar
 from uuid import UUID
 
 from pandas import DataFrame
@@ -32,6 +39,69 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
+@dataclass
+class ProgressInfo:
+    """Progress counts from the engine's artifact status tracking."""
+
+    pending: int
+    running: int
+    completed: int
+    failed: int
+    total: int
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "ProgressInfo":
+        return cls(
+            pending=d.get("pending", 0),
+            running=d.get("running", 0),
+            completed=d.get("completed", 0),
+            failed=d.get("failed", 0),
+            total=d.get("total", 0),
+        )
+
+
+def _get_progress(status: TaskStatusResponse) -> ProgressInfo | None:
+    """Extract progress info from a status response's additional_properties."""
+    raw = status.additional_properties.get("progress")
+    if raw is None or not isinstance(raw, dict):
+        return None
+    return ProgressInfo.from_dict(raw)
+
+
+def _ts() -> str:
+    """Format current time as [HH:MM:SS]."""
+    return time.strftime("[%H:%M:%S]")
+
+
+def _format_eta(completed: int, total: int, elapsed: float) -> str:
+    """Estimate remaining time based on completion rate."""
+    if completed <= 0 or elapsed <= 0:
+        return ""
+    rate = completed / elapsed
+    remaining = (total - completed) / rate
+    return f"~{remaining:.0f}s remaining"
+
+
+def _default_progress_output(progress: ProgressInfo, total: int, elapsed: float) -> None:
+    """Print a progress line to stderr."""
+    pct = (progress.completed / total * 100) if total > 0 else 0
+    parts = [
+        f"{_ts()}   [{progress.completed}/{total}] {pct:3.0f}%",
+        f"| {progress.running} running, {progress.failed} failed",
+    ]
+    eta = _format_eta(progress.completed, total, elapsed)
+    if eta:
+        parts.append(f"| {eta}")
+    print(" ".join(parts), file=sys.stderr, flush=True)
+
+
+def _log_jsonl(path: Path, entry: dict[str, Any]) -> None:
+    """Append a JSON line to the progress log file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -54,6 +124,12 @@ class EveryrowTask[T: BaseModel]:
         self.session_id = session_id
         self._client = client
 
+    def _get_session_url(self) -> str | None:
+        if self.session_id is None:
+            return None
+        base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
+        return f"{base_url}/sessions/{self.session_id}"
+
     async def get_status(self, client: AuthenticatedClient | None = None) -> TaskStatusResponse:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before fetching status")
@@ -62,13 +138,18 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError("No client available. Provide a client or use the task within a session context.")
         return await get_task_status(self.task_id, client)
 
-    async def await_result(self, client: AuthenticatedClient | None = None) -> TableResult | ScalarResult[T]:
+    async def await_result(
+        self,
+        client: AuthenticatedClient | None = None,
+        on_progress: Callable[[ProgressInfo], None] | None = None,
+    ) -> TableResult | ScalarResult[T]:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before awaiting result")
         client = client or self._client
         if client is None:
             raise EveryrowError("No client available. Provide a client or use the task within a session context.")
-        final_status = await await_task_completion(self.task_id, client)
+        session_url = self._get_session_url()
+        final_status = await await_task_completion(self.task_id, client, session_url=session_url, on_progress=on_progress)
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
@@ -94,9 +175,19 @@ class EveryrowTask[T: BaseModel]:
             )
 
 
-async def await_task_completion(task_id: UUID, client: AuthenticatedClient) -> TaskStatusResponse:
+async def await_task_completion(
+    task_id: UUID,
+    client: AuthenticatedClient,
+    session_url: str | None = None,
+    on_progress: Callable[[ProgressInfo], None] | None = None,
+) -> TaskStatusResponse:
     max_retries = 3
     retries = 0
+    last_snapshot: tuple[int, int, int, int] = (-1, -1, -1, -1)
+    start_time = time.monotonic()
+    total_announced = False
+    jsonl_path = Path(os.path.expanduser("~/.everyrow/progress.jsonl"))
+
     while True:
         try:
             status_response = await get_task_status(task_id, client)
@@ -104,15 +195,71 @@ async def await_task_completion(task_id: UUID, client: AuthenticatedClient) -> T
             if retries >= max_retries:
                 raise EveryrowError(f"Failed to get task status after {max_retries} retries") from e
             retries += 1
-        else:
-            retries = 0
-            if status_response.status in (
-                TaskStatus.COMPLETED,
-                TaskStatus.FAILED,
-                TaskStatus.REVOKED,
-            ):
-                break
-        await asyncio.sleep(1)
+            await asyncio.sleep(2)
+            continue
+
+        retries = 0
+        progress = _get_progress(status_response)
+
+        if progress and progress.total > 0:
+            if not total_announced:
+                total_announced = True
+                msg = f"{_ts()} Starting ({progress.total} agents)..."
+                if session_url:
+                    msg = f"{_ts()} Session: {session_url}\n" + msg
+                print(msg, file=sys.stderr, flush=True)
+                _log_jsonl(jsonl_path, {
+                    "ts": time.time(),
+                    "step": "start",
+                    "total": progress.total,
+                    "session_url": session_url,
+                })
+
+            snapshot = (progress.pending, progress.running, progress.completed, progress.failed)
+            if snapshot != last_snapshot:
+                last_snapshot = snapshot
+                elapsed = time.monotonic() - start_time
+                if on_progress:
+                    on_progress(progress)
+                else:
+                    _default_progress_output(progress, progress.total, elapsed)
+                _log_jsonl(jsonl_path, {
+                    "ts": time.time(),
+                    "completed": progress.completed,
+                    "running": progress.running,
+                    "failed": progress.failed,
+                    "total": progress.total,
+                })
+
+        if status_response.status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.REVOKED,
+        ):
+            break
+        await asyncio.sleep(2)
+
+    elapsed = time.monotonic() - start_time
+    if progress and progress.total > 0:
+        succeeded = progress.completed
+        failed = progress.failed
+        print(
+            f"{_ts()}   [{progress.total}/{progress.total}] 100% | Done ({elapsed:.1f}s total)",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
+            f"{_ts()} Results: {succeeded} succeeded, {failed} failed",
+            file=sys.stderr,
+            flush=True,
+        )
+        _log_jsonl(jsonl_path, {
+            "ts": time.time(),
+            "step": "done",
+            "elapsed": round(elapsed, 1),
+            "succeeded": succeeded,
+            "failed": failed,
+        })
 
     if status_response.status == TaskStatus.FAILED:
         error_msg = status_response.error if not isinstance(status_response.error, Unset) else "Unknown error"
@@ -195,6 +342,12 @@ class MergeTask:
         self.session_id = session_id
         self._client = client
 
+    def _get_session_url(self) -> str | None:
+        if self.session_id is None:
+            return None
+        base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
+        return f"{base_url}/sessions/{self.session_id}"
+
     async def get_status(
         self, client: AuthenticatedClient | None = None
     ) -> TaskStatusResponse:
@@ -217,7 +370,8 @@ class MergeTask:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        final_status = await await_task_completion(self.task_id, client)
+        session_url = self._get_session_url()
+        final_status = await await_task_completion(self.task_id, client, session_url=session_url)
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
