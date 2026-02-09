@@ -142,6 +142,7 @@ async def single_agent[T: BaseModel](
     include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: Literal[False] = False,
+    webhook_url: str | None = None,
 ) -> ScalarResult[T]: ...
 
 
@@ -156,6 +157,7 @@ async def single_agent(
     include_research: bool | None = None,
     response_model: type[BaseModel] = DefaultAgentResponse,
     return_table: Literal[True] = True,
+    webhook_url: str | None = None,
 ) -> TableResult: ...
 
 
@@ -169,6 +171,7 @@ async def single_agent[T: BaseModel](
     include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
+    webhook_url: str | None = None,
 ) -> ScalarResult[T] | TableResult:
     """Execute an AI agent task on the provided input.
 
@@ -183,6 +186,7 @@ async def single_agent[T: BaseModel](
         include_research: Include research notes. Required when effort_level is None.
         response_model: Pydantic model for the response schema.
         return_table: If True, return a TableResult instead of ScalarResult.
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         ScalarResult or TableResult depending on return_table parameter.
@@ -199,6 +203,7 @@ async def single_agent[T: BaseModel](
                 include_research=include_research,
                 response_model=response_model,
                 return_table=return_table,
+                webhook_url=webhook_url,
             )
             return await cohort_task.await_result()
     cohort_task = await single_agent_async(
@@ -211,6 +216,7 @@ async def single_agent[T: BaseModel](
         include_research=include_research,
         response_model=response_model,
         return_table=return_table,
+        webhook_url=webhook_url,
     )
     return await cohort_task.await_result()
 
@@ -225,6 +231,7 @@ async def single_agent_async[T: BaseModel](
     include_research: bool | None = None,
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
+    webhook_url: str | None = None,
 ) -> EveryrowTask[T]:
     """Submit a single_agent task asynchronously."""
     input_data = _prepare_single_input(input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2)
@@ -241,6 +248,8 @@ async def single_agent_async[T: BaseModel](
         include_research=include_research if include_research is not None else UNSET,
         return_list=return_table,
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await single_agent_operations_single_agent_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
@@ -263,6 +272,7 @@ async def agent_map(
     include_research: bool | None = None,
     enforce_row_independence: bool = False,
     response_model: type[BaseModel] = DefaultAgentResponse,
+    webhook_url: str | None = None,
 ) -> TableResult:
     """Execute an AI agent task on each row of the input table.
 
@@ -276,6 +286,7 @@ async def agent_map(
         iteration_budget: Number of agent iterations per row (0-20). Required when effort_level is None.
         include_research: Include research notes. Required when effort_level is None.
         response_model: Pydantic model for the response schema.
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         TableResult containing the agent results merged with input rows.
@@ -294,6 +305,7 @@ async def agent_map(
                 include_research=include_research,
                 enforce_row_independence=enforce_row_independence,
                 response_model=response_model,
+                webhook_url=webhook_url,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -309,6 +321,7 @@ async def agent_map(
         include_research=include_research,
         enforce_row_independence=enforce_row_independence,
         response_model=response_model,
+        webhook_url=webhook_url,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -326,6 +339,7 @@ async def agent_map_async(
     include_research: bool | None = None,
     enforce_row_independence: bool = False,
     response_model: type[BaseModel] = DefaultAgentResponse,
+    webhook_url: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit an agent_map task asynchronously."""
     input_data = _prepare_table_input(input, AgentMapOperationInputType1Item)
@@ -343,6 +357,8 @@ async def agent_map_async(
         join_with_input=True,
         enforce_row_independence=enforce_row_independence,
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await agent_map_operations_agent_map_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
@@ -360,6 +376,7 @@ async def screen[T: BaseModel](
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
     response_model: type[T] | None = None,
+    webhook_url: str | None = None,
 ) -> TableResult:
     """Screen rows in a table using AI.
 
@@ -368,6 +385,7 @@ async def screen[T: BaseModel](
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
         response_model: Optional Pydantic model for the response schema.
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         TableResult containing the screened table
@@ -381,12 +399,13 @@ async def screen[T: BaseModel](
                 session=internal_session,
                 input=input,
                 response_model=response_model,
+                webhook_url=webhook_url,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
                 return result
             raise EveryrowError("Screen task did not return a table result")
-    cohort_task = await screen_async(task=task, session=session, input=input, response_model=response_model)
+    cohort_task = await screen_async(task=task, session=session, input=input, response_model=response_model, webhook_url=webhook_url)
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
@@ -398,6 +417,7 @@ async def screen_async[T: BaseModel](
     session: Session,
     input: DataFrame | UUID | TableResult,
     response_model: type[T] | None = None,
+    webhook_url: str | None = None,
 ) -> EveryrowTask[T]:
     """Submit a screen task asynchronously."""
     input_data = _prepare_table_input(input, ScreenOperationInputType1Item)
@@ -409,6 +429,8 @@ async def screen_async[T: BaseModel](
         session_id=session.session_id,
         response_schema=ScreenOperationResponseSchemaType0.from_dict(actual_response_model.model_json_schema()),
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await screen_operations_screen_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
@@ -433,6 +455,7 @@ async def rank[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
+    webhook_url: str | None = None,
 ) -> TableResult:
     """Rank rows in a table using AI.
 
@@ -444,6 +467,7 @@ async def rank[T: BaseModel](
         field_type: The type of the field (default: "float", ignored if response_model is provided)
         response_model: Optional Pydantic model for the response schema
         ascending_order: If True, sort in ascending order
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         TableResult containing the ranked table
@@ -460,6 +484,7 @@ async def rank[T: BaseModel](
                 field_type=field_type,
                 response_model=response_model,
                 ascending_order=ascending_order,
+                webhook_url=webhook_url,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -473,6 +498,7 @@ async def rank[T: BaseModel](
         field_type=field_type,
         response_model=response_model,
         ascending_order=ascending_order,
+        webhook_url=webhook_url,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -488,6 +514,7 @@ async def rank_async[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
+    webhook_url: str | None = None,
 ) -> EveryrowTask[T]:
     """Submit a rank task asynchronously."""
     input_data = _prepare_table_input(input, RankOperationInputType1Item)
@@ -520,6 +547,8 @@ async def rank_async[T: BaseModel](
         response_schema=RankOperationResponseSchemaType0.from_dict(response_schema),
         ascending=ascending_order,
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await rank_operations_rank_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
@@ -544,6 +573,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    webhook_url: str | None = None,
 ) -> MergeResult:
     """Merge two tables using AI.
 
@@ -555,6 +585,7 @@ async def merge(
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
         use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -577,6 +608,7 @@ async def merge(
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
                 use_web_search=use_web_search,
+                webhook_url=webhook_url,
             )
             return await merge_task.await_result()
     merge_task = await merge_async(
@@ -587,6 +619,7 @@ async def merge(
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
         use_web_search=use_web_search,
+        webhook_url=webhook_url,
     )
     return await merge_task.await_result()
 
@@ -599,6 +632,7 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    webhook_url: str | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
@@ -617,6 +651,8 @@ async def merge_async(
         use_web_search=use_web_search or UNSET,  # type: ignore
         session_id=session.session_id,
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await merge_operations_merge_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
@@ -633,6 +669,7 @@ async def dedupe(
     equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
+    webhook_url: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using AI.
 
@@ -640,6 +677,7 @@ async def dedupe(
         equivalence_relation: Description of what makes items equivalent
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult)
+        webhook_url: Optional URL to receive a POST callback when the task completes or fails.
 
     Returns:
         TableResult containing the deduped table
@@ -652,6 +690,7 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                webhook_url=webhook_url,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -661,6 +700,7 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        webhook_url=webhook_url,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -672,6 +712,7 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    webhook_url: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
@@ -681,6 +722,8 @@ async def dedupe_async(
         equivalence_relation=equivalence_relation,
         session_id=session.session_id,
     )
+    if webhook_url is not None:
+        body["webhook_url"] = webhook_url
 
     response = await dedupe_operations_dedupe_post.asyncio(client=session.client, body=body)
     response = handle_response(response)
