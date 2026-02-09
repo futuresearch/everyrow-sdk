@@ -168,10 +168,10 @@ def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
 
     # mb is a dict from additional_properties, access fields with .get()
     return MergeBreakdown(
-        exact=[tuple(p) for p in mb.get("exact", []) or []],
-        fuzzy=[tuple(p) for p in mb.get("fuzzy", []) or []],
-        llm=[tuple(p) for p in mb.get("llm", []) or []],
-        web=[tuple(p) for p in mb.get("web", []) or []],
+        exact=[(p[0], p[1]) for p in mb.get("exact", []) or []],
+        fuzzy=[(p[0], p[1]) for p in mb.get("fuzzy", []) or []],
+        llm=[(p[0], p[1]) for p in mb.get("llm", []) or []],
+        web=[(p[0], p[1]) for p in mb.get("web", []) or []],
         unmatched_left=list(mb.get("unmatched_left", []) or []),
         unmatched_right=list(mb.get("unmatched_right", []) or []),
     )
