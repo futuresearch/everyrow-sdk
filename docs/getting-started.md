@@ -19,7 +19,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here
 ```
 
-See [Installation](/installation) for other options (MCP servers, coding agent plugins).
+See [Installation](/docs/installation) for other options (MCP servers, coding agent plugins).
 
 ## Basic Example
 
