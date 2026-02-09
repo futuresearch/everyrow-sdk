@@ -6,6 +6,12 @@ description: Helps write Python code using the everyrow SDK for AI-powered data 
 # everyrow SDK
 
 The everyrow SDK provides intelligent data processing utilities powered by AI agents. Use this skill when writing Python code that needs to:
+
+> **Documentation**: For detailed guides, case studies, and API reference, see:
+> - Docs site: [everyrow.io/docs](https://everyrow.io/docs)
+> - GitHub: [github.com/futuresearch/everyrow-sdk](https://github.com/futuresearch/everyrow-sdk)
+
+**Operations:**
 - Rank/score rows based on qualitative criteria
 - Deduplicate data using semantic understanding
 - Merge tables using AI-powered matching
@@ -14,23 +20,125 @@ The everyrow SDK provides intelligent data processing utilities powered by AI ag
 
 ## Installation
 
+### Python SDK
+
 ```bash
 pip install everyrow
 ```
 
+### MCP Server (for Claude Code, Claude Desktop, Cursor, etc.)
+
+If an MCP server is available (`everyrow_screen`, `everyrow_rank`, etc. tools), you can use it directly without writing Python code. The MCP server operates on local CSV files.
+
+To install the MCP server, add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "everyrow": {
+      "command": "uvx",
+      "args": ["everyrow-mcp"],
+      "env": {
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Config file locations:
+- **Claude Code**: `~/.claude.json` (user) or `.mcp.json` (project)
+- **Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+- **Cursor**: `~/.cursor/mcp.json`
+
 ## Configuration
 
-Before writing any everyrow code, check if `EVERYROW_API_KEY` is set. If not, prompt the user:
+Before writing any everyrow code or using the MCP tools, check if `EVERYROW_API_KEY` is set. If not, prompt the user:
 
 > everyrow requires an API key. Do you have one?
 > - If yes, paste it here
-> - If no, get one at https://everyrow.io/api-key and paste it back
+> - If no, get one at https://everyrow.io/api-key ($20 free credit) and paste it back
 
 Once the user provides the key, set it:
 
 ```bash
 export EVERYROW_API_KEY=<their_key>
 ```
+
+## When to Use SDK vs MCP
+
+**Use MCP tools** when:
+- Quick one-off operations on CSV files
+- User wants direct results without writing code
+- Simple lookups and enrichments
+
+**Use Python SDK** when:
+- Complex multi-step workflows (dedupe → merge → research)
+- Custom data transformations
+- Integration with existing Python scripts
+- Full control over execution and intermediate results
+
+---
+
+# MCP Server Tools
+
+If you have the everyrow MCP server configured, these tools operate directly on CSV files.
+
+### everyrow_screen
+Filter CSV rows based on criteria that require judgment.
+```
+Parameters:
+- task: Natural language description of screening criteria
+- input_csv: Absolute path to input CSV
+- output_path: Directory or full .csv path for output
+```
+
+### everyrow_rank
+Score and sort CSV rows based on qualitative criteria.
+```
+Parameters:
+- task: Natural language description of ranking criteria
+- input_csv: Absolute path to input CSV
+- output_path: Directory or full .csv path for output
+- field_name: Name of the score field to add
+- field_type: Type of field (float, int, str, bool)
+- ascending_order: Sort direction (default: true)
+```
+
+### everyrow_dedupe
+Remove duplicate rows using semantic equivalence.
+```
+Parameters:
+- equivalence_relation: Natural language description of what makes rows duplicates
+- input_csv: Absolute path to input CSV
+- output_path: Directory or full .csv path for output
+- select_representative: Keep one row per duplicate group (default: true)
+```
+
+### everyrow_merge
+Join two CSV files using intelligent entity matching.
+```
+Parameters:
+- task: Natural language description of how to match rows
+- left_csv: Absolute path to primary CSV
+- right_csv: Absolute path to secondary CSV
+- output_path: Directory or full .csv path for output
+- merge_on_left: (optional) Column name in left table
+- merge_on_right: (optional) Column name in right table
+```
+
+### everyrow_agent
+Run web research agents on each row of a CSV.
+```
+Parameters:
+- task: Natural language description of research task
+- input_csv: Absolute path to input CSV
+- output_path: Directory or full .csv path for output
+```
+
+---
+
+# Python SDK Reference
 
 ## Results
 
@@ -56,9 +164,30 @@ result = await rank(
     task="Score by likelihood to need data integration solutions",
     input=leads_dataframe,
     field_name="integration_need_score",
+    ascending_order=False,  # highest first
 )
 print(result.data.head())
 ```
+
+**Structured output** - get more than just a score:
+
+```python
+from pydantic import BaseModel, Field
+
+class AcquisitionScore(BaseModel):
+    fit_score: float = Field(description="0-100, strategic alignment")
+    annual_revenue_usd: int = Field(description="Estimated annual revenue in USD")
+
+result = await rank(
+    task="Score acquisition targets by product-market fit",
+    input=potential_acquisitions,
+    field_name="fit_score",
+    response_model=AcquisitionScore,
+    ascending_order=False,
+)
+```
+
+Parameters: `task`, `input`, `field_name`, `field_type` (default: "float"), `response_model`, `ascending_order` (default: True), `preview`, `session`
 
 ### dedupe - Deduplicate data
 
@@ -74,7 +203,25 @@ result = await dedupe(
 print(result.data.head())
 ```
 
-Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record in each cluster).
+**Strategies** - control what happens after clusters are identified:
+
+- `"select"` (default): Pick the best representative from each cluster
+- `"identify"`: Cluster only, no selection (for manual review)
+- `"combine"`: Synthesize a single combined row per cluster
+
+```python
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Same legal entity",
+    strategy="select",
+    strategy_prompt="Prefer the record with the most complete contact information",
+)
+deduped = result.data[result.data["selected"] == True]
+```
+
+Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record when using select/combine strategy).
+
+Parameters: `input`, `equivalence_relation`, `strategy`, `strategy_prompt`, `session`
 
 ### merge - Merge tables with AI matching
 
@@ -92,6 +239,8 @@ result = await merge(
 )
 print(result.data.head())
 ```
+
+Parameters: `task`, `left_table`, `right_table`, `merge_on_left`, `merge_on_right`, `session`
 
 ### screen - Evaluate and filter rows
 
@@ -116,19 +265,66 @@ result = await screen(
 print(result.data.head())
 ```
 
+**Richer output** - add fields to understand why something passed:
+
+```python
+class VendorRisk(BaseModel):
+    approved: bool = Field(description="True if vendor is acceptable")
+    risk_level: str = Field(description="low / medium / high")
+    security_issues: str = Field(description="Any breaches or incidents")
+
+result = await screen(
+    task="Assess each vendor for enterprise use based on security incidents and financial stability",
+    input=vendors,
+    response_model=VendorRisk,
+)
+```
+
+Parameters: `task`, `input`, `response_model`, `session`
+
 ### single_agent - Single input task
 
 Run an AI agent on a single input:
 
 ```python
 from everyrow.ops import single_agent
+from pydantic import BaseModel
+
+class CompanyInput(BaseModel):
+    company: str
 
 result = await single_agent(
-    task="What is the capital of the given country?",
-    input={"country": "India"},
+    task="Find the company's most recent annual revenue and employee count",
+    input=CompanyInput(company="Stripe"),
 )
 print(result.data.head())
 ```
+
+**No input required** - agents can work without input data:
+
+```python
+result = await single_agent(
+    task="What company has reported the greatest cost reduction due to internal AI usage?",
+)
+```
+
+**Return a table** - generate datasets from scratch:
+
+```python
+from pydantic import BaseModel, Field
+
+class CompanyInfo(BaseModel):
+    company: str = Field(description="Company name")
+    market_cap: int = Field(description="Market cap in USD")
+
+result = await single_agent(
+    task="Find the three largest US healthcare companies by market cap",
+    response_model=CompanyInfo,
+    return_table=True,
+)
+```
+
+Parameters: `task`, `input`, `effort_level` (LOW/MEDIUM/HIGH), `response_model`, `return_table`, `session`
 
 ### agent_map - Batch processing
 
@@ -139,11 +335,34 @@ from everyrow.ops import agent_map
 from pandas import DataFrame
 
 result = await agent_map(
-    task="What is the capital of the given country?",
-    input=DataFrame([{"country": "India"}, {"country": "USA"}]),
+    task="Find this company's latest funding round and lead investors",
+    input=DataFrame([
+        {"company": "Anthropic"},
+        {"company": "OpenAI"},
+        {"company": "Mistral"},
+    ]),
 )
 print(result.data.head())
 ```
+
+**Effort levels** - control research thoroughness:
+
+- `LOW` (default): Quick lookups, basic web searches
+- `MEDIUM`: More thorough research, multiple sources
+- `HIGH`: Deep research, cross-referencing sources
+
+```python
+from everyrow.ops import agent_map
+from everyrow.types import EffortLevel
+
+result = await agent_map(
+    task="Comprehensive competitive analysis",
+    input=competitors,
+    effort_level=EffortLevel.HIGH,
+)
+```
+
+Parameters: `task`, `input`, `effort_level`, `response_model`, `session`
 
 ## Explicit Sessions
 
@@ -187,6 +406,39 @@ from everyrow import fetch_task_data
 
 # Recover results from a crashed script
 df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
+```
+
+## Chaining Operations
+
+Operations can be chained to build complete workflows. Each step's output feeds the next:
+
+```python
+from everyrow import create_session
+from everyrow.ops import screen, dedupe, rank
+
+async with create_session(name="Lead Pipeline") as session:
+    # 1. Filter to qualified leads
+    screened = await screen(
+        session=session,
+        task="Has a company email domain (not gmail, yahoo, etc.)",
+        input=leads,
+        response_model=ScreenResult,
+    )
+
+    # 2. Dedupe across sources
+    deduped = await dedupe(
+        session=session,
+        input=screened.data,
+        equivalence_relation="Same company, accounting for Inc/LLC variations",
+    )
+
+    # 3. Prioritize for outreach
+    ranked = await rank(
+        session=session,
+        task="Score by likelihood to convert",
+        input=deduped.data[deduped.data["selected"] == True],
+        field_name="conversion_score",
+    )
 ```
 
 ## Best Practices
