@@ -89,7 +89,7 @@ def _default_progress_output(progress: ProgressInfo, total: int, elapsed: float)
     pct = (progress.completed / total * 100) if total > 0 else 0
     parts = [
         f"{_ts()}   [{progress.completed}/{total}] {pct:3.0f}%",
-        f"| {progress.running} running, {progress.failed} failed",
+        f"| {progress.running} running" + (f", {progress.failed} failed" if progress.failed else ""),
     ]
     eta = _format_eta(progress.completed, total, elapsed)
     if eta:
@@ -184,8 +184,8 @@ def _maybe_show_plugin_hint() -> None:
         return
     _plugin_hint_shown = True
     print(
-        "Tip: For Claude Code / Codex, install the everyrow plugin for automatic progress tracking.\n"
-        "     See: https://everyrow.io/docs/installation",
+        "Tip: Use the plugin or MCP server for better management of long-running tasks.\n"
+        "     See: https://everyrow.io/docs/installation#tab-claude-code-plugin",
         file=sys.stderr,
         flush=True,
     )
@@ -266,7 +266,7 @@ async def await_task_completion(
             flush=True,
         )
         print(
-            f"{_ts()} Results: {succeeded} succeeded, {failed} failed",
+            f"{_ts()} Results: {succeeded} succeeded" + (f", {failed} failed" if failed else ""),
             file=sys.stderr,
             flush=True,
         )

@@ -305,19 +305,31 @@ Config file location:
 
 </InstallationTabs>
 
-## What to Expect
+## Sample output (Claude Code)
 
-After installing, try an operation:
+After installing the Claude Code plugin, try an operation:
 
-> "Rank companies.csv by likelihood to need data integration solutions"
+> "Find the headquarter city and country for each company in companies.csv"
 
-Here's what happens:
+Here's what you'll see in Claude Code:
 
-1. **Submit** (~1 second) — The operation starts and you get a session URL
-2. **Progress** (every ~15 seconds) — Updates appear in the conversation: "23/50 complete, 5 running"
-3. **Results** — A CSV file is saved with the output data
+```
+⏺ everyrow_agent_submit
+  ⎿  Submitted: 21 agents starting.
+     Session: https://everyrow.io/sessions/df2b0daa-...
 
-Operations typically take **1–10 minutes** depending on dataset size and operation type. The agent handles the waiting automatically.
+⏺ everyrow_progress
+  ⎿  Running: 4/21 complete, 4 running (16s elapsed)
+
+⏺ everyrow_progress
+  ⎿  Running: 17/21 complete, 4 running (46s elapsed)
+
+⏺ everyrow_progress
+  ⎿  Completed: 21/21 (0 failed) in 63s.
+
+⏺ everyrow_results
+  ⎿  Saved 20 rows to /Users/you/demo_results.csv
+```
 
 For a persistent progress bar in your terminal, see [Progress Monitoring](/docs/progress-monitoring).
 

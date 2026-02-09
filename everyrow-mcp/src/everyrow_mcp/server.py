@@ -798,7 +798,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     fail_part = f", {failed} failed" if failed else ""
     return [TextContent(type="text", text=(
         f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
-        f"Immediately call everyrow_progress(task_id='{task_id}'). Do not break this tool call chain."
+        f"Immediately call everyrow_progress(task_id='{task_id}')."
     ))]
 
 
