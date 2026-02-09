@@ -112,17 +112,13 @@ export function getNavigation(): NavSection[] {
 
   return [
     {
-      title: "Getting Started",
+      title: "Overview",
       items: [
+        { slug: "getting-started", title: "Getting Started" },
+        { slug: "chaining-operations", title: "Chaining Operations" },
         { slug: "installation", title: "Installation" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
       ],
-    },
-    {
-      title: "Guides",
-      items: guides
-        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp")
-        .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
       title: "API Reference",
@@ -130,6 +126,12 @@ export function getNavigation(): NavSection[] {
         slug: d.slug,
         title: d.title.replace(/^reference\//, ""),
       })),
+    },
+    {
+      title: "Guides",
+      items: guides
+        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp"].includes(d.slug))
+        .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
       title: "Case Studies",

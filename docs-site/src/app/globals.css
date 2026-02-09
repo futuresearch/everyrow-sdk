@@ -178,6 +178,42 @@ a:hover {
   color: inherit;
 }
 
+.code-block-wrapper {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.code-block-wrapper pre {
+  margin-bottom: 0;
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 0.25rem;
+  color: #94a3b8;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.code-block-wrapper:hover .copy-button {
+  opacity: 1;
+}
+
+.copy-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+}
+
+.copy-button:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .prose blockquote {
   border-left: 4px solid var(--accent);
   padding-left: 1rem;
@@ -331,6 +367,27 @@ a:hover {
   color: var(--accent);
 }
 
+.landing-quickstart ol {
+  margin: 0;
+  padding-left: 1.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.landing-quickstart ol > li {
+  margin-bottom: 0.75rem;
+}
+
+.landing-quickstart ul {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+
+.landing-quickstart ul > li {
+  margin-bottom: 0.25rem;
+}
+
 /* Installation tabs */
 .installation-tabs {
   margin-top: 1.5rem;
@@ -440,6 +497,98 @@ noscript + .installation-tabs .tab-content:first-child {
   border-top: none;
   margin-top: 0;
   padding-top: 0;
+}
+
+/* Chained operations stepper */
+.chained-ops-tabs {
+  --arrow-depth: 20px;
+  margin: 1.5rem 0;
+}
+
+.chained-ops-stepper {
+  display: flex;
+  gap: 0;
+}
+
+.chained-ops-step {
+  position: relative;
+  flex: 1;
+  padding: 0.75rem 1rem 0.75rem calc(var(--arrow-depth) + 0.75rem);
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  transition: filter 0.15s, transform 0.15s;
+  clip-path: polygon(0 0, calc(100% - var(--arrow-depth)) 0, 100% 50%, calc(100% - var(--arrow-depth)) 100%, 0 100%, var(--arrow-depth) 50%);
+}
+
+.chained-ops-step:not(:first-child) {
+  margin-left: calc(-1 * var(--arrow-depth));
+}
+
+.chained-ops-step:first-child {
+  clip-path: polygon(0 0, calc(100% - var(--arrow-depth)) 0, 100% 50%, calc(100% - var(--arrow-depth)) 100%, 0 100%);
+  padding-left: 1rem;
+}
+
+.chained-ops-step:last-child {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--arrow-depth) 50%);
+}
+
+/* Brand colors cycling: #4d4fc4, #cfcfff, #0f125b */
+.chained-ops-step:nth-child(1) { background: #4d4fc4; }
+.chained-ops-step:nth-child(2) { background: #cfcfff; color: #0f125b; }
+.chained-ops-step:nth-child(3) { background: #0f125b; }
+.chained-ops-step:nth-child(4) { background: #4d4fc4; }
+.chained-ops-step:nth-child(5) { background: #cfcfff; color: #0f125b; }
+
+.chained-ops-step:hover:not(.active) {
+  filter: brightness(1.1);
+  transform: scale(1.03);
+}
+
+.chained-ops-step.active {
+  filter: none;
+}
+
+.chained-ops-step.active .chained-ops-step-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.chained-ops-step.pulse {
+  animation: tabPulse 0.35s ease-in-out 2;
+}
+
+@keyframes tabPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.25);
+  }
+}
+
+.chained-ops-step-label {
+  position: relative;
+  z-index: 1;
+  transition: font-size 0.15s ease;
+}
+
+.chained-ops-content {
+  padding: 0;
+}
+
+.chained-ops-step-content {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Mobile responsive */
