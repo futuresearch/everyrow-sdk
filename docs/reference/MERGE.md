@@ -1,5 +1,5 @@
 ---
-title: merge
+title: "How to Join DataFrames Without a Common Key"
 description: API reference for EveryRow merge tool, which left-joins two Python Pandas DataFrames using LLM-powered agents to resolve key mappings.
 ---
 
