@@ -25,6 +25,7 @@ from everyrow.generated.models import (
     CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
+    DedupeOperationStrategy,
     LLMEnumPublic,
     MergeOperation,
     MergeOperationLeftInputType1Item,
@@ -633,16 +634,39 @@ async def dedupe(
     equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using AI.
 
     Args:
-        equivalence_relation: Description of what makes items equivalent
+        equivalence_relation: Natural-language description of what makes two rows
+            equivalent/duplicates. Be as specific as needed — the LLM uses this to
+            reason about equivalence, handling abbreviations, typos, name variations,
+            and entity relationships that string matching cannot capture.
         session: Optional session. If not provided, one will be created automatically.
-        input: The input table (DataFrame, UUID, or TableResult)
+        input: The input table (DataFrame, UUID, or TableResult).
+        strategy: Controls what happens after duplicate clusters are identified.
+            - "identify": Cluster only. Adds `equivalence_class_id` and
+              `equivalence_class_name` columns but does NOT select or remove any rows.
+              Use this when you want to review clusters before deciding what to do.
+            - "select" (default): Picks the best representative row from each cluster.
+              Adds `equivalence_class_id`, `equivalence_class_name`, and `selected`
+              columns. Rows with `selected=True` are the canonical records. To get the
+              deduplicated table: `result.data[result.data["selected"] == True]`.
+            - "combine": Synthesizes a single combined row per cluster by merging the
+              best information from all duplicates. Original rows are kept with
+              `selected=False`, and new combined rows are appended with `selected=True`.
+              Useful when no single row has all the information (e.g., one row has the
+              email, another has the phone number).
+        strategy_prompt: Optional natural-language instructions that guide how the LLM
+            selects or combines rows. Only used with "select" and "combine" strategies.
+            Examples: "Prefer the record with the most complete contact information",
+            "For each field, keep the most recent and complete value",
+            "Prefer records from the CRM system over spreadsheet imports".
 
     Returns:
-        TableResult containing the deduped table
+        TableResult containing the deduped table with cluster metadata columns.
     """
     if input is None:
         raise EveryrowError("input is required for dedupe")
@@ -652,6 +676,8 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                strategy=strategy,
+                strategy_prompt=strategy_prompt,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -661,6 +687,8 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        strategy=strategy,
+        strategy_prompt=strategy_prompt,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -672,6 +700,8 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
@@ -680,6 +710,8 @@ async def dedupe_async(
         input_=input_data,  # type: ignore
         equivalence_relation=equivalence_relation,
         session_id=session.session_id,
+        strategy=DedupeOperationStrategy(strategy) if strategy is not None else UNSET,
+        strategy_prompt=strategy_prompt if strategy_prompt is not None else UNSET,
     )
 
     response = await dedupe_operations_dedupe_post.asyncio(client=session.client, body=body)

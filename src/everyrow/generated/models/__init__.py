@@ -3,7 +3,9 @@
 from .agent_map_operation import AgentMapOperation
 from .agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item
 from .agent_map_operation_input_type_2 import AgentMapOperationInputType2
-from .agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
+from .agent_map_operation_response_schema_type_0 import (
+    AgentMapOperationResponseSchemaType0,
+)
 from .billing_response import BillingResponse
 from .create_artifact_request import CreateArtifactRequest
 from .create_artifact_request_data_type_0_item import CreateArtifactRequestDataType0Item
@@ -13,6 +15,7 @@ from .create_session import CreateSession
 from .dedupe_operation import DedupeOperation
 from .dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
 from .dedupe_operation_input_type_2 import DedupeOperationInputType2
+from .dedupe_operation_strategy import DedupeOperationStrategy
 from .error_response import ErrorResponse
 from .error_response_details_type_0 import ErrorResponseDetailsType0
 from .http_validation_error import HTTPValidationError
@@ -39,7 +42,9 @@ from .session_response import SessionResponse
 from .single_agent_operation import SingleAgentOperation
 from .single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
 from .single_agent_operation_input_type_2 import SingleAgentOperationInputType2
-from .single_agent_operation_response_schema_type_0 import SingleAgentOperationResponseSchemaType0
+from .single_agent_operation_response_schema_type_0 import (
+    SingleAgentOperationResponseSchemaType0,
+)
 from .task_result_response import TaskResultResponse
 from .task_result_response_data_type_0_item import TaskResultResponseDataType0Item
 from .task_result_response_data_type_1 import TaskResultResponseDataType1
@@ -61,6 +66,7 @@ __all__ = (
     "DedupeOperation",
     "DedupeOperationInputType1Item",
     "DedupeOperationInputType2",
+    "DedupeOperationStrategy",
     "ErrorResponse",
     "ErrorResponseDetailsType0",
     "HTTPValidationError",
