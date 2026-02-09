@@ -11,7 +11,10 @@ from ..models.task_status import TaskStatus
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
-    from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
+    from ..models.merge_breakdown_response import MergeBreakdownResponse
+    from ..models.task_result_response_data_type_0_item import (
+        TaskResultResponseDataType0Item,
+    )
     from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
 
 
@@ -28,6 +31,7 @@ class TaskResultResponse:
         data (list[TaskResultResponseDataType0Item] | None | TaskResultResponseDataType1 | Unset): Result data: list of
             records for tables, single record for scalars, null if not completed
         error (None | str | Unset): Error message (if the task failed)
+        merge_breakdown (MergeBreakdownResponse | None | Unset): Merge breakdown (only for merge tasks)
     """
 
     task_id: UUID
@@ -35,10 +39,14 @@ class TaskResultResponse:
     artifact_id: None | Unset | UUID = UNSET
     data: list[TaskResultResponseDataType0Item] | None | TaskResultResponseDataType1 | Unset = UNSET
     error: None | str | Unset = UNSET
+    merge_breakdown: MergeBreakdownResponse | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
+        from ..models.merge_breakdown_response import MergeBreakdownResponse
+        from ..models.task_result_response_data_type_1 import (
+            TaskResultResponseDataType1,
+        )
 
         task_id = str(self.task_id)
 
@@ -72,6 +80,14 @@ class TaskResultResponse:
         else:
             error = self.error
 
+        merge_breakdown: dict[str, Any] | None | Unset
+        if isinstance(self.merge_breakdown, Unset):
+            merge_breakdown = UNSET
+        elif isinstance(self.merge_breakdown, MergeBreakdownResponse):
+            merge_breakdown = self.merge_breakdown.to_dict()
+        else:
+            merge_breakdown = self.merge_breakdown
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -86,13 +102,20 @@ class TaskResultResponse:
             field_dict["data"] = data
         if error is not UNSET:
             field_dict["error"] = error
+        if merge_breakdown is not UNSET:
+            field_dict["merge_breakdown"] = merge_breakdown
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
-        from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
-        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
+        from ..models.merge_breakdown_response import MergeBreakdownResponse
+        from ..models.task_result_response_data_type_0_item import (
+            TaskResultResponseDataType0Item,
+        )
+        from ..models.task_result_response_data_type_1 import (
+            TaskResultResponseDataType1,
+        )
 
         d = dict(src_dict)
         task_id = UUID(d.pop("task_id"))
@@ -157,12 +180,30 @@ class TaskResultResponse:
 
         error = _parse_error(d.pop("error", UNSET))
 
+        def _parse_merge_breakdown(data: object) -> MergeBreakdownResponse | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                merge_breakdown_type_0 = MergeBreakdownResponse.from_dict(data)
+
+                return merge_breakdown_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(MergeBreakdownResponse | None | Unset, data)
+
+        merge_breakdown = _parse_merge_breakdown(d.pop("merge_breakdown", UNSET))
+
         task_result_response = cls(
             task_id=task_id,
             status=status,
             artifact_id=artifact_id,
             data=data,
             error=error,
+            merge_breakdown=merge_breakdown,
         )
 
         task_result_response.additional_properties = d
