@@ -1,6 +1,6 @@
 import asyncio
 from enum import StrEnum
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from pandas import DataFrame
@@ -166,14 +166,18 @@ def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
             unmatched_right=[],
         )
 
-    # mb is a dict from additional_properties, access fields with .get()
+    # mb is a dict from additional_properties (typed as Any), cast to concrete types
+    # for basedpyright compatibility
+    def _pairs(raw: Any) -> list[tuple[int, int]]:
+        return [(int(p[0]), int(p[1])) for p in cast(list[list[int]], raw or [])]
+
     return MergeBreakdown(
-        exact=[(p[0], p[1]) for p in mb.get("exact", []) or []],
-        fuzzy=[(p[0], p[1]) for p in mb.get("fuzzy", []) or []],
-        llm=[(p[0], p[1]) for p in mb.get("llm", []) or []],
-        web=[(p[0], p[1]) for p in mb.get("web", []) or []],
-        unmatched_left=list(mb.get("unmatched_left", []) or []),
-        unmatched_right=list(mb.get("unmatched_right", []) or []),
+        exact=_pairs(mb.get("exact")),
+        fuzzy=_pairs(mb.get("fuzzy")),
+        llm=_pairs(mb.get("llm")),
+        web=_pairs(mb.get("web")),
+        unmatched_left=cast(list[int], mb.get("unmatched_left") or []),
+        unmatched_right=cast(list[int], mb.get("unmatched_right") or []),
     )
 
 
