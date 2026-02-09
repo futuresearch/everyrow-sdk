@@ -178,7 +178,8 @@ The Claude Code plugin (`.claude-plugin/plugin.json`) bundles:
 
 Install with:
 ```bash
-claude plugin add futuresearch/everyrow-sdk
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
 ```
 
 See [Progress Monitoring](/docs/progress-monitoring) for status line setup and hook details.

@@ -15,7 +15,8 @@ The fastest way to use everyrow is through the Claude Code plugin, no Python nee
 
 **1. Install the plugin:**
 ```bash
-claude plugin add futuresearch/everyrow-sdk
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
 ```
 
 **2. Set your API key** (get one at [everyrow.io/api-key](https://everyrow.io/api-key), comes with $20 of free credits):
@@ -329,7 +330,8 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ### Claude Code
 [Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 ```sh
-claude plugin add futuresearch/everyrow-sdk
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
 ```
 
 ### Gemini CLI

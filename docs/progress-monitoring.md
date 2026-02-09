@@ -74,7 +74,15 @@ everyrow ████████░░░░░░░ 42/100 23s   view
 
 The "view" link is clickable in terminals that support OSC 8 hyperlinks (iTerm2, kitty, WezTerm, Windows Terminal) and opens the session dashboard in your browser.
 
-Requirements: The status line script requires `jq` (`brew install jq` on macOS, `apt install jq` on Linux).
+The status line and hook scripts require **jq** for JSON parsing:
+
+```bash
+# macOS
+brew install jq
+
+# Linux
+apt install jq
+```
 
 Note: After adding the config, restart Claude Code. Status line settings are loaded at startup only.
 
