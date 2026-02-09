@@ -27,9 +27,11 @@ class DedupeOperation:
             list of JSON objects
         equivalence_relation (str): Description of what makes two rows equivalent/duplicates
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
-        strategy (DedupeOperationStrategy | Unset): Strategy for handling duplicates: 'identify' (cluster only),
-            'select' (pick best), 'combine' (synthesize combined row) Default: DedupeOperationStrategy.SELECT.
-        strategy_prompt (None | str | Unset): Optional instructions guiding how selection or combining is performed
+        strategy (DedupeOperationStrategy | Unset): Controls what happens after duplicate clusters are identified.
+            IDENTIFY = cluster only (no selection/combining), SELECT = pick best representative per cluster (default),
+            COMBINE = synthesize a merged row per cluster from all duplicates. Default: DedupeOperationStrategy.SELECT.
+        strategy_prompt (None | str | Unset): Optional natural-language instructions guiding how the LLM selects or
+            combines rows (only used with SELECT and COMBINE strategies). Example: "Prefer the most complete record".
     """
 
     input_: DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID

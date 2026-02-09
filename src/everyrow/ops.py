@@ -640,15 +640,33 @@ async def dedupe(
     """Dedupe a table by removing duplicates using AI.
 
     Args:
-        equivalence_relation: Description of what makes items equivalent
+        equivalence_relation: Natural-language description of what makes two rows
+            equivalent/duplicates. Be as specific as needed — the LLM uses this to
+            reason about equivalence, handling abbreviations, typos, name variations,
+            and entity relationships that string matching cannot capture.
         session: Optional session. If not provided, one will be created automatically.
-        input: The input table (DataFrame, UUID, or TableResult)
-        strategy: Strategy for handling duplicates: 'identify' (cluster only),
-            'select' (pick best, default), 'combine' (synthesize combined row)
-        strategy_prompt: Optional instructions guiding how selection or combining is performed
+        input: The input table (DataFrame, UUID, or TableResult).
+        strategy: Controls what happens after duplicate clusters are identified.
+            - "identify": Cluster only. Adds `equivalence_class_id` and
+              `equivalence_class_name` columns but does NOT select or remove any rows.
+              Use this when you want to review clusters before deciding what to do.
+            - "select" (default): Picks the best representative row from each cluster.
+              Adds `equivalence_class_id`, `equivalence_class_name`, and `selected`
+              columns. Rows with `selected=True` are the canonical records. To get the
+              deduplicated table: `result.data[result.data["selected"] == True]`.
+            - "combine": Synthesizes a single combined row per cluster by merging the
+              best information from all duplicates. Original rows are kept with
+              `selected=False`, and new combined rows are appended with `selected=True`.
+              Useful when no single row has all the information (e.g., one row has the
+              email, another has the phone number).
+        strategy_prompt: Optional natural-language instructions that guide how the LLM
+            selects or combines rows. Only used with "select" and "combine" strategies.
+            Examples: "Prefer the record with the most complete contact information",
+            "For each field, keep the most recent and complete value",
+            "Prefer records from the CRM system over spreadsheet imports".
 
     Returns:
-        TableResult containing the deduped table
+        TableResult containing the deduped table with cluster metadata columns.
     """
     if input is None:
         raise EveryrowError("input is required for dedupe")
