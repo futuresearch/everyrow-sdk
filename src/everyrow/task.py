@@ -165,10 +165,10 @@ def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
         )
 
     return MergeBreakdown(
-        exact=[tuple(p) for p in mb.exact] if not isinstance(mb.exact, Unset) else [],
-        fuzzy=[tuple(p) for p in mb.fuzzy] if not isinstance(mb.fuzzy, Unset) else [],
-        llm=[tuple(p) for p in mb.llm] if not isinstance(mb.llm, Unset) else [],
-        web=[tuple(p) for p in mb.web] if not isinstance(mb.web, Unset) else [],
+        exact=[(p[0], p[1]) for p in mb.exact] if not isinstance(mb.exact, Unset) else [],
+        fuzzy=[(p[0], p[1]) for p in mb.fuzzy] if not isinstance(mb.fuzzy, Unset) else [],
+        llm=[(p[0], p[1]) for p in mb.llm] if not isinstance(mb.llm, Unset) else [],
+        web=[(p[0], p[1]) for p in mb.web] if not isinstance(mb.web, Unset) else [],
         unmatched_left=list(mb.unmatched_left) if not isinstance(mb.unmatched_left, Unset) else [],
         unmatched_right=list(mb.unmatched_right) if not isinstance(mb.unmatched_right, Unset) else [],
     )
