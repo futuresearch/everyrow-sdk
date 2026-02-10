@@ -1,10 +1,21 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { execSync } from "child_process";
 import { getAllNotebooks } from "./notebooks";
 
 // Path to the docs content directory (relative to project root)
 const DOCS_DIR = path.join(process.cwd(), "..", "docs");
+
+function getGitLastModified(filePath: string): Date {
+  const result = execSync(`git log -1 --format=%cI -- "${filePath}"`, {
+    encoding: "utf-8",
+  }).trim();
+  if (!result) {
+    throw new Error(`No git history found for ${filePath}`);
+  }
+  return new Date(result);
+}
 
 export interface DocMeta {
   slug: string;
@@ -12,6 +23,7 @@ export interface DocMeta {
   description?: string;
   category: string;
   format: "md" | "mdx";
+  lastModified: Date;
 }
 
 export interface Doc extends DocMeta {
@@ -59,6 +71,7 @@ export function getAllDocs(): DocMeta[] {
           description: data.description,
           category: getCategory(relativePath),
           format: isMdx ? "mdx" : "md",
+          lastModified: getGitLastModified(fullPath),
         });
       }
     }
@@ -85,6 +98,7 @@ export function getDocBySlug(slug: string): Doc | null {
         description: data.description,
         category: getCategory(baseSlug),
         format: ext === ".mdx" ? "mdx" : "md",
+        lastModified: getGitLastModified(fullPath),
         content,
       };
     }
