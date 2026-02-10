@@ -17,9 +17,10 @@ export function Sidebar({ navigation }: SidebarProps) {
 
   return (
     <aside className="docs-sidebar">
-      <Link href="/" className="docs-sidebar-logo">
-        Everyrow
-      </Link>
+      <div className="docs-sidebar-logo">
+        <a href="https://everyrow.io" className="docs-sidebar-logo-text">everyrow</a>
+        <Link href="/" className="docs-sidebar-logo-chip">docs</Link>
+      </div>
 
       {navigation.map((section) => (
         <div key={section.title} className="docs-sidebar-section">

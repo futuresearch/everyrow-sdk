@@ -6,14 +6,14 @@ import { getNavigation, type NavSection } from "@/utils/docs";
 export const metadata: Metadata = {
   title: "Everyrow Documentation",
   description:
-    "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+    "Run LLM Research Agents at Scale",
   alternates: {
     canonical: "https://everyrow.io/docs",
   },
   openGraph: {
     title: "Everyrow Documentation",
     description:
-      "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+      "Run LLM Research Agents at Scale",
     url: "https://everyrow.io/docs",
     images: [{ url: "https://everyrow.io/everyrow-og.png" }],
   },
@@ -109,10 +109,9 @@ export default function DocsHome() {
   return (
     <DocsLayout navigation={navigation}>
       <div className="landing-hero">
-        <h1 className="landing-title">everyrow documentation</h1>
+        <h1 className="landing-title"><span className="landing-title-brand">everyrow</span> documentation</h1>
         <p className="landing-subtitle">
-          Process every row of your data with AI-powered research, deduplication,
-          merging, ranking, and screening.
+          Run LLM Research Agents at Scale
         </p>
       </div>
 

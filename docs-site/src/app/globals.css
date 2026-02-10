@@ -3,8 +3,11 @@
   --background: #ffffff;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --accent: #2563eb;
-  --accent-light: #dbeafe;
+  --accent: #4D4FBD;
+  --accent-light: #f0f0ff;
+  --brand-primary: #0F1257;
+  --brand-secondary: #1D1F8A;
+  --brand-accent: #9294F0;
   --code-bg: #f3f4f6;
   --code-block-bg: #1e293b;
 }
@@ -19,7 +22,7 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--foreground);
   background: var(--background);
 }
@@ -49,11 +52,35 @@ a:hover {
 }
 
 .docs-sidebar-logo {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--foreground);
   margin-bottom: 2rem;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.docs-sidebar-logo-text {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.docs-sidebar-logo-text:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.docs-sidebar-logo-chip {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 0.125rem 0.4rem;
+  border-radius: 0.25rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
 }
 
 .docs-sidebar-section {
@@ -102,11 +129,42 @@ a:hover {
 .docs-content {
   flex: 1;
   overflow-y: auto;
+  position: relative;
+}
+
+.docs-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1.5rem;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-futuresearch-link {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 300;
+  color: var(--brand-primary);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.docs-futuresearch-link:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.docs-futuresearch-link .highlight {
+  color: var(--brand-accent);
+  font-weight: 400;
 }
 
 .docs-content-inner {
   max-width: 900px;
-  padding: 3rem 4rem;
+  padding: 1.8rem 2.4rem;
 }
 
 /* Prose styles for markdown content */
@@ -157,7 +215,7 @@ a:hover {
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
-  font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
 }
 
 .prose pre {
@@ -267,6 +325,12 @@ a:hover {
   line-height: 1.2;
 }
 
+.landing-title-brand {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  color: var(--brand-primary);
+  font-weight: 600;
+}
+
 .landing-subtitle {
   font-size: 1.125rem;
   color: var(--muted);
@@ -293,7 +357,7 @@ a:hover {
 
 .landing-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 4px 12px rgba(77, 79, 189, 0.1);
   text-decoration: none;
 }
 
@@ -354,7 +418,7 @@ a:hover {
   border-radius: 0.5rem;
   margin-bottom: 0.75rem;
   font-size: 0.875rem;
-  font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", monospace;
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
 }
 
 .landing-quickstart p {
@@ -606,7 +670,7 @@ noscript + .installation-tabs .tab-content:first-child {
   }
 
   .docs-content-inner {
-    padding: 2rem 1.5rem;
+    padding: 1.2rem 0.9rem;
   }
 
   .landing-grid {

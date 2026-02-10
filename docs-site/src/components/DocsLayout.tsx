@@ -12,6 +12,16 @@ export function DocsLayout({ navigation, children }: DocsLayoutProps) {
     <div className="docs-layout">
       <Sidebar navigation={navigation} />
       <main className="docs-content">
+        <div className="docs-top-bar">
+          <a
+            href="https://futuresearch.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="docs-futuresearch-link"
+          >
+            by futu<span className="highlight">re</span>search
+          </a>
+        </div>
         <div className="docs-content-inner">
           {children}
           <CodeBlockEnhancer />
