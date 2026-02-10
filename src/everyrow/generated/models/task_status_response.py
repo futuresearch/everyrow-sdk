@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import UUID
 
 from attrs import define as _attrs_define
@@ -12,6 +12,10 @@ from dateutil.parser import isoparse
 from ..models.public_task_type import PublicTaskType
 from ..models.task_status import TaskStatus
 from ..types import UNSET, Unset
+
+if TYPE_CHECKING:
+    from ..models.task_progress_info import TaskProgressInfo
+
 
 T = TypeVar("T", bound="TaskStatusResponse")
 
@@ -26,6 +30,7 @@ class TaskStatusResponse:
         task_type (PublicTaskType):
         created_at (datetime.datetime | None): When the task was created
         updated_at (datetime.datetime | None): When the task was last updated
+        progress (None | TaskProgressInfo): Subtask progress counts (available while task is running)
         artifact_id (None | Unset | UUID): Result artifact ID (if the task completed)
         error (None | str | Unset): Error message (if the task failed)
     """
@@ -36,11 +41,14 @@ class TaskStatusResponse:
     task_type: PublicTaskType
     created_at: datetime.datetime | None
     updated_at: datetime.datetime | None
+    progress: None | TaskProgressInfo
     artifact_id: None | Unset | UUID = UNSET
     error: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        from ..models.task_progress_info import TaskProgressInfo
+
         task_id = str(self.task_id)
 
         session_id = str(self.session_id)
@@ -60,6 +68,12 @@ class TaskStatusResponse:
             updated_at = self.updated_at.isoformat()
         else:
             updated_at = self.updated_at
+
+        progress: dict[str, Any] | None
+        if isinstance(self.progress, TaskProgressInfo):
+            progress = self.progress.to_dict()
+        else:
+            progress = self.progress
 
         artifact_id: None | str | Unset
         if isinstance(self.artifact_id, Unset):
@@ -85,6 +99,7 @@ class TaskStatusResponse:
                 "task_type": task_type,
                 "created_at": created_at,
                 "updated_at": updated_at,
+                "progress": progress,
             }
         )
         if artifact_id is not UNSET:
@@ -96,6 +111,8 @@ class TaskStatusResponse:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.task_progress_info import TaskProgressInfo
+
         d = dict(src_dict)
         task_id = UUID(d.pop("task_id"))
 
@@ -135,6 +152,21 @@ class TaskStatusResponse:
 
         updated_at = _parse_updated_at(d.pop("updated_at"))
 
+        def _parse_progress(data: object) -> None | TaskProgressInfo:
+            if data is None:
+                return data
+            try:
+                if not isinstance(data, dict):
+                    raise TypeError()
+                progress_type_0 = TaskProgressInfo.from_dict(data)
+
+                return progress_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(None | TaskProgressInfo, data)
+
+        progress = _parse_progress(d.pop("progress"))
+
         def _parse_artifact_id(data: object) -> None | Unset | UUID:
             if data is None:
                 return data
@@ -168,6 +200,7 @@ class TaskStatusResponse:
             task_type=task_type,
             created_at=created_at,
             updated_at=updated_at,
+            progress=progress,
             artifact_id=artifact_id,
             error=error,
         )

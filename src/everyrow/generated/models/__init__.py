@@ -40,6 +40,7 @@ from .single_agent_operation import SingleAgentOperation
 from .single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
 from .single_agent_operation_input_type_2 import SingleAgentOperationInputType2
 from .single_agent_operation_response_schema_type_0 import SingleAgentOperationResponseSchemaType0
+from .task_progress_info import TaskProgressInfo
 from .task_result_response import TaskResultResponse
 from .task_result_response_data_type_0_item import TaskResultResponseDataType0Item
 from .task_result_response_data_type_1 import TaskResultResponseDataType1
@@ -88,6 +89,7 @@ __all__ = (
     "SingleAgentOperationInputType1Item",
     "SingleAgentOperationInputType2",
     "SingleAgentOperationResponseSchemaType0",
+    "TaskProgressInfo",
     "TaskResultResponse",
     "TaskResultResponseDataType0Item",
     "TaskResultResponseDataType1",
