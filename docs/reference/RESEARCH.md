@@ -130,3 +130,13 @@ companies = await single_agent(
     return_table=True,  # Return a table of companies
 )
 ```
+
+## Related docs
+
+### Guides
+- [Add a Column with Web Lookup](/add-column-web-lookup)
+- [Classify and Label Data with an LLM](/classify-dataframe-rows-llm)
+
+### Notebooks
+- [Agent Map Regulatory Status](/notebooks/agent-map-regulatory-status)
+- [LLM Web Research Agents at Scale](/notebooks/llm-web-research-agents-at-scale)

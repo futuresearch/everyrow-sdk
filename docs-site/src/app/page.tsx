@@ -33,6 +33,12 @@ const SECTION_DESCRIPTIONS: Record<string, string> = {
   "Case Studies": "Real-world examples with Jupyter notebooks",
 };
 
+const SECTION_LINKS: Record<string, string> = {
+  "API Reference": "/api",
+  Guides: "/guides",
+  "Case Studies": "/notebooks",
+};
+
 const SECTION_DISPLAY_TITLES: Record<string, string> = {
   Overview: "Getting Started",
 };
@@ -44,8 +50,10 @@ function SectionCard({ section }: { section: NavSection }) {
 
   if (!firstItem) return null;
 
+  const href = SECTION_LINKS[section.title] || `/${firstItem.slug}`;
+
   return (
-    <Link href={`/${firstItem.slug}`} className="landing-card">
+    <Link href={href} className="landing-card">
       <div className="landing-card-icon" data-icon={icon}>
         {icon === "rocket" && (
           <svg

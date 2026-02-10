@@ -94,6 +94,12 @@ a:hover {
   letter-spacing: 0.05em;
   color: var(--muted);
   margin-bottom: 0.5rem;
+  text-decoration: none;
+  display: block;
+}
+
+a.docs-sidebar-section-title:hover {
+  color: var(--foreground);
 }
 
 .docs-sidebar-nav {
