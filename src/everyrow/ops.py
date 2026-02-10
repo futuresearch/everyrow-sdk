@@ -545,6 +545,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    one_on_one: bool | None = None,
 ) -> MergeResult:
     """Merge two tables using AI.
 
@@ -556,6 +557,7 @@ async def merge(
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
         use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
+        one_on_one: Optional boolean parameter for one-on-one merge mode. Defaults to None/False.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -578,6 +580,7 @@ async def merge(
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
                 use_web_search=use_web_search,
+                one_on_one=one_on_one,
             )
             return await merge_task.await_result()
     merge_task = await merge_async(
@@ -588,6 +591,7 @@ async def merge(
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
         use_web_search=use_web_search,
+        one_on_one=one_on_one,
     )
     return await merge_task.await_result()
 
@@ -600,6 +604,7 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    one_on_one: bool | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
@@ -616,6 +621,7 @@ async def merge_async(
         left_key=merge_on_left or UNSET,
         right_key=merge_on_right or UNSET,
         use_web_search=use_web_search or UNSET,  # type: ignore
+        one_on_one=one_on_one or UNSET,  # type: ignore
         session_id=session.session_id,
     )
 

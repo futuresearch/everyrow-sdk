@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from everyrow.generated.types import Unset
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import UUID
 
@@ -34,6 +35,7 @@ class MergeOperation:
         use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
             tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
             without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
+        one_on_one (bool | None | Unset): Optional boolean parameter for one-on-one merge mode. Defaults to None/False.
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
@@ -43,6 +45,7 @@ class MergeOperation:
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
     use_web_search: MergeOperationUseWebSearchType0 | None | Unset = MergeOperationUseWebSearchType0.AUTO
+    one_on_one: bool | None | Unset = UNSET
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -93,6 +96,12 @@ class MergeOperation:
         else:
             use_web_search = self.use_web_search
 
+        one_on_one: bool | None | Unset
+        if isinstance(self.one_on_one, Unset):
+            one_on_one = UNSET
+        else:
+            one_on_one = self.one_on_one
+
         session_id: None | str | Unset
         if isinstance(self.session_id, Unset):
             session_id = UNSET
@@ -116,6 +125,8 @@ class MergeOperation:
             field_dict["right_key"] = right_key
         if use_web_search is not UNSET:
             field_dict["use_web_search"] = use_web_search
+        if one_on_one is not UNSET:
+            field_dict["one_on_one"] = one_on_one
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
 
@@ -231,6 +242,15 @@ class MergeOperation:
 
         use_web_search = _parse_use_web_search(d.pop("use_web_search", UNSET))
 
+        def _parse_one_on_one(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        one_on_one: bool | Unset | None = _parse_one_on_one(d.pop("one_on_one", UNSET))
+
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
                 return data
@@ -255,6 +275,7 @@ class MergeOperation:
             left_key=left_key,
             right_key=right_key,
             use_web_search=use_web_search,
+            one_on_one=one_on_one,
             session_id=session_id,
         )
 
