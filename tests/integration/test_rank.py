@@ -10,7 +10,7 @@ from everyrow.result import TableResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_rank_returns_sorted_table_ascending():
+async def test_rank_returns_sorted_table_ascending(session):
     """Test that rank returns a TableResult sorted ascending."""
     input_df = pd.DataFrame(
         [
@@ -26,6 +26,7 @@ async def test_rank_returns_sorted_table_ascending():
         field_name="population",
         field_type="int",
         ascending_order=True,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -38,7 +39,7 @@ async def test_rank_returns_sorted_table_ascending():
     assert result.data.iloc[0]["country"] == "Vatican City"
 
 
-async def test_rank_descending_order():
+async def test_rank_descending_order(session):
     """Test rank with descending order."""
     input_df = pd.DataFrame(
         [
@@ -54,6 +55,7 @@ async def test_rank_descending_order():
         field_name="population",
         field_type="int",
         ascending_order=False,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -64,7 +66,7 @@ async def test_rank_descending_order():
     assert result.data.iloc[0]["country"] == "India"
 
 
-async def test_rank_with_custom_response_model():
+async def test_rank_with_custom_response_model(session):
     """Test rank with a custom response model."""
 
     class CountryMetrics(BaseModel):
@@ -85,6 +87,7 @@ async def test_rank_with_custom_response_model():
         field_name="population_millions",
         response_model=CountryMetrics,
         ascending_order=False,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -94,7 +97,7 @@ async def test_rank_with_custom_response_model():
     assert result.data.iloc[0]["country"] == "Brazil"
 
 
-async def test_rank_validates_field_in_response_model():
+async def test_rank_validates_field_in_response_model(session):
     """Test that rank validates field_name exists in response_model."""
 
     class WrongModel(BaseModel):
@@ -108,4 +111,5 @@ async def test_rank_validates_field_in_response_model():
             input=input_df,
             field_name="population",
             response_model=WrongModel,
+            session=session,
         )

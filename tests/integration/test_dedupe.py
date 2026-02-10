@@ -9,7 +9,7 @@ from everyrow.result import TableResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_dedupe_returns_table_with_equivalence_fields(papers_df):
+async def test_dedupe_returns_table_with_equivalence_fields(papers_df, session):
     """Test that dedupe returns a TableResult with equivalence class fields."""
     result = await dedupe(
         equivalence_relation="""
@@ -18,6 +18,7 @@ async def test_dedupe_returns_table_with_equivalence_fields(papers_df):
             are considered duplicates.
         """,
         input=papers_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -26,7 +27,7 @@ async def test_dedupe_returns_table_with_equivalence_fields(papers_df):
     assert "selected" in result.data.columns
 
 
-async def test_dedupe_identifies_duplicates(papers_df):
+async def test_dedupe_identifies_duplicates(papers_df, session):
     """Test that dedupe correctly identifies duplicate papers."""
     result = await dedupe(
         equivalence_relation="""
@@ -35,6 +36,7 @@ async def test_dedupe_identifies_duplicates(papers_df):
             "Attention Is All You Need" appears twice - once as NeurIPS and once as arXiv.
         """,
         input=papers_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -53,7 +55,7 @@ async def test_dedupe_identifies_duplicates(papers_df):
     assert attention_class != bert_class
 
 
-async def test_dedupe_selects_one_per_class():
+async def test_dedupe_selects_one_per_class(session):
     """Test that dedupe marks exactly one entry as selected per equivalence class."""
     input_df = pd.DataFrame(
         [
@@ -69,6 +71,7 @@ async def test_dedupe_selects_one_per_class():
             "Paper A - Preprint" and "Paper A - Published" are the same paper.
         """,
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -82,7 +85,7 @@ async def test_dedupe_selects_one_per_class():
         )
 
 
-async def test_dedupe_unique_items_all_selected():
+async def test_dedupe_unique_items_all_selected(session):
     """Test that unique (non-duplicate) items each get their own class and are selected."""
     input_df = pd.DataFrame(
         [
@@ -95,6 +98,7 @@ async def test_dedupe_unique_items_all_selected():
     result = await dedupe(
         equivalence_relation="Items are duplicates only if they are the exact same fruit name.",
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -104,7 +108,7 @@ async def test_dedupe_unique_items_all_selected():
     assert result.data["selected"].all()  # pyright: ignore[reportGeneralTypeIssues]
 
 
-async def test_dedupe_identify_strategy_no_selection():
+async def test_dedupe_identify_strategy_no_selection(session):
     """Test that identify strategy clusters but does not add a 'selected' column."""
     input_df = pd.DataFrame(
         [
@@ -121,6 +125,7 @@ async def test_dedupe_identify_strategy_no_selection():
         """,
         input=input_df,
         strategy="identify",
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -129,7 +134,7 @@ async def test_dedupe_identify_strategy_no_selection():
     assert "selected" not in result.data.columns
 
 
-async def test_dedupe_combine_strategy_creates_combined_rows():
+async def test_dedupe_combine_strategy_creates_combined_rows(session):
     """Test that combine strategy produces combined rows marked as selected."""
     input_df = pd.DataFrame(
         [
@@ -146,6 +151,7 @@ async def test_dedupe_combine_strategy_creates_combined_rows():
         """,
         input=input_df,
         strategy="combine",
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -157,7 +163,7 @@ async def test_dedupe_combine_strategy_creates_combined_rows():
     assert len(selected_rows) >= 1
 
 
-async def test_dedupe_select_strategy_explicit():
+async def test_dedupe_select_strategy_explicit(session):
     """Test that explicitly passing strategy='select' works the same as the default."""
     input_df = pd.DataFrame(
         [
@@ -170,6 +176,7 @@ async def test_dedupe_select_strategy_explicit():
         equivalence_relation="Items are duplicates only if they are the exact same fruit name.",
         input=input_df,
         strategy="select",
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -179,7 +186,7 @@ async def test_dedupe_select_strategy_explicit():
     assert result.data["selected"].all()  # pyright: ignore[reportGeneralTypeIssues]
 
 
-async def test_dedupe_with_strategy_prompt():
+async def test_dedupe_with_strategy_prompt(session):
     """Test that strategy_prompt parameter is accepted."""
     input_df = pd.DataFrame(
         [
@@ -197,6 +204,7 @@ async def test_dedupe_with_strategy_prompt():
         input=input_df,
         strategy="select",
         strategy_prompt="Always prefer the published version over the preprint.",
+        session=session,
     )
 
     assert isinstance(result, TableResult)

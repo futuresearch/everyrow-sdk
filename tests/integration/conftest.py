@@ -1,10 +1,15 @@
 """Shared fixtures and configuration for integration tests."""
 
 import os
+from collections.abc import AsyncGenerator
+from datetime import datetime
 
 import pandas as pd
 import pytest
+import pytest_asyncio
 from pydantic import BaseModel, Field
+
+from everyrow.session import Session, create_session
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -12,6 +17,14 @@ def require_api_key():
     """Fail integration tests if EVERYROW_API_KEY is not set."""
     if not os.environ.get("EVERYROW_API_KEY"):
         pytest.fail("EVERYROW_API_KEY environment variable not set")
+
+
+@pytest_asyncio.fixture(scope="session")
+async def session() -> AsyncGenerator[Session, None]:
+    """Create a single shared session for all integration tests."""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    async with create_session(name=f"integration-tests-{timestamp}") as sess:
+        yield sess
 
 
 # ============================================================================

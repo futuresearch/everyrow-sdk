@@ -10,7 +10,7 @@ from everyrow.result import TableResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_screen_returns_table_with_passes_field():
+async def test_screen_returns_table_with_passes_field(session):
     """Test that screen returns a TableResult with passes boolean."""
     input_df = pd.DataFrame(
         [
@@ -22,6 +22,7 @@ async def test_screen_returns_table_with_passes_field():
     result = await screen(
         task="Screen items for safety as food/drink. Pass only items safe for human consumption.",
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -32,7 +33,7 @@ async def test_screen_returns_table_with_passes_field():
     assert result.data["passes"].all()  # pyright: ignore[reportGeneralTypeIssues]
 
 
-async def test_screen_filters_out_failing_items():
+async def test_screen_filters_out_failing_items(session):
     """Test that screen filters out items that don't pass."""
     input_df = pd.DataFrame(
         [
@@ -45,6 +46,7 @@ async def test_screen_filters_out_failing_items():
     result = await screen(
         task="Screen items for safety as food/drink. Pass only items safe for human consumption. Arsenic is toxic and must fail.",
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -60,7 +62,7 @@ async def test_screen_filters_out_failing_items():
     assert result.data["passes"].all()  # pyright: ignore[reportGeneralTypeIssues]
 
 
-async def test_screen_with_custom_response_model():
+async def test_screen_with_custom_response_model(session):
     """Test screen with a custom response model adds fields to research."""
 
     class SafetyAssessment(BaseModel):
@@ -80,6 +82,7 @@ async def test_screen_with_custom_response_model():
         task="Assess safety for human consumption. Milk is safe.",
         input=input_df,
         response_model=SafetyAssessment,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
