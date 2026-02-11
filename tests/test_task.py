@@ -3,13 +3,14 @@
 import json
 import uuid
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from everyrow.constants import EveryrowError
 from everyrow.generated.models import (
     PublicTaskType,
+    TaskProgressInfo,
     TaskStatus,
     TaskStatusResponse,
 )
@@ -23,22 +24,19 @@ from everyrow.task import (
 
 def _make_status(
     status: TaskStatus = TaskStatus.PENDING,
-    progress: dict | None = None,
+    progress: TaskProgressInfo | None = None,
     error: str | None = None,
 ) -> TaskStatusResponse:
-    resp = TaskStatusResponse(
+    return TaskStatusResponse(
         task_id=uuid.uuid4(),
         session_id=uuid.uuid4(),
         status=status,
         task_type=PublicTaskType.AGENT,
         created_at=datetime.now(),
         updated_at=datetime.now(),
+        progress=progress,
+        error=error,
     )
-    if progress is not None:
-        resp.additional_properties["progress"] = progress
-    if error is not None:
-        resp.error = error
-    return resp
 
 
 # --- ProgressInfo tests ---
@@ -73,7 +71,13 @@ class TestGetProgress:
 
     def test_returns_progress_info(self):
         status = _make_status(
-            progress={"pending": 0, "running": 1, "completed": 9, "failed": 0, "total": 10}
+            progress=TaskProgressInfo(
+                pending=0,
+                running=1,
+                completed=9,
+                failed=0,
+                total=10,
+            )
         )
         info = _get_progress(status)
         assert info is not None
@@ -122,12 +126,19 @@ def jsonl_tmp(tmp_path, monkeypatch):
     everyrow_dir = tmp_path / ".everyrow"
     everyrow_dir.mkdir()
     log_path = everyrow_dir / "progress.jsonl"
-    monkeypatch.setattr("everyrow.task.os.path.expanduser", lambda p: str(log_path) if "progress.jsonl" in p else p)
+    monkeypatch.setattr(
+        "everyrow.task.os.path.expanduser",
+        lambda p: str(log_path) if "progress.jsonl" in p else p,
+    )
     return log_path
 
 
 @pytest.mark.asyncio
-async def test_immediate_completion(mocker, mock_client, jsonl_tmp):
+async def test_immediate_completion(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """Task already completed on first poll — no progress output."""
     mock_status = mocker.patch(
         "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
@@ -141,19 +152,35 @@ async def test_immediate_completion(mocker, mock_client, jsonl_tmp):
 
 
 @pytest.mark.asyncio
-async def test_progress_callback_fires_on_change(mocker, mock_client, jsonl_tmp):
+async def test_progress_callback_fires_on_change(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """on_progress callback fires when snapshot changes."""
     task_id = uuid.uuid4()
     callback = MagicMock()
 
     statuses = [
-        _make_status(TaskStatus.PENDING, {"pending": 5, "running": 0, "completed": 0, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.PENDING, {"pending": 3, "running": 2, "completed": 0, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.PENDING, {"pending": 1, "running": 2, "completed": 2, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=5, running=0, completed=0, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=3, running=2, completed=0, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=1, running=2, completed=2, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
+        ),
     ]
 
-    mock_status = mocker.patch(
+    mocker.patch(
         "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
         new_callable=AsyncMock,
         side_effect=statuses,
@@ -173,17 +200,30 @@ async def test_progress_callback_fires_on_change(mocker, mock_client, jsonl_tmp)
 
 
 @pytest.mark.asyncio
-async def test_callback_skips_duplicate_snapshot(mocker, mock_client, jsonl_tmp):
+async def test_callback_skips_duplicate_snapshot(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """on_progress callback does NOT fire when snapshot is unchanged."""
     task_id = uuid.uuid4()
     callback = MagicMock()
 
-    same_progress = {"pending": 3, "running": 2, "completed": 0, "failed": 0, "total": 5}
+    same_progress = TaskProgressInfo(
+        pending=3,
+        running=2,
+        completed=0,
+        failed=0,
+        total=5,
+    )
     statuses = [
         _make_status(TaskStatus.PENDING, same_progress),
         _make_status(TaskStatus.PENDING, same_progress),  # duplicate
         _make_status(TaskStatus.PENDING, same_progress),  # duplicate
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
+        ),
     ]
 
     mocker.patch(
@@ -204,8 +244,14 @@ async def test_jsonl_log_written(mocker, mock_client, jsonl_tmp):
     task_id = uuid.uuid4()
 
     statuses = [
-        _make_status(TaskStatus.PENDING, {"pending": 5, "running": 0, "completed": 0, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=5, running=0, completed=0, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
+        ),
     ]
 
     mocker.patch(
@@ -227,13 +273,24 @@ async def test_jsonl_log_written(mocker, mock_client, jsonl_tmp):
 
 
 @pytest.mark.asyncio
-async def test_stderr_output_format(mocker, mock_client, jsonl_tmp, capsys):
+async def test_stderr_output_format(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+    capsys,
+):
     """Default progress output writes to stderr in expected format."""
     task_id = uuid.uuid4()
 
     statuses = [
-        _make_status(TaskStatus.PENDING, {"pending": 3, "running": 2, "completed": 0, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=3, running=2, completed=0, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
+        ),
     ]
 
     mocker.patch(
@@ -252,7 +309,11 @@ async def test_stderr_output_format(mocker, mock_client, jsonl_tmp, capsys):
 
 
 @pytest.mark.asyncio
-async def test_failed_task_raises(mocker, mock_client, jsonl_tmp):
+async def test_failed_task_raises(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """A task that ends in FAILED raises EveryrowError."""
     task_id = uuid.uuid4()
 
@@ -262,14 +323,16 @@ async def test_failed_task_raises(mocker, mock_client, jsonl_tmp):
         return_value=_make_status(TaskStatus.FAILED, error="Something went wrong"),
     )
 
-    from everyrow.constants import EveryrowError
-
     with pytest.raises(EveryrowError, match="Task failed"):
         await await_task_completion(task_id, mock_client)
 
 
 @pytest.mark.asyncio
-async def test_revoked_task_raises(mocker, mock_client, jsonl_tmp):
+async def test_revoked_task_raises(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """A task that ends in REVOKED raises EveryrowError."""
     task_id = uuid.uuid4()
 
@@ -279,20 +342,22 @@ async def test_revoked_task_raises(mocker, mock_client, jsonl_tmp):
         return_value=_make_status(TaskStatus.REVOKED),
     )
 
-    from everyrow.constants import EveryrowError
-
     with pytest.raises(EveryrowError, match="revoked"):
         await await_task_completion(task_id, mock_client)
 
 
 @pytest.mark.asyncio
-async def test_retries_on_transient_error(mocker, mock_client, jsonl_tmp):
+async def test_retries_on_transient_error(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """Transient status fetch errors are retried up to max_retries."""
     task_id = uuid.uuid4()
 
     call_count = 0
 
-    async def status_with_error(*args, **kwargs):
+    async def status_with_error(*_args, **_kwargs):
         nonlocal call_count
         call_count += 1
         if call_count <= 2:
@@ -310,7 +375,11 @@ async def test_retries_on_transient_error(mocker, mock_client, jsonl_tmp):
 
 
 @pytest.mark.asyncio
-async def test_retries_exhausted_raises(mocker, mock_client, jsonl_tmp):
+async def test_retries_exhausted_raises(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+):
     """Exceeding max_retries raises EveryrowError."""
     task_id = uuid.uuid4()
 
@@ -319,20 +388,29 @@ async def test_retries_exhausted_raises(mocker, mock_client, jsonl_tmp):
         side_effect=ConnectionError("persistent failure"),
     )
 
-    from everyrow.constants import EveryrowError
-
     with pytest.raises(EveryrowError, match="retries"):
         await await_task_completion(task_id, mock_client)
 
 
 @pytest.mark.asyncio
-async def test_session_url_in_output(mocker, mock_client, jsonl_tmp, capsys):
+async def test_session_url_in_output(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+    capsys,
+):
     """Session URL is printed to stderr when provided."""
     task_id = uuid.uuid4()
 
     statuses = [
-        _make_status(TaskStatus.PENDING, {"pending": 5, "running": 0, "completed": 0, "failed": 0, "total": 5}),
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=5, running=0, completed=0, failed=0, total=5),
+        ),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
+        ),
     ]
 
     mocker.patch(
@@ -350,13 +428,24 @@ async def test_session_url_in_output(mocker, mock_client, jsonl_tmp, capsys):
 
 
 @pytest.mark.asyncio
-async def test_final_summary_line(mocker, mock_client, jsonl_tmp, capsys):
+async def test_final_summary_line(
+    mocker,
+    mock_client,
+    jsonl_tmp,  # noqa: ARG001
+    capsys,
+):
     """Completion prints a summary with succeeded/failed counts."""
     task_id = uuid.uuid4()
 
     statuses = [
-        _make_status(TaskStatus.PENDING, {"pending": 2, "running": 1, "completed": 0, "failed": 0, "total": 3}),
-        _make_status(TaskStatus.COMPLETED, {"pending": 0, "running": 0, "completed": 2, "failed": 1, "total": 3}),
+        _make_status(
+            TaskStatus.PENDING,
+            TaskProgressInfo(pending=2, running=1, completed=0, failed=0, total=3),
+        ),
+        _make_status(
+            TaskStatus.COMPLETED,
+            TaskProgressInfo(pending=0, running=0, completed=2, failed=1, total=3),
+        ),
     ]
 
     mocker.patch(

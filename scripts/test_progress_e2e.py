@@ -10,29 +10,33 @@ Requires: local engine on :8000 + Celery worker running.
 """
 
 import asyncio
+
 import pandas as pd
 from pydantic import BaseModel, Field
+
 from everyrow.ops import agent_map
 from everyrow.task import EffortLevel
 
 # 15 rows — enough for multiple intermediate progress updates at 2s poll interval
-companies = pd.DataFrame([
-    {"company": "Anthropic"},
-    {"company": "Stripe"},
-    {"company": "Notion"},
-    {"company": "Linear"},
-    {"company": "Vercel"},
-    {"company": "Figma"},
-    {"company": "Datadog"},
-    {"company": "Cloudflare"},
-    {"company": "Snowflake"},
-    {"company": "Databricks"},
-    {"company": "GitLab"},
-    {"company": "HashiCorp"},
-    {"company": "Confluent"},
-    {"company": "Elastic"},
-    {"company": "MongoDB"},
-])
+companies = pd.DataFrame(
+    [
+        {"company": "Anthropic"},
+        {"company": "Stripe"},
+        {"company": "Notion"},
+        {"company": "Linear"},
+        {"company": "Vercel"},
+        {"company": "Figma"},
+        {"company": "Datadog"},
+        {"company": "Cloudflare"},
+        {"company": "Snowflake"},
+        {"company": "Databricks"},
+        {"company": "GitLab"},
+        {"company": "HashiCorp"},
+        {"company": "Confluent"},
+        {"company": "Elastic"},
+        {"company": "MongoDB"},
+    ]
+)
 
 
 class CompanyHQ(BaseModel):

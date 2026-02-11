@@ -84,12 +84,15 @@ def _format_eta(completed: int, total: int, elapsed: float) -> str:
     return f"~{remaining:.0f}s remaining"
 
 
-def _default_progress_output(progress: ProgressInfo, total: int, elapsed: float) -> None:
+def _default_progress_output(
+    progress: ProgressInfo, total: int, elapsed: float
+) -> None:
     """Print a progress line to stderr."""
     pct = (progress.completed / total * 100) if total > 0 else 0
     parts = [
         f"{_ts()}   [{progress.completed}/{total}] {pct:3.0f}%",
-        f"| {progress.running} running" + (f", {progress.failed} failed" if progress.failed else ""),
+        f"| {progress.running} running"
+        + (f", {progress.failed} failed" if progress.failed else ""),
     ]
     eta = _format_eta(progress.completed, total, elapsed)
     if eta:
@@ -132,12 +135,16 @@ class EveryrowTask[T: BaseModel]:
         base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
         return f"{base_url}/sessions/{self.session_id}"
 
-    async def get_status(self, client: AuthenticatedClient | None = None) -> TaskStatusResponse:
+    async def get_status(
+        self, client: AuthenticatedClient | None = None
+    ) -> TaskStatusResponse:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before fetching status")
         client = client or self._client
         if client is None:
-            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
         return await get_task_status(self.task_id, client)
 
     async def await_result(
@@ -149,9 +156,13 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError("Task must be submitted before awaiting result")
         client = client or self._client
         if client is None:
-            raise EveryrowError("No client available. Provide a client or use the task within a session context.")
+            raise EveryrowError(
+                "No client available. Provide a client or use the task within a session context."
+            )
         session_url = self._get_session_url()
-        final_status = await await_task_completion(self.task_id, client, session_url=session_url, on_progress=on_progress)
+        final_status = await await_task_completion(
+            self.task_id, client, session_url=session_url, on_progress=on_progress
+        )
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
@@ -159,7 +170,9 @@ class EveryrowTask[T: BaseModel]:
         if isinstance(artifact_id, Unset) or artifact_id is None:
             raise EveryrowError("Task result has no artifact ID")
 
-        error = final_status.error if not isinstance(final_status.error, Unset) else None
+        error = (
+            final_status.error if not isinstance(final_status.error, Unset) else None
+        )
 
         if self._is_map or self._is_expand:
             data = _extract_table_data(result_response)
@@ -179,7 +192,7 @@ class EveryrowTask[T: BaseModel]:
 
 def _maybe_show_plugin_hint() -> None:
     """Show a one-time hint about the Claude Code plugin if not running inside the MCP server."""
-    global _plugin_hint_shown
+    global _plugin_hint_shown  # noqa: PLW0603
     if _plugin_hint_shown or os.environ.get("EVERYROW_MCP_SERVER"):
         return
     _plugin_hint_shown = True
@@ -210,7 +223,9 @@ async def await_task_completion(
             status_response = await get_task_status(task_id, client)
         except Exception as e:
             if retries >= max_retries:
-                raise EveryrowError(f"Failed to get task status after {max_retries} retries") from e
+                raise EveryrowError(
+                    f"Failed to get task status after {max_retries} retries"
+                ) from e
             retries += 1
             await asyncio.sleep(2)
             continue
@@ -225,14 +240,22 @@ async def await_task_completion(
                 if session_url:
                     msg = f"{_ts()} Session: {session_url}\n" + msg
                 print(msg, file=sys.stderr, flush=True)
-                _log_jsonl(jsonl_path, {
-                    "ts": time.time(),
-                    "step": "start",
-                    "total": progress.total,
-                    "session_url": session_url,
-                })
+                _log_jsonl(
+                    jsonl_path,
+                    {
+                        "ts": time.time(),
+                        "step": "start",
+                        "total": progress.total,
+                        "session_url": session_url,
+                    },
+                )
 
-            snapshot = (progress.pending, progress.running, progress.completed, progress.failed)
+            snapshot = (
+                progress.pending,
+                progress.running,
+                progress.completed,
+                progress.failed,
+            )
             if snapshot != last_snapshot:
                 last_snapshot = snapshot
                 elapsed = time.monotonic() - start_time
@@ -240,13 +263,16 @@ async def await_task_completion(
                     on_progress(progress)
                 else:
                     _default_progress_output(progress, progress.total, elapsed)
-                _log_jsonl(jsonl_path, {
-                    "ts": time.time(),
-                    "completed": progress.completed,
-                    "running": progress.running,
-                    "failed": progress.failed,
-                    "total": progress.total,
-                })
+                _log_jsonl(
+                    jsonl_path,
+                    {
+                        "ts": time.time(),
+                        "completed": progress.completed,
+                        "running": progress.running,
+                        "failed": progress.failed,
+                        "total": progress.total,
+                    },
+                )
 
         if status_response.status in (
             TaskStatus.COMPLETED,
@@ -266,20 +292,28 @@ async def await_task_completion(
             flush=True,
         )
         print(
-            f"{_ts()} Results: {succeeded} succeeded" + (f", {failed} failed" if failed else ""),
+            f"{_ts()} Results: {succeeded} succeeded"
+            + (f", {failed} failed" if failed else ""),
             file=sys.stderr,
             flush=True,
         )
-        _log_jsonl(jsonl_path, {
-            "ts": time.time(),
-            "step": "done",
-            "elapsed": round(elapsed, 1),
-            "succeeded": succeeded,
-            "failed": failed,
-        })
+        _log_jsonl(
+            jsonl_path,
+            {
+                "ts": time.time(),
+                "step": "done",
+                "elapsed": round(elapsed, 1),
+                "succeeded": succeeded,
+                "failed": failed,
+            },
+        )
 
     if status_response.status == TaskStatus.FAILED:
-        error_msg = status_response.error if not isinstance(status_response.error, Unset) else "Unknown error"
+        error_msg = (
+            status_response.error
+            if not isinstance(status_response.error, Unset)
+            else "Unknown error"
+        )
         raise EveryrowError(f"Task failed: {error_msg}")
 
     if status_response.status == TaskStatus.REVOKED:
@@ -288,14 +322,22 @@ async def await_task_completion(
     return status_response
 
 
-async def get_task_status(task_id: UUID, client: AuthenticatedClient) -> TaskStatusResponse:
-    response = await get_task_status_tasks_task_id_status_get.asyncio(task_id=task_id, client=client)
+async def get_task_status(
+    task_id: UUID, client: AuthenticatedClient
+) -> TaskStatusResponse:
+    response = await get_task_status_tasks_task_id_status_get.asyncio(
+        task_id=task_id, client=client
+    )
     response = handle_response(response)
     return response
 
 
-async def get_task_result(task_id: UUID, client: AuthenticatedClient) -> TaskResultResponse:
-    response = await get_task_result_tasks_task_id_result_get.asyncio(task_id=task_id, client=client)
+async def get_task_result(
+    task_id: UUID, client: AuthenticatedClient
+) -> TaskResultResponse:
+    response = await get_task_result_tasks_task_id_result_get.asyncio(
+        task_id=task_id, client=client
+    )
     response = handle_response(response)
     return response
 
@@ -304,10 +346,14 @@ def _extract_table_data(result: TaskResultResponse) -> DataFrame:
     if isinstance(result.data, list):
         records = [item.additional_properties for item in result.data]
         return DataFrame(records)
-    raise EveryrowError("Expected table result (list of records), but got scalar or null")
+    raise EveryrowError(
+        "Expected table result (list of records), but got scalar or null"
+    )
 
 
-def _extract_scalar_data[T: BaseModel](result: TaskResultResponse, response_model: type[T]) -> T:
+def _extract_scalar_data[T: BaseModel](
+    result: TaskResultResponse, response_model: type[T]
+) -> T:
     if isinstance(result.data, TaskResultResponseDataType1):
         return response_model(**result.data.additional_properties)
     if isinstance(result.data, list) and len(result.data) == 1:
@@ -388,7 +434,9 @@ class MergeTask:
                 "No client available. Provide a client or use the task within a session context."
             )
         session_url = self._get_session_url()
-        final_status = await await_task_completion(self.task_id, client, session_url=session_url)
+        final_status = await await_task_completion(
+            self.task_id, client, session_url=session_url
+        )
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
@@ -437,7 +485,9 @@ async def fetch_task_data(
     status_response = await get_task_status(task_id, client)
 
     if status_response.status != TaskStatus.COMPLETED:
-        raise EveryrowError(f"Task {task_id} is not completed (status: {status_response.status.value}).")
+        raise EveryrowError(
+            f"Task {task_id} is not completed (status: {status_response.status.value})."
+        )
 
     result_response = await get_task_result(task_id, client)
     return _extract_table_data(result_response)

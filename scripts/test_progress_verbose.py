@@ -9,32 +9,33 @@ import asyncio
 import json
 import sys
 import time
+
 import pandas as pd
 from pydantic import BaseModel, Field
-from everyrow.api_utils import create_client
-from everyrow.ops import agent_map
+
+from everyrow import create_session
+from everyrow.generated.models import TaskStatus
+from everyrow.ops import agent_map_async
 from everyrow.task import (
     EffortLevel,
-    ProgressInfo,
     _get_progress,
     get_task_status,
 )
-from everyrow.generated.models import TaskStatus
-from everyrow import create_session
-from everyrow.ops import agent_map_async
 
-companies = pd.DataFrame([
-    {"company": "Anthropic"},
-    {"company": "Stripe"},
-    {"company": "Notion"},
-    {"company": "Linear"},
-    {"company": "Vercel"},
-    {"company": "Figma"},
-    {"company": "Datadog"},
-    {"company": "Cloudflare"},
-    {"company": "Snowflake"},
-    {"company": "Databricks"},
-])
+companies = pd.DataFrame(
+    [
+        {"company": "Anthropic"},
+        {"company": "Stripe"},
+        {"company": "Notion"},
+        {"company": "Linear"},
+        {"company": "Vercel"},
+        {"company": "Figma"},
+        {"company": "Datadog"},
+        {"company": "Cloudflare"},
+        {"company": "Snowflake"},
+        {"company": "Databricks"},
+    ]
+)
 
 
 class CompanyHQ(BaseModel):
@@ -71,11 +72,17 @@ async def main():
                     "completed": progress.completed,
                     "failed": progress.failed,
                     "total": progress.total,
-                } if progress else None,
+                }
+                if progress
+                else None,
             }
             print(json.dumps(entry), file=sys.stderr, flush=True)
 
-            if status.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
+            if status.status in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.REVOKED,
+            ):
                 break
             await asyncio.sleep(2)
 

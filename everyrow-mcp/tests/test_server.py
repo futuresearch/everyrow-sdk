@@ -5,6 +5,7 @@ without making actual API calls.
 """
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -401,7 +402,9 @@ class TestAgentSubmit:
         mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch("everyrow_mcp.server.agent_map_async", new_callable=AsyncMock) as mock_op,
+            patch(
+                "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
             patch("everyrow_mcp.server.create_client", return_value=mock_client),
             patch("everyrow_mcp.server.create_session", return_value=mock_session_ctx),
             patch("everyrow_mcp.server._write_task_state"),
@@ -441,8 +444,6 @@ class TestProgress:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        # Register a task
-        import time
         _active_tasks[task_id] = {
             "client": mock_client,
             "started_at": time.monotonic(),
@@ -459,12 +460,22 @@ class TestProgress:
         mock_status.status = MagicMock(value="running")
         mock_status.error = None
         mock_status.additional_properties = {
-            "progress": {"pending": 2, "running": 3, "completed": 4, "failed": 1, "total": 10}
+            "progress": {
+                "pending": 2,
+                "running": 3,
+                "completed": 4,
+                "failed": 1,
+                "total": 10,
+            }
         }
 
         try:
             with (
-                patch("everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio", new_callable=AsyncMock, return_value=mock_status),
+                patch(
+                    "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                    new_callable=AsyncMock,
+                    return_value=mock_status,
+                ),
                 patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
                 patch("everyrow_mcp.server._write_task_state"),
             ):
@@ -485,7 +496,6 @@ class TestProgress:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        import time
         _active_tasks[task_id] = {
             "client": mock_client,
             "started_at": time.monotonic(),
@@ -501,12 +511,22 @@ class TestProgress:
         mock_status.status = MagicMock(value="completed")
         mock_status.error = None
         mock_status.additional_properties = {
-            "progress": {"pending": 0, "running": 0, "completed": 5, "failed": 0, "total": 5}
+            "progress": {
+                "pending": 0,
+                "running": 0,
+                "completed": 5,
+                "failed": 0,
+                "total": 5,
+            }
         }
 
         try:
             with (
-                patch("everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio", new_callable=AsyncMock, return_value=mock_status),
+                patch(
+                    "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                    new_callable=AsyncMock,
+                    return_value=mock_status,
+                ),
                 patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
                 patch("everyrow_mcp.server._write_task_state"),
             ):
@@ -538,7 +558,6 @@ class TestResults:
         mock_session_ctx = AsyncMock()
         mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
-        import time
         _active_tasks[task_id] = {
             "client": mock_client,
             "started_at": time.monotonic(),
@@ -559,7 +578,11 @@ class TestResults:
         mock_result = MagicMock()
         mock_result.data = [mock_item1, mock_item2]
 
-        with patch("everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio", new_callable=AsyncMock, return_value=mock_result):
+        with patch(
+            "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ):
             params = ResultsInput(task_id=task_id, output_path=str(tmp_path))
             result = await everyrow_results(params)
         text = result[0].text

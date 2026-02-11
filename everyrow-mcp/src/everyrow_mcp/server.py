@@ -19,7 +19,6 @@ from everyrow.generated.api.tasks import (
     get_task_result_tasks_task_id_result_get,
     get_task_status_tasks_task_id_status_get,
 )
-from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.types import Unset
 from everyrow.ops import (
     agent_map,
@@ -69,12 +68,16 @@ TASK_STATE_FILE = "/tmp/everyrow-task.json"
 
 
 def _write_task_state(
-    task_id: str, session_url: str, total: int,
-    completed: int, failed: int, running: int, status: str,
+    task_id: str,
+    session_url: str,
+    total: int,
+    completed: int,
+    failed: int,
+    running: int,
+    status: str,
 ) -> None:
     """Write task tracking state for hooks/status line to read."""
     try:
-        import json as _json
         state = {
             "task_id": task_id,
             "session_url": session_url,
@@ -86,7 +89,7 @@ def _write_task_state(
             "started_at": int(time.time()),
         }
         with open(TASK_STATE_FILE, "w") as f:
-            _json.dump(state, f)
+            json.dump(state, f)
     except Exception:
         pass  # Non-critical — hooks/status line just won't update
 
@@ -564,7 +567,9 @@ class AgentSubmitInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    task: str = Field(..., description="Natural language task to perform on each row.", min_length=1)
+    task: str = Field(
+        ..., description="Natural language task to perform on each row.", min_length=1
+    )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     response_schema: dict[str, Any] | None = Field(
         default=None,
@@ -583,11 +588,17 @@ class RankSubmitInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    task: str = Field(..., description="Natural language ranking criteria.", min_length=1)
+    task: str = Field(
+        ..., description="Natural language ranking criteria.", min_length=1
+    )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     field_name: str = Field(..., description="Name of the field to sort by.")
-    field_type: str = Field(default="float", description="Type: 'float', 'int', 'str', or 'bool'")
-    ascending_order: bool = Field(default=True, description="Sort ascending (True) or descending (False).")
+    field_type: str = Field(
+        default="float", description="Type: 'float', 'int', 'str', or 'bool'"
+    )
+    ascending_order: bool = Field(
+        default=True, description="Sort ascending (True) or descending (False)."
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the response model.",
@@ -678,12 +689,17 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
 
     _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
 
-    return [TextContent(type="text", text=(
-        f"Submitted: {total} agents starting.\n"
-        f"Session: {session_url}\n"
-        f"Task ID: {task_id}\n\n"
-        f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
-    ))]
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Submitted: {total} agents starting.\n"
+                f"Session: {session_url}\n"
+                f"Task ID: {task_id}\n\n"
+                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
 
 
 @mcp.tool(name="everyrow_rank_submit", structured_output=False)
@@ -734,12 +750,17 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
 
     _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
 
-    return [TextContent(type="text", text=(
-        f"Submitted: {total} rows for ranking.\n"
-        f"Session: {session_url}\n"
-        f"Task ID: {task_id}\n\n"
-        f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
-    ))]
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Submitted: {total} rows for ranking.\n"
+                f"Session: {session_url}\n"
+                f"Task ID: {task_id}\n\n"
+                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
 
 
 @mcp.tool(name="everyrow_progress", structured_output=False)
@@ -754,7 +775,12 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     task_info = _active_tasks.get(task_id)
 
     if task_info is None:
-        return [TextContent(type="text", text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.",
+            )
+        ]
 
     client = task_info["client"]
     elapsed = time.monotonic() - task_info["started_at"]
@@ -765,12 +791,18 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
 
     try:
         status_response = await get_task_status_tasks_task_id_status_get.asyncio(
-            task_id=UUID(task_id), client=client,
+            task_id=UUID(task_id),
+            client=client,
         )
         if status_response is None:
             raise RuntimeError("No response from status endpoint")
     except Exception as e:
-        return [TextContent(type="text", text=f"Error polling task: {e}\nRetry: call everyrow_progress(task_id='{task_id}').")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Error polling task: {e}\nRetry: call everyrow_progress(task_id='{task_id}').",
+            )
+        ]
 
     status_str = status_response.status.value
     raw_progress = status_response.additional_properties.get("progress")
@@ -782,24 +814,40 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     total = progress.get("total", 0) if progress else 0
     elapsed_s = round(elapsed + PROGRESS_POLL_DELAY)
 
-    _write_task_state(task_id, session_url, total, completed, failed, running, status_str)
+    _write_task_state(
+        task_id, session_url, total, completed, failed, running, status_str
+    )
 
     if status_str in ("completed", "failed", "revoked"):
         error = status_response.error
         if error and not isinstance(error, Unset):
             return [TextContent(type="text", text=f"Task {status_str}: {error}")]
         if status_str == "completed":
-            return [TextContent(type="text", text=(
-                f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s.\n"
-                f"Call everyrow_results(task_id='{task_id}', output_path='...') to retrieve the output."
-            ))]
-        return [TextContent(type="text", text=f"Task {status_str}. Report the error to the user.")]
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s.\n"
+                        f"Call everyrow_results(task_id='{task_id}', output_path='...') to retrieve the output."
+                    ),
+                )
+            ]
+        return [
+            TextContent(
+                type="text", text=f"Task {status_str}. Report the error to the user."
+            )
+        ]
 
     fail_part = f", {failed} failed" if failed else ""
-    return [TextContent(type="text", text=(
-        f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
-        f"Immediately call everyrow_progress(task_id='{task_id}')."
-    ))]
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
+                f"Immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
 
 
 @mcp.tool(name="everyrow_results", structured_output=False)
@@ -812,7 +860,12 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     task_info = _active_tasks.get(task_id)
 
     if task_info is None:
-        return [TextContent(type="text", text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.")]
+        return [
+            TextContent(
+                type="text",
+                text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.",
+            )
+        ]
 
     client = task_info["client"]
     input_csv = task_info["input_csv"]
@@ -820,16 +873,23 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
 
     try:
         result_response = await get_task_result_tasks_task_id_result_get.asyncio(
-            task_id=UUID(task_id), client=client,
+            task_id=UUID(task_id),
+            client=client,
         )
         if result_response is None:
-            return [TextContent(type="text", text="Error: No response from result endpoint.")]
+            return [
+                TextContent(
+                    type="text", text="Error: No response from result endpoint."
+                )
+            ]
 
         if isinstance(result_response.data, list):
             records = [item.additional_properties for item in result_response.data]
             df = pd.DataFrame(records)
         else:
-            return [TextContent(type="text", text="Error: Task result has no table data.")]
+            return [
+                TextContent(type="text", text="Error: Task result has no table data.")
+            ]
 
         output_file = resolve_output_path(params.output_path, input_csv, prefix)
         save_result_to_csv(df, output_file)
@@ -847,11 +907,16 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
             pass
         del _active_tasks[task_id]
 
-        return [TextContent(type="text", text=(
-            f"Saved {len(df)} rows to {output_file}\n\n"
-            "Tip: For multi-step pipelines, custom response models, or preview mode, "
-            "ask Claude to write Python using the everyrow SDK."
-        ))]
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Saved {len(df)} rows to {output_file}\n\n"
+                    "Tip: For multi-step pipelines, custom response models, or preview mode, "
+                    "ask Claude to write Python using the everyrow SDK."
+                ),
+            )
+        ]
 
     except Exception as e:
         return [TextContent(type="text", text=f"Error retrieving results: {e}")]
