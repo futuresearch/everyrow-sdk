@@ -1060,7 +1060,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         return [
             TextContent(
                 type="text",
-                text=f"Error: Unknown task_id {task_id}. It may have already been retrieved or the server restarted.",
+                text=f"Error: Unknown task_id {task_id}",
             )
         ]
 
