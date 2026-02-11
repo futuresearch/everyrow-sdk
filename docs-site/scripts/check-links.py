@@ -22,6 +22,13 @@ BASE_PATH = "/docs"
 # GitHub blob URLs pointing into this repo are checked as local files
 REPO_BLOB_PREFIX = "https://github.com/futuresearch/everyrow-sdk/blob/main/"
 
+# Git LFS media URLs — the correct way to link to LFS-tracked files.
+# These are checked as local files instead of fetching from GitHub.
+REPO_LFS_PREFIX = (
+    "https://media.githubusercontent.com/media/"
+    "futuresearch/everyrow-sdk/refs/heads/main/"
+)
+
 # Domains where all pages are HTTP-checked (our own properties)
 CHECKED_DOMAINS: set[str] = {
     "everyrow.io",
@@ -145,9 +152,28 @@ def check_file(
             # Strip fragment for matching against skip list
             url_without_fragment = href.split("#")[0]
 
-            # GitHub blob links to this repo: check the file exists locally
+            # GitHub blob links to this repo: check the file exists locally.
+            # CSV files (LFS-tracked) must use the media.githubusercontent.com
+            # URL so readers get the real data, not the LFS pointer.
             if url_without_fragment.startswith(REPO_BLOB_PREFIX):
                 rel_path = url_without_fragment[len(REPO_BLOB_PREFIX) :]
+                if rel_path.endswith(".csv"):
+                    lfs_url = REPO_LFS_PREFIX + rel_path
+                    errors.append(
+                        f"  {page_label}: {href!r} is a blob URL for an"
+                        f" LFS-tracked CSV; use {lfs_url} instead"
+                    )
+                elif not (REPO_ROOT / rel_path).exists():
+                    errors.append(
+                        f"  {page_label}: file not found for {href!r}"
+                        f" (expected {rel_path})"
+                    )
+                continue
+
+            # Git LFS media URLs: verify the file exists locally instead
+            # of fetching from GitHub.
+            if url_without_fragment.startswith(REPO_LFS_PREFIX):
+                rel_path = url_without_fragment[len(REPO_LFS_PREFIX) :]
                 if not (REPO_ROOT / rel_path).exists():
                     errors.append(
                         f"  {page_label}: file not found for {href!r}"

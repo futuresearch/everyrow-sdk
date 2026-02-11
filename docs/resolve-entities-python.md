@@ -23,7 +23,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
 ```
 
-We'll use a messy CRM dataset with 500 company records. The same companies appear multiple times with different spellings, abbreviations, and missing fields. Download [case_01_crm_data.csv](https://github.com/futuresearch/everyrow-sdk/blob/main/docs/data/case_01_crm_data.csv) to follow along.
+We'll use a messy CRM dataset with 500 company records. The same companies appear multiple times with different spellings, abbreviations, and missing fields. Download [case_01_crm_data.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/case_01_crm_data.csv) to follow along.
 
 ```python
 import asyncio

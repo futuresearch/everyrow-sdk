@@ -23,7 +23,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
 ```
 
-We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](https://github.com/futuresearch/everyrow-sdk/blob/main/docs/data/company_info.csv) and [valuations.csv](https://github.com/futuresearch/everyrow-sdk/blob/main/docs/data/valuations.csv), or run the [full notebook](notebooks/match-software-vendors-to-requirements).
+We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/company_info.csv) and [valuations.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/valuations.csv), or run the [full notebook](notebooks/match-software-vendors-to-requirements).
 
 ```python
 import asyncio
