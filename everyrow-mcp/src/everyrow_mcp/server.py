@@ -1285,14 +1285,8 @@ def main():
 
     # Check for API key before starting
     if "EVERYROW_API_KEY" not in os.environ:
-        print(
-            "Error: EVERYROW_API_KEY environment variable is not set.",
-            file=sys.stderr,
-        )
-        print(
-            "Get an API key at https://everyrow.io/api-key",
-            file=sys.stderr,
-        )
+        logging.error("EVERYROW_API_KEY environment variable is not set.")
+        logging.error("Get an API key at https://everyrow.io/api-key")
         sys.exit(1)
 
     mcp.run(transport="stdio")

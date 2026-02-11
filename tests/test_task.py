@@ -251,9 +251,9 @@ async def test_stderr_output_format(
     mocker,
     mock_client,
     jsonl_tmp,  # noqa: ARG001
-    capsys,
+    caplog,
 ):
-    """Default progress output writes to stderr in expected format."""
+    """Default progress output is logged in expected format."""
     task_id = uuid.uuid4()
 
     statuses = [
@@ -273,13 +273,14 @@ async def test_stderr_output_format(
         side_effect=statuses,
     )
 
-    await await_task_completion(task_id, mock_client)
+    with caplog.at_level("INFO", logger="everyrow"):
+        await await_task_completion(task_id, mock_client)
 
-    captured = capsys.readouterr()
-    # Progress goes to stderr
-    assert "[0/5]" in captured.err or "[5/5]" in captured.err
-    assert "running" in captured.err
-    assert "Done" in captured.err
+    # Progress is logged via the everyrow logger
+    log_text = caplog.text
+    assert "[0/5]" in log_text or "[5/5]" in log_text
+    assert "running" in log_text
+    assert "Done" in log_text
 
 
 @pytest.mark.asyncio
@@ -371,9 +372,9 @@ async def test_session_url_in_output(
     mocker,
     mock_client,
     jsonl_tmp,  # noqa: ARG001
-    capsys,
+    caplog,
 ):
-    """Session URL is printed to stderr when provided."""
+    """Session URL is logged when provided."""
     task_id = uuid.uuid4()
 
     statuses = [
@@ -393,12 +394,12 @@ async def test_session_url_in_output(
         side_effect=statuses,
     )
 
-    await await_task_completion(
-        task_id, mock_client, session_url="https://everyrow.io/sessions/abc123"
-    )
+    with caplog.at_level("INFO", logger="everyrow"):
+        await await_task_completion(
+            task_id, mock_client, session_url="https://everyrow.io/sessions/abc123"
+        )
 
-    captured = capsys.readouterr()
-    assert "https://everyrow.io/sessions/abc123" in captured.err
+    assert "https://everyrow.io/sessions/abc123" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -406,9 +407,9 @@ async def test_final_summary_line(
     mocker,
     mock_client,
     jsonl_tmp,  # noqa: ARG001
-    capsys,
+    caplog,
 ):
-    """Completion prints a summary with succeeded/failed counts."""
+    """Completion logs a summary with succeeded/failed counts."""
     task_id = uuid.uuid4()
 
     statuses = [
@@ -428,8 +429,8 @@ async def test_final_summary_line(
         side_effect=statuses,
     )
 
-    await await_task_completion(task_id, mock_client)
+    with caplog.at_level("INFO", logger="everyrow"):
+        await await_task_completion(task_id, mock_client)
 
-    captured = capsys.readouterr()
-    assert "2 succeeded" in captured.err
-    assert "1 failed" in captured.err
+    assert "2 succeeded" in caplog.text
+    assert "1 failed" in caplog.text

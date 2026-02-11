@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import sys
 import time
@@ -32,6 +33,16 @@ from everyrow.result import MergeBreakdown, MergeResult, ScalarResult, TableResu
 
 LLM = LLMEnumPublic
 
+# Configure the everyrow logger. Users can customize this logger to redirect
+# or silence progress output (e.g., logging.getLogger("everyrow").setLevel(logging.WARNING))
+_logger = logging.getLogger("everyrow")
+if not _logger.handlers:
+    # Only add handler if none exists (avoids duplicate handlers on re-import)
+    _handler = logging.StreamHandler(sys.stderr)
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    _logger.addHandler(_handler)
+    _logger.setLevel(logging.INFO)
+
 _plugin_hint_shown = False
 
 
@@ -63,7 +74,7 @@ def _format_eta(completed: int, total: int, elapsed: float) -> str:
 def _default_progress_output(
     progress: TaskProgressInfo, total: int, elapsed: float
 ) -> None:
-    """Print a progress line to stderr."""
+    """Log a progress line."""
     pct = (progress.completed / total * 100) if total > 0 else 0
     parts = [
         f"{_ts()}   [{progress.completed}/{total}] {pct:3.0f}%",
@@ -73,7 +84,7 @@ def _default_progress_output(
     eta = _format_eta(progress.completed, total, elapsed)
     if eta:
         parts.append(f"| {eta}")
-    print(" ".join(parts), file=sys.stderr, flush=True)
+    _logger.info(" ".join(parts))
 
 
 def _log_jsonl(path: Path, entry: dict[str, Any]) -> None:
@@ -172,11 +183,9 @@ def _maybe_show_plugin_hint() -> None:
     if _plugin_hint_shown or os.environ.get("EVERYROW_MCP_SERVER"):
         return
     _plugin_hint_shown = True
-    print(
+    _logger.info(
         "Tip: Use the plugin or MCP server for better management of long-running tasks.\n"
-        "     See: https://everyrow.io/docs/installation#tab-claude-code-plugin",
-        file=sys.stderr,
-        flush=True,
+        "     See: https://everyrow.io/docs/installation#tab-claude-code-plugin"
     )
 
 
@@ -215,7 +224,7 @@ async def await_task_completion(
                 msg = f"{_ts()} Starting ({progress.total} agents)..."
                 if session_url:
                     msg = f"{_ts()} Session: {session_url}\n" + msg
-                print(msg, file=sys.stderr, flush=True)
+                _logger.info(msg)
                 _log_jsonl(
                     jsonl_path,
                     {
@@ -239,10 +248,8 @@ async def await_task_completion(
                     try:
                         on_progress(progress)
                     except Exception as e:
-                        print(
-                            f"Warning: on_progress callback raised {type(e).__name__}: {e}",
-                            file=sys.stderr,
-                            flush=True,
+                        _logger.warning(
+                            "on_progress callback raised %s: %s", type(e).__name__, e
                         )
                 else:
                     _default_progress_output(progress, progress.total, elapsed)
@@ -269,16 +276,18 @@ async def await_task_completion(
     if progress and progress.total > 0:
         succeeded = progress.completed
         failed = progress.failed
-        print(
-            f"{_ts()}   [{progress.total}/{progress.total}] 100% | Done ({elapsed:.1f}s total)",
-            file=sys.stderr,
-            flush=True,
+        _logger.info(
+            "%s   [%d/%d] 100%% | Done (%.1fs total)",
+            _ts(),
+            progress.total,
+            progress.total,
+            elapsed,
         )
-        print(
-            f"{_ts()} Results: {succeeded} succeeded"
-            + (f", {failed} failed" if failed else ""),
-            file=sys.stderr,
-            flush=True,
+        _logger.info(
+            "%s Results: %d succeeded%s",
+            _ts(),
+            succeeded,
+            f", {failed} failed" if failed else "",
         )
         _log_jsonl(
             jsonl_path,
