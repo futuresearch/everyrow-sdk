@@ -72,7 +72,8 @@ async def lifespan(_server: FastMCP):
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
     except Exception as e:
-        raise RuntimeError(f"everyrow-mcp startup failed: {e}") from e
+        logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
+        raise
 
     yield
 
@@ -1080,7 +1081,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         return [
             TextContent(
                 type="text",
-                text=f"Error polling task: {e}\nRetry: call everyrow_progress(task_id='{task_id}').",
+                text=f"Error polling task: {e!r}\nRetry: call everyrow_progress(task_id='{task_id}').",
             )
         ]
 
@@ -1228,7 +1229,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
         ]
 
     except Exception as e:
-        return [TextContent(type="text", text=f"Error retrieving results: {e}")]
+        return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
 
 
 JSON_TYPE_MAP = {
