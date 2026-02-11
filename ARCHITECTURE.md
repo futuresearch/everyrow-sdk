@@ -27,6 +27,9 @@ Blocking tools (run to completion, return results inline):
 Submit/poll tools (for long-running operations):
 - `everyrow_agent_submit` — Submit agent_map, return immediately with `task_id` and `session_url`
 - `everyrow_rank_submit` — Submit rank, return immediately
+- `everyrow_screen_submit` — Submit screen, return immediately
+- `everyrow_dedupe_submit` — Submit dedupe, return immediately
+- `everyrow_merge_submit` — Submit merge, return immediately
 - `everyrow_progress` — Poll task status (blocks ~12s server-side, returns progress text)
 - `everyrow_results` — Retrieve completed results, save to CSV
 
@@ -56,9 +59,9 @@ Chaining instructions: The progress tool's response text includes "Immediately c
 
 The MCP server maintains two forms of state for in-flight tasks:
 
-In-process: `_active_tasks` dictionary keyed by `task_id`. Stores `session`, `session_ctx`, `client`, `total`, `session_url`, `started_at`, `input_csv`, `prefix`. Cleaned up by `everyrow_results`.
+In-process: `_active_tasks` dictionary keyed by `task_id`. The value is an `ActiveTask` dataclass with typed fields: `session`, `session_ctx`, `client: AuthenticatedClient`, `total: int`, `session_url: str`, `started_at: float`, `input_csv: str`, `prefix: str`. Cleaned up by `everyrow_results`.
 
-On-disk: `/tmp/everyrow-task.json` written by `_write_task_state()` on submit and each progress poll. Contains:
+On-disk: `~/.everyrow/task.json` written by `_write_task_state()` on submit and each progress poll. Contains:
 
 ```json
 {
@@ -73,7 +76,7 @@ On-disk: `/tmp/everyrow-task.json` written by `_write_task_state()` on submit an
 }
 ```
 
-This file is a singleton. Only one task is tracked at a time. It is read by the status line script and hook scripts (see below). The MCP server writes it directly rather than relying on hooks, which avoids the fragile double-escaped JSON parsing required to extract `tool_response` from plugin MCP tools.
+This file is a singleton. Only one task is tracked at a time. It is read by the status line script and hook scripts (see below). The MCP server writes it directly rather than relying on hooks, which avoids the fragile double-escaped JSON parsing required to extract `tool_response` from plugin MCP tools. The path `~/.everyrow/task.json` is consistent with the SDK's `~/.everyrow/` directory used for other files like `progress.jsonl`.
 
 ## SDK Progress Output
 
@@ -92,7 +95,7 @@ stderr (default): Timestamped progress lines:
 
 JSONL log (`~/.everyrow/progress.jsonl`): Machine-readable log appended on each progress change. Useful for post-hoc analysis and verification scripts.
 
-`on_progress` callback: Optional parameter to `await_result()` or `await_task_completion()`. Receives a `ProgressInfo` dataclass with `pending`, `running`, `completed`, `failed`, `total` counts. Only fires when the snapshot changes (deduplication prevents redundant calls).
+`on_progress` callback: Optional parameter to `await_result()` or `await_task_completion()`. Receives a `TaskProgressInfo` object (from `everyrow.generated.models`) with `pending`, `running`, `completed`, `failed`, `total` counts. Only fires when the snapshot changes (deduplication prevents redundant calls). The callback is wrapped in a try/except so exceptions don't break the polling loop.
 
 ### Snapshot deduplication
 
@@ -111,15 +114,15 @@ The Claude Code plugin (`.claude-plugin/plugin.json`) ships:
 ### Hooks
 
 PostToolUse (matcher: `mcp__plugin_everyrow_everyrow__everyrow_results`):
-Runs `everyrow-track-results.sh`, sends a macOS desktop notification with completion summary, then deletes `/tmp/everyrow-task.json`.
+Runs `everyrow-track-results.sh`, sends a desktop notification (macOS via `osascript`, Linux via `notify-send`) with completion summary, then deletes `~/.everyrow/task.json`.
 
 Stop:
-Runs `everyrow-stop-guard.sh`, reads `/tmp/everyrow-task.json`. If a task is running, outputs `{"decision": "block", "reason": "..."}` which prevents Claude from ending its turn. The reason text instructs Claude to call `everyrow_progress` to check status.
+Runs `everyrow-stop-guard.sh`, reads `~/.everyrow/task.json`. If a task is running, outputs `{"decision": "block", "reason": "..."}` which prevents Claude from ending its turn. The reason text instructs Claude to call `everyrow_progress` to check status.
 
 Note: Claude Code displays stop hook blocks as "Stop hook error: ..." This is a cosmetic UI bug ([claude-code#12667](https://github.com/anthropics/claude-code/issues/12667)), not an actual error. The hook is working correctly.
 
 **SessionEnd**:
-Runs `rm -f /tmp/everyrow-task.json` to clean up tracking state.
+Runs `rm -f ~/.everyrow/task.json` to clean up tracking state.
 
 ### Status Line
 
@@ -135,7 +138,7 @@ The status line script (`everyrow-mcp/scripts/everyrow-statusline.sh`) is not pa
 }
 ```
 
-The script reads `/tmp/everyrow-task.json` on each refresh and renders:
+The script reads `~/.everyrow/task.json` on each refresh and renders:
 ```
 everyrow ████████░░░░░░░ 42/100 23s   view
 ```
@@ -151,7 +154,7 @@ Features: model name, context usage from Claude Code env vars, progress bar, ela
 | "Stop hook error:" cosmetic UI ([#12667](https://github.com/anthropics/claude-code/issues/12667)) | Misleading error display when stop guard blocks | No workaround — craft self-documenting reason text |
 | Hooks stop after ~2.5h ([#16047](https://github.com/anthropics/claude-code/issues/16047)) | Stop guard and notifications stop in long sessions | Restart session for operations in sessions >2h |
 | `type: "prompt"` hooks broken in plugins ([#13155](https://github.com/anthropics/claude-code/issues/13155)) | Must use `type: "command"` for all hooks | Already handled in plugin config |
-| `/tmp/everyrow-task.json` is singleton | Only one operation tracked at a time | Sequential operations only (matches current behavior) |
+| `~/.everyrow/task.json` is singleton | Only one operation tracked at a time | Sequential operations only (matches current behavior) |
 | MCP/plugins/hooks can't reload mid-session | Any config change requires restart | Restart Claude Code after changes |
 | `jq` required | Status line and hook scripts need `jq` installed | `brew install jq` (macOS) or `apt install jq` (Linux) |
 

@@ -123,15 +123,15 @@ When using the Python SDK directly, progress is printed to stderr:
 For programmatic progress handling, pass an `on_progress` callback to `await_result()`:
 
 ```python
-from everyrow.task import ProgressInfo
+from everyrow.generated.models import TaskProgressInfo
 
-def my_progress_handler(progress: ProgressInfo):
+def my_progress_handler(progress: TaskProgressInfo):
     print(f"{progress.completed}/{progress.total} done, {progress.failed} failed")
 
 result = await task.await_result(on_progress=my_progress_handler)
 ```
 
-The callback receives a `ProgressInfo` dataclass with fields: `pending`, `running`, `completed`, `failed`, `total`. It only fires when the progress snapshot actually changes (no duplicate calls).
+The callback receives a `TaskProgressInfo` object with fields: `pending`, `running`, `completed`, `failed`, `total`. It only fires when the progress snapshot actually changes (no duplicate calls). Exceptions in the callback are caught and logged, so a buggy callback won't break the polling loop.
 
 ### JSONL Progress Log
 
