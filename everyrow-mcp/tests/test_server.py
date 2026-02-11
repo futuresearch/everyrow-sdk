@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from everyrow_mcp.server import (
+    ActiveTask,
     AgentInput,
     AgentSubmitInput,
     DedupeInput,
@@ -444,30 +445,28 @@ class TestProgress:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        _active_tasks[task_id] = {
-            "client": mock_client,
-            "started_at": time.time(),
-            "session": MagicMock(),
-            "session_ctx": MagicMock(),
-            "total": 10,
-            "session_url": "https://everyrow.io/sessions/test",
-            "input_csv": "/tmp/test.csv",
-            "prefix": "agent",
-        }
+        _active_tasks[task_id] = ActiveTask(
+            client=mock_client,
+            started_at=time.time(),
+            session=MagicMock(),
+            session_ctx=MagicMock(),
+            total=10,
+            session_url="https://everyrow.io/sessions/test",
+            input_csv="/tmp/test.csv",
+            prefix="agent",
+        )
 
         # Mock the status response
         mock_status = MagicMock()
         mock_status.status = MagicMock(value="running")
         mock_status.error = None
-        mock_status.additional_properties = {
-            "progress": {
-                "pending": 2,
-                "running": 3,
-                "completed": 4,
-                "failed": 1,
-                "total": 10,
-            }
-        }
+        mock_status.progress = MagicMock(
+            pending=2,
+            running=3,
+            completed=4,
+            failed=1,
+            total=10,
+        )
 
         try:
             with (
@@ -496,29 +495,27 @@ class TestProgress:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        _active_tasks[task_id] = {
-            "client": mock_client,
-            "started_at": time.time(),
-            "session": MagicMock(),
-            "session_ctx": MagicMock(),
-            "total": 5,
-            "session_url": "https://everyrow.io/sessions/test",
-            "input_csv": "/tmp/test.csv",
-            "prefix": "agent",
-        }
+        _active_tasks[task_id] = ActiveTask(
+            client=mock_client,
+            started_at=time.time(),
+            session=MagicMock(),
+            session_ctx=MagicMock(),
+            total=5,
+            session_url="https://everyrow.io/sessions/test",
+            input_csv="/tmp/test.csv",
+            prefix="agent",
+        )
 
         mock_status = MagicMock()
         mock_status.status = MagicMock(value="completed")
         mock_status.error = None
-        mock_status.additional_properties = {
-            "progress": {
-                "pending": 0,
-                "running": 0,
-                "completed": 5,
-                "failed": 0,
-                "total": 5,
-            }
-        }
+        mock_status.progress = MagicMock(
+            pending=0,
+            running=0,
+            completed=5,
+            failed=0,
+            total=5,
+        )
 
         try:
             with (
@@ -558,16 +555,16 @@ class TestResults:
         mock_session_ctx = AsyncMock()
         mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
-        _active_tasks[task_id] = {
-            "client": mock_client,
-            "started_at": time.time(),
-            "session": MagicMock(),
-            "session_ctx": mock_session_ctx,
-            "total": 3,
-            "session_url": "https://everyrow.io/sessions/test",
-            "input_csv": companies_csv,
-            "prefix": "agent",
-        }
+        _active_tasks[task_id] = ActiveTask(
+            client=mock_client,
+            started_at=time.time(),
+            session=MagicMock(),
+            session_ctx=mock_session_ctx,
+            total=3,
+            session_url="https://everyrow.io/sessions/test",
+            input_csv=companies_csv,
+            prefix="agent",
+        )
 
         # Mock status response (for completion check)
         mock_status = MagicMock()

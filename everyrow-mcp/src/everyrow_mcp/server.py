@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -46,6 +47,20 @@ from everyrow_mcp.utils import (
 )
 
 
+@dataclass
+class ActiveTask:
+    """Tracks state for a submitted task in the submit/poll pattern."""
+
+    session: Any  # Session type from SDK
+    session_ctx: Any  # Context manager for session
+    client: AuthenticatedClient
+    total: int
+    session_url: str
+    started_at: float
+    input_csv: str
+    prefix: str
+
+
 @asynccontextmanager
 async def lifespan(_server: FastMCP):
     """Validate everyrow credentials on startup."""
@@ -64,8 +79,7 @@ async def lifespan(_server: FastMCP):
 mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
 
 # Track active tasks for the submit/poll pattern.
-# Maps task_id -> {session, client, total, session_url, started_at}
-_active_tasks: dict[str, dict[str, Any]] = {}
+_active_tasks: dict[str, ActiveTask] = {}
 
 PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
@@ -120,16 +134,16 @@ def _register_submitted_task(
     """
     task_id = str(cohort_task.task_id)
     started_at = time.time()
-    _active_tasks[task_id] = {
-        "session": session,
-        "session_ctx": session_ctx,
-        "client": client,
-        "total": total,
-        "session_url": session_url,
-        "started_at": started_at,
-        "input_csv": input_csv,
-        "prefix": prefix,
-    }
+    _active_tasks[task_id] = ActiveTask(
+        session=session,
+        session_ctx=session_ctx,
+        client=client,
+        total=total,
+        session_url=session_url,
+        started_at=started_at,
+        input_csv=input_csv,
+        prefix=prefix,
+    )
     _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
     return task_id
 
@@ -1039,9 +1053,9 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     Do not add commentary between progress calls — just call again immediately.
     """
     task_id = params.task_id
-    task_info = _active_tasks.get(task_id)
+    task = _active_tasks.get(task_id)
 
-    if task_info is None:
+    if task is None:
         return [
             TextContent(
                 type="text",
@@ -1049,9 +1063,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
             )
         ]
 
-    client = task_info["client"]
-    elapsed = time.time() - task_info["started_at"]
-    session_url = task_info["session_url"]
+    elapsed = time.time() - task.started_at
 
     # Block server-side before polling — controls the cadence
     await asyncio.sleep(PROGRESS_POLL_DELAY)
@@ -1059,7 +1071,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     try:
         status_response = await get_task_status_tasks_task_id_status_get.asyncio(
             task_id=UUID(task_id),
-            client=client,
+            client=task.client,
         )
         if status_response is None:
             raise RuntimeError("No response from status endpoint")
@@ -1072,24 +1084,23 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         ]
 
     status_str = status_response.status.value
-    raw_progress = status_response.additional_properties.get("progress")
-    progress = raw_progress if isinstance(raw_progress, dict) else None
+    progress = status_response.progress
 
-    completed = progress.get("completed", 0) if progress else 0
-    failed = progress.get("failed", 0) if progress else 0
-    running = progress.get("running", 0) if progress else 0
-    total = progress.get("total", 0) if progress else 0
+    completed = progress.completed if progress else 0
+    failed = progress.failed if progress else 0
+    running = progress.running if progress else 0
+    total = progress.total if progress else 0
     elapsed_s = round(elapsed + PROGRESS_POLL_DELAY)
 
     _write_task_state(
         task_id,
-        session_url,
+        task.session_url,
         total,
         completed,
         failed,
         running,
         status_str,
-        task_info["started_at"],
+        task.started_at,
     )
 
     if status_str in ("completed", "failed", "revoked"):
@@ -1131,9 +1142,9 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     Only call this after everyrow_progress reports status 'completed'.
     """
     task_id = params.task_id
-    task_info = _active_tasks.get(task_id)
+    task = _active_tasks.get(task_id)
 
-    if task_info is None:
+    if task is None:
         return [
             TextContent(
                 type="text",
@@ -1141,14 +1152,10 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
             )
         ]
 
-    client = task_info["client"]
-    input_csv = task_info["input_csv"]
-    prefix = task_info["prefix"]
-
     try:
         status_response = await get_task_status_tasks_task_id_status_get.asyncio(
             task_id=UUID(task_id),
-            client=client,
+            client=task.client,
         )
         if status_response is None:
             return [
@@ -1173,7 +1180,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     try:
         result_response = await get_task_result_tasks_task_id_result_get.asyncio(
             task_id=UUID(task_id),
-            client=client,
+            client=task.client,
         )
         if result_response is None:
             return [
@@ -1190,18 +1197,19 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
                 TextContent(type="text", text="Error: Task result has no table data.")
             ]
 
-        output_file = resolve_output_path(params.output_path, input_csv, prefix)
+        output_file = resolve_output_path(
+            params.output_path, task.input_csv, task.prefix
+        )
         save_result_to_csv(df, output_file)
 
         # Clean up session and client
-        session_ctx = task_info.get("session_ctx")
-        if session_ctx:
+        if task.session_ctx:
             try:
-                await session_ctx.__aexit__(None, None, None)
+                await task.session_ctx.__aexit__(None, None, None)
             except Exception:
                 pass
         try:
-            await client.__aexit__(None, None, None)
+            await task.client.__aexit__(None, None, None)
         except Exception:
             pass
         del _active_tasks[task_id]
