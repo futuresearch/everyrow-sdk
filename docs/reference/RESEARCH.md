@@ -1,5 +1,5 @@
 ---
-title: agent_map
+title: RESEARCH Agent Reference: Web Research APIs for DataFrames
 description: API reference for the EveryRow agent_map and single_agent tools, which run web research agents on entire DataFrames or single inputs.
 ---
 

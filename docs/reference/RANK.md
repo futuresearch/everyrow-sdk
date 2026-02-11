@@ -1,5 +1,5 @@
 ---
-title: rank
+title: Rank: Sort and Score Data with AI-Powered Metrics
 description: API reference for the EveryRow rank tool, which sorts a DataFrame by a metric computed through web research agents.
 ---
 

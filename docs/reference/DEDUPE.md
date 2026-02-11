@@ -1,5 +1,5 @@
 ---
-title: dedupe
+title: How Dedupe Works: Semantic Data Deduplication API
 description: API reference for the EveryRow dedupe tool, which groups duplicate rows in a Python Pandas DataFrame using LLM-powered semantic matching.
 ---
 

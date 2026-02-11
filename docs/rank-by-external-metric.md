@@ -1,5 +1,5 @@
 ---
-title: How to sort a dataset using web data in Python
+title: Rank DataFrames by External Metrics: API Data, Web Research, and Custom Criteria
 description: Rank or sort a Pandas DataFrame by criteria that don't exist in your data, using LLM research agents to look up data.
 ---
 

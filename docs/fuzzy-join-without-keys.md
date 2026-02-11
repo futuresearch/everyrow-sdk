@@ -1,6 +1,6 @@
 ---
 title: How to Fuzzy Join DataFrames in Python
-description: Merge two pandas DataFrames when there's no shared ID column, using LLM-powered semantic matching for company names, tickers, and more.
+description: Join datasets without a matching key using AI-powered entity resolution. Merge company names, tickers, addresses, and other fuzzy matches across multiple data sources.
 ---
 
 # How to Merge DataFrames Without a Matching Column in Python
