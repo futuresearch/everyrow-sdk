@@ -1,0 +1,178 @@
+name: PR Content Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-banned-terms:
+    name: Check for terms
+    # issue_comment fires for both issues and PRs; only run for PRs
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for banned terms
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          VIOLATIONS=""
+
+          add_violation() {
+            VIOLATIONS="${VIOLATIONS}- ${1}\n"
+          }
+
+          # 1. Branch name
+          echo "::group::Checking branch name"
+          BRANCH=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q '.headRefName')
+          if echo "$BRANCH" | grep -qi 'seo'; then
+            add_violation "Branch name contains 'SEO': \`$BRANCH\`"
+            echo "::error::Branch name '$BRANCH' contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 2. PR title
+          echo "::group::Checking PR title"
+          TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title -q '.title')
+          if echo "$TITLE" | grep -qi 'seo'; then
+            add_violation "PR title contains 'SEO': \`$TITLE\`"
+            echo "::error::PR title contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 3. PR description
+          echo "::group::Checking PR description"
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json body -q '.body // ""' > /tmp/pr_body.txt
+          if grep -qi 'seo' /tmp/pr_body.txt; then
+            add_violation "PR description contains 'SEO'"
+            echo "::error::PR description contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 4. Commit messages
+          echo "::group::Checking commit messages"
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/commits" --paginate \
+            -q '.[].commit.message' > /tmp/commits.txt
+          if grep -qi 'seo' /tmp/commits.txt; then
+            MATCH=$(grep -i 'seo' /tmp/commits.txt | head -1)
+            add_violation "Commit message contains 'SEO': \`$MATCH\`"
+            echo "::error::Commit message contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 5. PR comments
+          echo "::group::Checking PR comments"
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
+            -q '.[].body // ""' > /tmp/comments.txt
+          if grep -qi 'seo' /tmp/comments.txt; then
+            add_violation "PR comment contains 'SEO'"
+            echo "::error::PR comment contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 6. Review comments (inline code review)
+          echo "::group::Checking review comments"
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments" --paginate \
+            -q '.[].body // ""' > /tmp/review_comments.txt
+          if grep -qi 'seo' /tmp/review_comments.txt; then
+            add_violation "Inline review comment contains 'SEO'"
+            echo "::error::Inline review comment contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 7. Review bodies
+          echo "::group::Checking review bodies"
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" --paginate \
+            -q '.[].body // ""' > /tmp/reviews.txt
+          if grep -qi 'seo' /tmp/reviews.txt; then
+            add_violation "PR review body contains 'SEO'"
+            echo "::error::PR review body contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 8. PR labels
+          echo "::group::Checking PR labels"
+          LABELS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json labels -q '.labels[].name' | tr '\n' ', ')
+          if echo "$LABELS" | grep -qi 'seo'; then
+            add_violation "PR label contains 'SEO': \`$LABELS\`"
+            echo "::error::PR label contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 9. Changed file paths
+          echo "::group::Checking changed file paths"
+          gh pr view "$PR_NUMBER" --repo "$REPO" --json files -q '.files[].path' > /tmp/changed_files.txt
+          if grep -qi 'seo' /tmp/changed_files.txt; then
+            MATCH=$(grep -i 'seo' /tmp/changed_files.txt | head -3 | tr '\n' ', ')
+            add_violation "Changed file path contains 'SEO': \`$MATCH\`"
+            echo "::error::Changed file path contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # 10. Diff content (added lines only)
+          echo "::group::Checking diff content (added lines)"
+          if ! gh pr diff "$PR_NUMBER" --repo "$REPO" > /tmp/pr_diff.txt; then
+            add_violation "Failed to fetch PR diff (may be too large to check)"
+            echo "::error::Failed to fetch PR diff"
+          elif grep -E '^\+' /tmp/pr_diff.txt | grep -Ev '^\+\+\+' | grep -qi 'seo'; then
+            add_violation "Added lines in diff contain 'SEO'"
+            echo "::error::Added code contains banned term"
+          else
+            echo "OK"
+          fi
+          echo "::endgroup::"
+
+          # Final verdict
+          if [ -n "$VIOLATIONS" ]; then
+            echo ""
+            echo "::error::Banned term 'SEO' found in PR content"
+            echo ""
+            echo "========================================="
+            echo "FAILED: Banned term 'SEO' detected"
+            echo "========================================="
+            echo -e "$VIOLATIONS"
+            exit 1
+          fi
+
+          echo ""
+          echo "All checks passed - no banned terms found."
