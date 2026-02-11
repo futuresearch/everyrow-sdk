@@ -112,7 +112,9 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
         data=CreateArtifactRequestDataType1.from_dict(input.model_dump()),
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(client=session.client, body=body)
+    response = await create_artifact_artifacts_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
     return response.artifact_id
 
@@ -124,7 +126,9 @@ async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
         data=[CreateArtifactRequestDataType0Item.from_dict(r) for r in records],
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(client=session.client, body=body)
+    response = await create_artifact_artifacts_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
     return response.artifact_id
 
@@ -228,25 +232,35 @@ async def single_agent_async[T: BaseModel](
     return_table: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a single_agent task asynchronously."""
-    input_data = _prepare_single_input(input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2)
+    input_data = _prepare_single_input(
+        input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2
+    )
 
     # Build the operation body with either preset or custom params
     body = SingleAgentOperation(
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=SingleAgentOperationResponseSchemaType0.from_dict(response_model.model_json_schema()),
-        effort_level=PublicEffortLevel(effort_level.value) if effort_level is not None else UNSET,
+        response_schema=SingleAgentOperationResponseSchemaType0.from_dict(
+            response_model.model_json_schema()
+        ),
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
         llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
         iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
         include_research=include_research if include_research is not None else UNSET,
         return_list=return_table,
     )
 
-    response = await single_agent_operations_single_agent_post.asyncio(client=session.client, body=body)
+    response = await single_agent_operations_single_agent_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(response_model=response_model, is_map=False, is_expand=return_table)
+    cohort_task: EveryrowTask[T] = EveryrowTask(
+        response_model=response_model, is_map=False, is_expand=return_table
+    )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
     return cohort_task
 
@@ -336,8 +350,12 @@ async def agent_map_async(
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=AgentMapOperationResponseSchemaType0.from_dict(response_model.model_json_schema()),
-        effort_level=PublicEffortLevel(effort_level.value) if effort_level is not None else UNSET,
+        response_schema=AgentMapOperationResponseSchemaType0.from_dict(
+            response_model.model_json_schema()
+        ),
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
         llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
         iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
         include_research=include_research if include_research is not None else UNSET,
@@ -345,10 +363,14 @@ async def agent_map_async(
         enforce_row_independence=enforce_row_independence,
     )
 
-    response = await agent_map_operations_agent_map_post.asyncio(client=session.client, body=body)
+    response = await agent_map_operations_agent_map_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
-    cohort_task = EveryrowTask(response_model=response_model, is_map=True, is_expand=False)
+    cohort_task = EveryrowTask(
+        response_model=response_model, is_map=True, is_expand=False
+    )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
     return cohort_task
 
@@ -387,7 +409,9 @@ async def screen[T: BaseModel](
             if isinstance(result, TableResult):
                 return result
             raise EveryrowError("Screen task did not return a table result")
-    cohort_task = await screen_async(task=task, session=session, input=input, response_model=response_model)
+    cohort_task = await screen_async(
+        task=task, session=session, input=input, response_model=response_model
+    )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
@@ -408,10 +432,14 @@ async def screen_async[T: BaseModel](
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=ScreenOperationResponseSchemaType0.from_dict(actual_response_model.model_json_schema()),
+        response_schema=ScreenOperationResponseSchemaType0.from_dict(
+            actual_response_model.model_json_schema()
+        ),
     )
 
-    response = await screen_operations_screen_post.asyncio(client=session.client, body=body)
+    response = await screen_operations_screen_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     cohort_task: EveryrowTask[T] = EveryrowTask(
@@ -498,7 +526,9 @@ async def rank_async[T: BaseModel](
         # Validate that field_name exists in the model
         properties = response_schema.get("properties", {})
         if field_name not in properties:
-            raise ValueError(f"Field {field_name} not in response model {response_model.__name__}")
+            raise ValueError(
+                f"Field {field_name} not in response model {response_model.__name__}"
+            )
     else:
         # Build a minimal JSON schema with just the sort field
         json_type_map = {
@@ -509,7 +539,9 @@ async def rank_async[T: BaseModel](
         }
         response_schema = {
             "type": "object",
-            "properties": {field_name: {"type": json_type_map.get(field_type, field_type)}},
+            "properties": {
+                field_name: {"type": json_type_map.get(field_type, field_type)}
+            },
             "required": [field_name],
         }
 
@@ -625,7 +657,9 @@ async def merge_async(
         session_id=session.session_id,
     )
 
-    response = await merge_operations_merge_post.asyncio(client=session.client, body=body)
+    response = await merge_operations_merge_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     merge_task = MergeTask()
@@ -720,7 +754,9 @@ async def dedupe_async(
         strategy_prompt=strategy_prompt if strategy_prompt is not None else UNSET,
     )
 
-    response = await dedupe_operations_dedupe_post.asyncio(client=session.client, body=body)
+    response = await dedupe_operations_dedupe_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     cohort_task = EveryrowTask(response_model=BaseModel, is_map=True, is_expand=False)
