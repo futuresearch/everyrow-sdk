@@ -1,4 +1,9 @@
 #!/bin/bash
+set -e
+
+# Check for jq dependency
+command -v jq >/dev/null 2>&1 || { echo "jq required" >&2; exit 1; }
+
 INPUT=$(cat)
 TASK_FILE="$HOME/.everyrow/task.json"
 

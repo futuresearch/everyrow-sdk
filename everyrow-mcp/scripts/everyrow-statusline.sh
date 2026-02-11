@@ -1,4 +1,9 @@
 #!/bin/bash
+set -e
+
+# Check for jq dependency (exit silently to avoid breaking Claude Code UI)
+command -v jq >/dev/null 2>&1 || exit 0
+
 input=$(cat)
 
 MODEL=$(echo "$input" | jq -r '.model.display_name')
