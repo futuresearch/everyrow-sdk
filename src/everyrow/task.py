@@ -260,7 +260,14 @@ async def await_task_completion(
                 last_snapshot = snapshot
                 elapsed = time.time() - start_time
                 if on_progress:
-                    on_progress(progress)
+                    try:
+                        on_progress(progress)
+                    except Exception as e:
+                        print(
+                            f"Warning: on_progress callback raised {type(e).__name__}: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
                 else:
                     _default_progress_output(progress, progress.total, elapsed)
                 _log_jsonl(
