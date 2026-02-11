@@ -55,12 +55,12 @@ async def main():
         print(f"Task submitted: {task.task_id}", file=sys.stderr, flush=True)
 
         client = task._client
-        start = time.monotonic()
+        start = time.time()
         poll_num = 0
         while True:
             status = await get_task_status(task.task_id, client)
             progress = _get_progress(status)
-            elapsed = time.monotonic() - start
+            elapsed = time.time() - start
             poll_num += 1
             entry = {
                 "poll": poll_num,

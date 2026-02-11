@@ -75,6 +75,7 @@ def _write_task_state(
     failed: int,
     running: int,
     status: str,
+    started_at: float,
 ) -> None:
     """Write task tracking state for hooks/status line to read."""
     try:
@@ -86,7 +87,7 @@ def _write_task_state(
             "failed": failed,
             "running": running,
             "status": status,
-            "started_at": int(time.time()),
+            "started_at": started_at,
         }
         with open(TASK_STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -675,7 +676,7 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
     cohort_task = await agent_map_async(**kwargs)
 
     task_id = str(cohort_task.task_id)
-    started_at = time.monotonic()
+    started_at = time.time()
     _active_tasks[task_id] = {
         "session": session,
         "session_ctx": session_ctx,
@@ -687,7 +688,7 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
         "prefix": "agent",
     }
 
-    _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
+    _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
 
     return [
         TextContent(
@@ -737,18 +738,19 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
     )
 
     task_id = str(cohort_task.task_id)
+    started_at = time.time()
     _active_tasks[task_id] = {
         "session": session,
         "session_ctx": session_ctx,
         "client": client,
         "total": total,
         "session_url": session_url,
-        "started_at": time.monotonic(),
+        "started_at": started_at,
         "input_csv": params.input_csv,
         "prefix": "ranked",
     }
 
-    _write_task_state(task_id, session_url, total, 0, 0, 0, "running")
+    _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
 
     return [
         TextContent(
@@ -783,7 +785,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         ]
 
     client = task_info["client"]
-    elapsed = time.monotonic() - task_info["started_at"]
+    elapsed = time.time() - task_info["started_at"]
     session_url = task_info["session_url"]
 
     # Block server-side before polling — controls the cadence
@@ -815,7 +817,14 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     elapsed_s = round(elapsed + PROGRESS_POLL_DELAY)
 
     _write_task_state(
-        task_id, session_url, total, completed, failed, running, status_str
+        task_id,
+        session_url,
+        total,
+        completed,
+        failed,
+        running,
+        status_str,
+        task_info["started_at"],
     )
 
     if status_str in ("completed", "failed", "revoked"):

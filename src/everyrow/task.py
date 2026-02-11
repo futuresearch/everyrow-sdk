@@ -214,7 +214,7 @@ async def await_task_completion(
     max_retries = 3
     retries = 0
     last_snapshot: tuple[int, int, int, int] = (-1, -1, -1, -1)
-    start_time = time.monotonic()
+    start_time = time.time()
     total_announced = False
     jsonl_path = Path(os.path.expanduser("~/.everyrow/progress.jsonl"))
 
@@ -258,7 +258,7 @@ async def await_task_completion(
             )
             if snapshot != last_snapshot:
                 last_snapshot = snapshot
-                elapsed = time.monotonic() - start_time
+                elapsed = time.time() - start_time
                 if on_progress:
                     on_progress(progress)
                 else:
@@ -282,7 +282,7 @@ async def await_task_completion(
             break
         await asyncio.sleep(2)
 
-    elapsed = time.monotonic() - start_time
+    elapsed = time.time() - start_time
     if progress and progress.total > 0:
         succeeded = progress.completed
         failed = progress.failed

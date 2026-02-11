@@ -446,7 +446,7 @@ class TestProgress:
 
         _active_tasks[task_id] = {
             "client": mock_client,
-            "started_at": time.monotonic(),
+            "started_at": time.time(),
             "session": MagicMock(),
             "session_ctx": MagicMock(),
             "total": 10,
@@ -498,7 +498,7 @@ class TestProgress:
 
         _active_tasks[task_id] = {
             "client": mock_client,
-            "started_at": time.monotonic(),
+            "started_at": time.time(),
             "session": MagicMock(),
             "session_ctx": MagicMock(),
             "total": 5,
@@ -560,7 +560,7 @@ class TestResults:
 
         _active_tasks[task_id] = {
             "client": mock_client,
-            "started_at": time.monotonic(),
+            "started_at": time.time(),
             "session": MagicMock(),
             "session_ctx": mock_session_ctx,
             "total": 3,
