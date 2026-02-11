@@ -179,7 +179,7 @@ async def single_agent[T: BaseModel](
         session: Optional session. If not provided, one will be created automatically.
         input: Input data (BaseModel, DataFrame, UUID, or Result).
         effort_level: Effort level preset (low/medium/high). Mutually exclusive with
-            custom params (llm, iteration_budget, include_research). Default: low.
+            custom params (llm, iteration_budget, include_research). Default: medium.
         llm: LLM to use. Required when effort_level is None.
         iteration_budget: Number of agent iterations (0-20). Required when effort_level is None.
         include_research: Include research notes. Required when effort_level is None.
