@@ -7,9 +7,11 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
   exit 0
 fi
 
-if [ -f /tmp/everyrow-task.json ]; then
-  STATUS=$(jq -r '.status' /tmp/everyrow-task.json)
-  TASK_ID=$(jq -r '.task_id' /tmp/everyrow-task.json)
+TASK_FILE="$HOME/.everyrow/task.json"
+
+if [ -f "$TASK_FILE" ]; then
+  STATUS=$(jq -r '.status' "$TASK_FILE")
+  TASK_ID=$(jq -r '.task_id' "$TASK_FILE")
 
   if [ "$STATUS" = "running" ]; then
     jq -n \

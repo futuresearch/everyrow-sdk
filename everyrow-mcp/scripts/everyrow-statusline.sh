@@ -12,8 +12,10 @@ RESET='\033[0m'
 
 echo -e "${CYAN}[$MODEL]${RESET} ${PCT}% context"
 
-if [ -f /tmp/everyrow-task.json ]; then
-  TASK=$(cat /tmp/everyrow-task.json)
+TASK_FILE="$HOME/.everyrow/task.json"
+
+if [ -f "$TASK_FILE" ]; then
+  TASK=$(cat "$TASK_FILE")
   STATUS=$(echo "$TASK" | jq -r '.status')
   COMPLETED=$(echo "$TASK" | jq -r '.completed // 0')
   TOTAL=$(echo "$TASK" | jq -r '.total // 0')

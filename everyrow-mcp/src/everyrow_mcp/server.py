@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
@@ -64,7 +65,7 @@ mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
 _active_tasks: dict[str, dict[str, Any]] = {}
 
 PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
-TASK_STATE_FILE = "/tmp/everyrow-task.json"
+TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 
 
 def _write_task_state(
@@ -77,8 +78,13 @@ def _write_task_state(
     status: str,
     started_at: float,
 ) -> None:
-    """Write task tracking state for hooks/status line to read."""
+    """Write task tracking state for hooks/status line to read.
+
+    Note: Only one task is tracked at a time. If multiple tasks run concurrently,
+    only the most recent one's progress is shown.
+    """
     try:
+        TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         state = {
             "task_id": task_id,
             "session_url": session_url,
@@ -940,6 +946,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
         except Exception:
             pass
         del _active_tasks[task_id]
+        # Task state file deleted by PostToolUse hook (everyrow-track-results.sh)
 
         return [
             TextContent(

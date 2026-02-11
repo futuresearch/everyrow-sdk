@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "rm -f /tmp/everyrow-task.json"
+            "command": "rm -f ~/.everyrow/task.json"
           }
         ]
       }
