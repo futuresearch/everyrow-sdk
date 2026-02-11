@@ -15,9 +15,14 @@ if [ -f "$TASK_FILE" ]; then
   STARTED=$(echo "$TASK" | jq -r '.started_at' | cut -d. -f1)
   ELAPSED=$(( $(date +%s) - STARTED ))
 
-  # Desktop notification (macOS)
-  osascript -e "display notification \"$COMPLETED/$TOTAL complete ($FAILED failed) in ${ELAPSED}s\" with title \"Everyrow\" sound name \"Glass\"" 2>/dev/null
+  # Desktop notification (macOS or Linux)
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"$COMPLETED/$TOTAL complete ($FAILED failed) in ${ELAPSED}s\" with title \"Everyrow\" sound name \"Glass\"" 2>/dev/null
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "Everyrow" "$COMPLETED/$TOTAL complete ($FAILED failed) in ${ELAPSED}s"
+  fi
 
   rm -f "$TASK_FILE"
 fi
+
 exit 0
