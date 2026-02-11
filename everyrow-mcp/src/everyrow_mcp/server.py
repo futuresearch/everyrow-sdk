@@ -25,10 +25,13 @@ from everyrow.ops import (
     agent_map,
     agent_map_async,
     dedupe,
+    dedupe_async,
     merge,
+    merge_async,
     rank,
     rank_async,
     screen,
+    screen_async,
 )
 from everyrow.session import create_session
 from mcp.server.fastmcp import FastMCP
@@ -99,6 +102,36 @@ def _write_task_state(
             json.dump(state, f)
     except Exception:
         pass  # Non-critical — hooks/status line just won't update
+
+
+def _register_submitted_task(
+    cohort_task: Any,
+    client: Any,
+    session: Any,
+    session_ctx: Any,
+    session_url: str,
+    total: int,
+    input_csv: str,
+    prefix: str,
+) -> str:
+    """Register a submitted task for progress tracking.
+
+    Returns the task_id string.
+    """
+    task_id = str(cohort_task.task_id)
+    started_at = time.time()
+    _active_tasks[task_id] = {
+        "session": session,
+        "session_ctx": session_ctx,
+        "client": client,
+        "total": total,
+        "session_url": session_url,
+        "started_at": started_at,
+        "input_csv": input_csv,
+        "prefix": prefix,
+    }
+    _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
+    return task_id
 
 
 class ScreenInput(BaseModel):
@@ -626,6 +659,79 @@ class RankSubmitInput(BaseModel):
         return v
 
 
+class ScreenSubmitInput(BaseModel):
+    """Input for submitting a screen operation (non-blocking)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(
+        ..., description="Natural language screening criteria.", min_length=1
+    )
+    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    response_schema: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional JSON schema for the response model.",
+    )
+
+    @field_validator("input_csv")
+    @classmethod
+    def validate_input_csv(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+
+class DedupeSubmitInput(BaseModel):
+    """Input for submitting a dedupe operation (non-blocking)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    equivalence_relation: str = Field(
+        ...,
+        description="Natural language description of what makes two rows equivalent.",
+        min_length=1,
+    )
+    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    select_representative: bool = Field(
+        default=True,
+        description="If True, select one representative per duplicate group.",
+    )
+
+    @field_validator("input_csv")
+    @classmethod
+    def validate_input_csv(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+
+class MergeSubmitInput(BaseModel):
+    """Input for submitting a merge operation (non-blocking)."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(
+        ...,
+        description="Natural language description of how to match rows.",
+        min_length=1,
+    )
+    left_csv: str = Field(..., description="Absolute path to the left/primary CSV.")
+    right_csv: str = Field(..., description="Absolute path to the right/secondary CSV.")
+    merge_on_left: str | None = Field(
+        default=None, description="Optional column name in left table for merge key."
+    )
+    merge_on_right: str | None = Field(
+        default=None, description="Optional column name in right table for merge key."
+    )
+    use_web_search: Literal["auto", "yes", "no"] | None = Field(
+        default=None, description='Control web search: "auto", "yes", or "no".'
+    )
+
+    @field_validator("left_csv", "right_csv")
+    @classmethod
+    def validate_csv_paths(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+
 class ProgressInput(BaseModel):
     """Input for checking task progress."""
 
@@ -681,20 +787,16 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
         kwargs["response_model"] = response_model
     cohort_task = await agent_map_async(**kwargs)
 
-    task_id = str(cohort_task.task_id)
-    started_at = time.time()
-    _active_tasks[task_id] = {
-        "session": session,
-        "session_ctx": session_ctx,
-        "client": client,
-        "total": total,
-        "session_url": session_url,
-        "started_at": started_at,
-        "input_csv": params.input_csv,
-        "prefix": "agent",
-    }
-
-    _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
+    task_id = _register_submitted_task(
+        cohort_task,
+        client,
+        session,
+        session_ctx,
+        session_url,
+        total,
+        params.input_csv,
+        "agent",
+    )
 
     return [
         TextContent(
@@ -743,26 +845,183 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
         ascending_order=params.ascending_order,
     )
 
-    task_id = str(cohort_task.task_id)
-    started_at = time.time()
-    _active_tasks[task_id] = {
-        "session": session,
-        "session_ctx": session_ctx,
-        "client": client,
-        "total": total,
-        "session_url": session_url,
-        "started_at": started_at,
-        "input_csv": params.input_csv,
-        "prefix": "ranked",
-    }
-
-    _write_task_state(task_id, session_url, total, 0, 0, 0, "running", started_at)
+    task_id = _register_submitted_task(
+        cohort_task,
+        client,
+        session,
+        session_ctx,
+        session_url,
+        total,
+        params.input_csv,
+        "ranked",
+    )
 
     return [
         TextContent(
             type="text",
             text=(
                 f"Submitted: {total} rows for ranking.\n"
+                f"Session: {session_url}\n"
+                f"Task ID: {task_id}\n\n"
+                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
+
+
+@mcp.tool(name="everyrow_screen_submit", structured_output=False)
+async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]:
+    """Submit a screen/filter operation on a CSV (returns immediately).
+
+    Use this instead of everyrow_screen for long-running operations. Returns a task_id
+    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+
+    After receiving a result from this tool, share the session_url with the user,
+    then immediately call everyrow_progress with the returned task_id.
+    """
+    df = pd.read_csv(params.input_csv)
+    total = len(df)
+
+    response_model: type[BaseModel] | None = None
+    if params.response_schema:
+        response_model = _schema_to_model("ScreenResult", params.response_schema)
+
+    client = create_client()
+    await client.__aenter__()
+
+    session_ctx = create_session(client=client)
+    session = await session_ctx.__aenter__()
+    session_url = session.get_url()
+
+    cohort_task = await screen_async(
+        task=params.task,
+        session=session,
+        input=df,
+        response_model=response_model,
+    )
+
+    task_id = _register_submitted_task(
+        cohort_task,
+        client,
+        session,
+        session_ctx,
+        session_url,
+        total,
+        params.input_csv,
+        "screened",
+    )
+
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Submitted: {total} rows for screening.\n"
+                f"Session: {session_url}\n"
+                f"Task ID: {task_id}\n\n"
+                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
+
+
+@mcp.tool(name="everyrow_dedupe_submit", structured_output=False)
+async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]:
+    """Submit a dedupe operation on a CSV (returns immediately).
+
+    Use this instead of everyrow_dedupe for long-running operations. Returns a task_id
+    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+
+    After receiving a result from this tool, share the session_url with the user,
+    then immediately call everyrow_progress with the returned task_id.
+    """
+    df = pd.read_csv(params.input_csv)
+    total = len(df)
+
+    client = create_client()
+    await client.__aenter__()
+
+    session_ctx = create_session(client=client)
+    session = await session_ctx.__aenter__()
+    session_url = session.get_url()
+
+    cohort_task = await dedupe_async(
+        equivalence_relation=params.equivalence_relation,
+        session=session,
+        input=df,
+        select_representative=params.select_representative,
+    )
+
+    task_id = _register_submitted_task(
+        cohort_task,
+        client,
+        session,
+        session_ctx,
+        session_url,
+        total,
+        params.input_csv,
+        "deduped",
+    )
+
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Submitted: {total} rows for deduplication.\n"
+                f"Session: {session_url}\n"
+                f"Task ID: {task_id}\n\n"
+                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            ),
+        )
+    ]
+
+
+@mcp.tool(name="everyrow_merge_submit", structured_output=False)
+async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
+    """Submit a merge operation on two CSVs (returns immediately).
+
+    Use this instead of everyrow_merge for long-running operations. Returns a task_id
+    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+
+    After receiving a result from this tool, share the session_url with the user,
+    then immediately call everyrow_progress with the returned task_id.
+    """
+    left_df = pd.read_csv(params.left_csv)
+    right_df = pd.read_csv(params.right_csv)
+    total = len(left_df)
+
+    client = create_client()
+    await client.__aenter__()
+
+    session_ctx = create_session(client=client)
+    session = await session_ctx.__aenter__()
+    session_url = session.get_url()
+
+    cohort_task = await merge_async(
+        task=params.task,
+        session=session,
+        left_table=left_df,
+        right_table=right_df,
+        merge_on_left=params.merge_on_left,
+        merge_on_right=params.merge_on_right,
+        use_web_search=params.use_web_search,
+    )
+
+    task_id = _register_submitted_task(
+        cohort_task,
+        client,
+        session,
+        session_ctx,
+        session_url,
+        total,
+        params.left_csv,
+        "merged",
+    )
+
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Submitted: {total} left rows for merging.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
