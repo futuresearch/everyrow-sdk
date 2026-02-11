@@ -138,5 +138,4 @@ companies = await single_agent(
 - [Classify and Label Data with an LLM](/docs/classify-dataframe-rows-llm)
 
 ### Notebooks
-- [Agent Map Regulatory Status](/docs/notebooks/agent-map-regulatory-status)
 - [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)

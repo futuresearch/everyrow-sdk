@@ -65,4 +65,4 @@ result = await agent_map(task=..., input=df)
 
 [Full reference →](/docs/reference/RESEARCH)
 Guides: [Add a Column with Web Lookup](/docs/add-column-web-lookup), [Classify and Label Data with an LLM](/docs/classify-dataframe-rows-llm)
-Notebooks: [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale), [Agent Map Regulatory Status](/docs/notebooks/agent-map-regulatory-status)
+Notebooks: [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)

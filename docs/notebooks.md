@@ -34,7 +34,6 @@ Runnable notebooks with real datasets. Each notebook demonstrates an everyrow op
 ## Research
 
 - [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)
-- [Agent Map Regulatory Status](/docs/notebooks/agent-map-regulatory-status)
 
 ## Multi-Method
 
