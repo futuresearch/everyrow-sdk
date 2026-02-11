@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   check-banned-terms:
-    name: Check for banned terms
+    name: Check for terms
     # issue_comment fires for both issues and PRs; only run for PRs
     if: github.event_name != 'issue_comment' || github.event.issue.pull_request
     runs-on: ubuntu-latest
