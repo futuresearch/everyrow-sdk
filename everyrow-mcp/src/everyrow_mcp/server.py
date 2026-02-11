@@ -860,7 +860,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_results", structured_output=False)
-async def everyrow_results(params: ResultsInput) -> list[TextContent]:
+async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
     """Retrieve results from a completed everyrow task and save to CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
@@ -879,6 +879,31 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     client = task_info["client"]
     input_csv = task_info["input_csv"]
     prefix = task_info["prefix"]
+
+    try:
+        status_response = await get_task_status_tasks_task_id_status_get.asyncio(
+            task_id=UUID(task_id),
+            client=client,
+        )
+        if status_response is None:
+            return [
+                TextContent(
+                    type="text", text="Error: No response from status endpoint."
+                )
+            ]
+        status_str = status_response.status.value
+        if status_str not in ("completed", "failed", "revoked"):
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Task status is {status_str}. Cannot fetch results yet.\n"
+                        f"Call everyrow_progress(task_id='{task_id}') to check again."
+                    ),
+                )
+            ]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Error checking task status: {e!r}")]
 
     try:
         result_response = await get_task_result_tasks_task_id_result_get.asyncio(

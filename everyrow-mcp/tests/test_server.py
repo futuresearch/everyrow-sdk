@@ -569,6 +569,10 @@ class TestResults:
             "prefix": "agent",
         }
 
+        # Mock status response (for completion check)
+        mock_status = MagicMock()
+        mock_status.status = MagicMock(value="completed")
+
         # Mock result response with additional_properties data
         mock_item1 = MagicMock()
         mock_item1.additional_properties = {"name": "TechStart", "answer": "Series A"}
@@ -578,10 +582,17 @@ class TestResults:
         mock_result = MagicMock()
         mock_result.data = [mock_item1, mock_item2]
 
-        with patch(
-            "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
-            new_callable=AsyncMock,
-            return_value=mock_result,
+        with (
+            patch(
+                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=mock_status,
+            ),
+            patch(
+                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
         ):
             params = ResultsInput(task_id=task_id, output_path=str(tmp_path))
             result = await everyrow_results(params)
