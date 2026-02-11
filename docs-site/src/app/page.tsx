@@ -6,14 +6,14 @@ import { getNavigation, type NavSection } from "@/utils/docs";
 export const metadata: Metadata = {
   title: "Everyrow Documentation",
   description:
-    "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+    "Run LLM Research Agents at Scale",
   alternates: {
     canonical: "https://everyrow.io/docs",
   },
   openGraph: {
     title: "Everyrow Documentation",
     description:
-      "Process every row of your data with AI-powered research, deduplication, merging, ranking, and screening.",
+      "Run LLM Research Agents at Scale",
     url: "https://everyrow.io/docs",
     images: [{ url: "https://everyrow.io/everyrow-og.png" }],
   },
@@ -33,6 +33,12 @@ const SECTION_DESCRIPTIONS: Record<string, string> = {
   "Case Studies": "Real-world examples with Jupyter notebooks",
 };
 
+const SECTION_LINKS: Record<string, string> = {
+  "API Reference": "/api",
+  Guides: "/guides",
+  "Case Studies": "/notebooks",
+};
+
 const SECTION_DISPLAY_TITLES: Record<string, string> = {
   Overview: "Getting Started",
 };
@@ -44,8 +50,10 @@ function SectionCard({ section }: { section: NavSection }) {
 
   if (!firstItem) return null;
 
+  const href = SECTION_LINKS[section.title] || `/${firstItem.slug}`;
+
   return (
-    <Link href={`/${firstItem.slug}`} className="landing-card">
+    <Link href={href} className="landing-card">
       <div className="landing-card-icon" data-icon={icon}>
         {icon === "rocket" && (
           <svg
@@ -109,10 +117,9 @@ export default function DocsHome() {
   return (
     <DocsLayout navigation={navigation}>
       <div className="landing-hero">
-        <h1 className="landing-title">everyrow documentation</h1>
+        <h1 className="landing-title"><span className="landing-title-brand">everyrow</span> documentation</h1>
         <p className="landing-subtitle">
-          Process every row of your data with AI-powered research, deduplication,
-          merging, ranking, and screening.
+          Run LLM Research Agents at Scale
         </p>
       </div>
 

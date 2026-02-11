@@ -35,7 +35,11 @@ class MergeOperation:
         use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
             tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
             without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
+<<<<<<< HEAD
         one_on_one (bool | None | Unset): Optional boolean parameter for one-on-one merge mode. Defaults to None/False.
+=======
+        one_on_one (bool | None | Unset): Optional parameter for one-on-one merge behavior
+>>>>>>> main
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
@@ -249,7 +253,7 @@ class MergeOperation:
                 return data
             return cast(bool | None | Unset, data)
 
-        one_on_one: bool | Unset | None = _parse_one_on_one(d.pop("one_on_one", UNSET))
+        one_on_one = _parse_one_on_one(d.pop("one_on_one", UNSET))
 
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
