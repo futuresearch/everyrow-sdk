@@ -4,7 +4,6 @@ import os
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, TypeVar
@@ -22,6 +21,7 @@ from everyrow.generated.api.tasks import (
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models import (
     LLMEnumPublic,
+    TaskProgressInfo,
     TaskResultResponse,
     TaskResultResponseDataType1,
     TaskStatus,
@@ -41,38 +41,9 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
-@dataclass
-class ProgressInfo:
-    """Progress counts from the engine's artifact status tracking."""
-
-    pending: int
-    running: int
-    completed: int
-    failed: int
-    total: int
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ProgressInfo":
-        return cls(
-            pending=d.get("pending", 0),
-            running=d.get("running", 0),
-            completed=d.get("completed", 0),
-            failed=d.get("failed", 0),
-            total=d.get("total", 0),
-        )
-
-
-def _get_progress(status: TaskStatusResponse) -> ProgressInfo | None:
+def _get_progress(status: TaskStatusResponse) -> TaskProgressInfo | None:
     """Extract progress info from a status response."""
-    if status.progress is None:
-        return None
-    return ProgressInfo(
-        pending=status.progress.pending,
-        running=status.progress.running,
-        completed=status.progress.completed,
-        failed=status.progress.failed,
-        total=status.progress.total,
-    )
+    return status.progress
 
 
 def _ts() -> str:
@@ -90,7 +61,7 @@ def _format_eta(completed: int, total: int, elapsed: float) -> str:
 
 
 def _default_progress_output(
-    progress: ProgressInfo, total: int, elapsed: float
+    progress: TaskProgressInfo, total: int, elapsed: float
 ) -> None:
     """Print a progress line to stderr."""
     pct = (progress.completed / total * 100) if total > 0 else 0
@@ -155,7 +126,7 @@ class EveryrowTask[T: BaseModel]:
     async def await_result(
         self,
         client: AuthenticatedClient | None = None,
-        on_progress: Callable[[ProgressInfo], None] | None = None,
+        on_progress: Callable[[TaskProgressInfo], None] | None = None,
     ) -> TableResult | ScalarResult[T]:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before awaiting result")
@@ -213,7 +184,7 @@ async def await_task_completion(
     task_id: UUID,
     client: AuthenticatedClient,
     session_url: str | None = None,
-    on_progress: Callable[[ProgressInfo], None] | None = None,
+    on_progress: Callable[[TaskProgressInfo], None] | None = None,
 ) -> TaskStatusResponse:
     _maybe_show_plugin_hint()
     max_retries = 3

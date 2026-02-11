@@ -15,7 +15,6 @@ from everyrow.generated.models import (
     TaskStatusResponse,
 )
 from everyrow.task import (
-    ProgressInfo,
     _format_eta,
     _get_progress,
     await_task_completion,
@@ -39,34 +38,9 @@ def _make_status(
     )
 
 
-# --- ProgressInfo tests ---
-
-
-class TestProgressInfo:
-    def test_from_dict(self):
-        info = ProgressInfo.from_dict(
-            {"pending": 3, "running": 2, "completed": 5, "failed": 1, "total": 11}
-        )
-        assert info.pending == 3
-        assert info.running == 2
-        assert info.completed == 5
-        assert info.failed == 1
-        assert info.total == 11
-
-    def test_from_dict_defaults(self):
-        info = ProgressInfo.from_dict({})
-        assert info.pending == 0
-        assert info.completed == 0
-
-
 class TestGetProgress:
     def test_returns_none_when_missing(self):
         status = _make_status()
-        assert _get_progress(status) is None
-
-    def test_returns_none_for_non_dict(self):
-        status = _make_status()
-        status.additional_properties["progress"] = "not a dict"
         assert _get_progress(status) is None
 
     def test_returns_progress_info(self):
@@ -192,7 +166,7 @@ async def test_progress_callback_fires_on_change(
     assert callback.call_count == 4
     # Verify the first call got the initial progress
     first_call = callback.call_args_list[0][0][0]
-    assert isinstance(first_call, ProgressInfo)
+    assert isinstance(first_call, TaskProgressInfo)
     assert first_call.pending == 5
     # Verify the last call got the final progress
     last_call = callback.call_args_list[-1][0][0]
