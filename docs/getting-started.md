@@ -19,7 +19,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here
 ```
 
-See [Installation](/docs/installation) for other options (MCP servers, coding agent plugins).
+See the [docs homepage](/docs) for other options (MCP servers, coding agent plugins).
 
 ## Basic Example
 
@@ -135,6 +135,6 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 
 ## See Also
 
-- [Guides](/filter-dataframe-with-llm) — step-by-step tutorials
-- [Case Studies](/notebooks/basic-usage) — worked examples
-- [Skills vs MCP](/skills-vs-mcp) — integration options
+- [Guides](/filter-dataframe-with-llm): step-by-step tutorials
+- [Case Studies](/notebooks/basic-usage): worked examples
+- [Skills vs MCP](/skills-vs-mcp): integration options

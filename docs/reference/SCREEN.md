@@ -93,14 +93,14 @@ Compare: regex on "remote-friendly" job postings gets 68% precision.
 ## Related docs
 
 ### Guides
-- [Filter a DataFrame with LLMs](/filter-dataframe-with-llm)
+- [Filter a DataFrame with LLMs](/docs/filter-dataframe-with-llm)
 
 ### Notebooks
-- [LLM Screening at Scale](/notebooks/llm-powered-screening-at-scale)
-- [Screen Job Postings by Criteria](/notebooks/screen-job-postings-by-criteria)
-- [Screen Stocks by Investment Thesis](/notebooks/screen-stocks-by-investment-thesis)
-- [Screen Stocks by Margin Sensitivity](/notebooks/screen-stocks-by-margin-sensitivity)
-- [Multi-Stage Lead Qualification](/notebooks/multi-stage-lead-qualification)
+- [LLM Screening at Scale](/docs/notebooks/llm-powered-screening-at-scale)
+- [Screen Job Postings by Criteria](/docs/notebooks/screen-job-postings-by-criteria)
+- [Screen Stocks by Investment Thesis](/docs/notebooks/screen-stocks-by-investment-thesis)
+- [Screen Stocks by Margin Sensitivity](/docs/notebooks/screen-stocks-by-margin-sensitivity)
+- [Multi-Stage Lead Qualification](/docs/notebooks/multi-stage-lead-qualification)
 
 ### Blog posts
 - [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/)

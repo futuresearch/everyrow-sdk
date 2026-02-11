@@ -134,9 +134,9 @@ companies = await single_agent(
 ## Related docs
 
 ### Guides
-- [Add a Column with Web Lookup](/add-column-web-lookup)
-- [Classify and Label Data with an LLM](/classify-dataframe-rows-llm)
+- [Add a Column with Web Lookup](/docs/add-column-web-lookup)
+- [Classify and Label Data with an LLM](/docs/classify-dataframe-rows-llm)
 
 ### Notebooks
-- [Agent Map Regulatory Status](/notebooks/agent-map-regulatory-status)
-- [LLM Web Research Agents at Scale](/notebooks/llm-web-research-agents-at-scale)
+- [Agent Map Regulatory Status](/docs/notebooks/agent-map-regulatory-status)
+- [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)

@@ -68,13 +68,13 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 ## Related docs
 
 ### Guides
-- [Fuzzy Join Without Matching Keys](/fuzzy-join-without-keys)
+- [Fuzzy Join Without Matching Keys](/docs/fuzzy-join-without-keys)
 
 ### Notebooks
-- [LLM Merging at Scale](/notebooks/llm-powered-merging-at-scale)
-- [Match Software Vendors to Requirements](/notebooks/match-software-vendors-to-requirements)
-- [Merge Contacts with Company Data](/notebooks/merge-contacts-with-company-data)
-- [Merge Overlapping Contact Lists](/notebooks/merge-overlapping-contact-lists)
+- [LLM Merging at Scale](/docs/notebooks/llm-powered-merging-at-scale)
+- [Match Software Vendors to Requirements](/docs/notebooks/match-software-vendors-to-requirements)
+- [Merge Contacts with Company Data](/docs/notebooks/merge-contacts-with-company-data)
+- [Merge Overlapping Contact Lists](/docs/notebooks/merge-overlapping-contact-lists)
 
 ### Blog posts
 - [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/)
