@@ -26,7 +26,7 @@ if [ -f "$TASK_FILE" ]; then
   TOTAL=$(echo "$TASK" | jq -r '.total // 0')
   FAILED=$(echo "$TASK" | jq -r '.failed // 0')
   URL=$(echo "$TASK" | jq -r '.session_url // empty')
-  STARTED=$(echo "$TASK" | jq -r '.started_at // 0')
+  STARTED=$(echo "$TASK" | jq -r '.started_at // 0' | cut -d. -f1)
   ELAPSED=$(( $(date +%s) - STARTED ))
 
   if [ "$STATUS" = "running" ] && [ "$TOTAL" -gt 0 ]; then
