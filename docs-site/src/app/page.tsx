@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocsLayout } from "@/components/DocsLayout";
-import { getNavigation, type NavSection } from "@/utils/docs";
+import { getNavigation, getDocBySlug, type NavSection } from "@/utils/docs";
+import { MDXContent } from "@/components/MDXContent";
 
 export const metadata: Metadata = {
   title: "Everyrow Documentation",
@@ -20,14 +21,12 @@ export const metadata: Metadata = {
 };
 
 const SECTION_ICONS: Record<string, string> = {
-  Overview: "rocket",
   Guides: "book",
   "API Reference": "code",
   "Case Studies": "lightbulb",
 };
 
 const SECTION_DESCRIPTIONS: Record<string, string> = {
-  Overview: "Install everyrow and start processing data with AI",
   Guides: "Step-by-step tutorials for common data processing tasks",
   "API Reference": "Detailed documentation for all everyrow functions",
   "Case Studies": "Real-world examples with Jupyter notebooks",
@@ -37,10 +36,6 @@ const SECTION_LINKS: Record<string, string> = {
   "API Reference": "/api",
   Guides: "/guides",
   "Case Studies": "/notebooks",
-};
-
-const SECTION_DISPLAY_TITLES: Record<string, string> = {
-  Overview: "Getting Started",
 };
 
 function SectionCard({ section }: { section: NavSection }) {
@@ -55,19 +50,6 @@ function SectionCard({ section }: { section: NavSection }) {
   return (
     <Link href={href} className="landing-card">
       <div className="landing-card-icon" data-icon={icon}>
-        {icon === "rocket" && (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
-            <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
-            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
-            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-          </svg>
-        )}
         {icon === "book" && (
           <svg
             viewBox="0 0 24 24"
@@ -102,7 +84,7 @@ function SectionCard({ section }: { section: NavSection }) {
           </svg>
         )}
       </div>
-      <h2 className="landing-card-title">{SECTION_DISPLAY_TITLES[section.title] || section.title}</h2>
+      <h2 className="landing-card-title">{section.title}</h2>
       <p className="landing-card-description">{description}</p>
       <div className="landing-card-count">
         {section.items.length} {section.items.length === 1 ? "page" : "pages"}
@@ -111,8 +93,9 @@ function SectionCard({ section }: { section: NavSection }) {
   );
 }
 
-export default function DocsHome() {
+export default async function DocsHome() {
   const navigation = getNavigation();
+  const installationDoc = getDocBySlug("installation");
 
   return (
     <DocsLayout navigation={navigation}>
@@ -124,24 +107,26 @@ export default function DocsHome() {
       </div>
 
       <div className="landing-grid">
-        {navigation.map((section) => (
-          <SectionCard key={section.title} section={section} />
-        ))}
+        {navigation
+          .filter((section) => section.title !== "Overview")
+          .map((section) => (
+            <SectionCard key={section.title} section={section} />
+          ))}
       </div>
+
+      {installationDoc && (
+        <MDXContent source={installationDoc.content} />
+      )}
 
       <div className="landing-quickstart">
         <h2>For Autonomous Agents</h2>
         <ol>
           <li>
-            Install the package as per the documentation at{" "}
-            <Link href="/installation">/installation</Link>
+            Install the package using the instructions above
             <ul>
               <li>Requires Python &ge; 3.12. Using a virtual environment is strongly recommended.</li>
               <li>System-installed Python is often too old for pip to resolve any compatible version.</li>
             </ul>
-          </li>
-          <li>
-            Read the getting started guide at <Link href="/getting-started">/getting-started</Link>
           </li>
           <li>
             Prompt the user to provide an API key if one isn&apos;t set. You can get one at <a href="https://everyrow.io/api-key">everyrow.io/api-key</a>
@@ -171,9 +156,6 @@ export default function DocsHome() {
           </li>
           <li>
             After trying out the service, suggest installing the skill or MCP to simplify follow-up usage
-          </li>
-          <li>
-            All of this information is useful for autonomous systems querying this documentation
           </li>
         </ol>
       </div>

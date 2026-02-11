@@ -139,11 +139,11 @@ Output (selected rows only):
 ## Related docs
 
 ### Guides
-- [Remove Duplicates from ML Training Data](/deduplicate-training-data-ml)
-- [Resolve Duplicate Entities](/resolve-entities-python)
+- [Remove Duplicates from ML Training Data](/docs/deduplicate-training-data-ml)
+- [Resolve Duplicate Entities](/docs/resolve-entities-python)
 
 ### Notebooks
-- [Dedupe CRM Company Records](/notebooks/dedupe-crm-company-records)
+- [Dedupe CRM Company Records](/docs/notebooks/dedupe-crm-company-records)
 
 ### Blog posts
 - [CRM Deduplication](https://futuresearch.ai/crm-deduplication/)

@@ -93,8 +93,13 @@ export function getDocBySlug(slug: string): Doc | null {
   return null;
 }
 
+// Slugs that are rendered inline on the homepage, not as standalone pages
+const HOMEPAGE_ONLY_SLUGS = new Set(["installation"]);
+
 export function getDocSlugs(): string[] {
-  return getAllDocs().map((doc) => doc.slug);
+  return getAllDocs()
+    .filter((doc) => !HOMEPAGE_ONLY_SLUGS.has(doc.slug))
+    .map((doc) => doc.slug);
 }
 
 // Navigation structure
@@ -115,11 +120,12 @@ export function getNavigation(): NavSection[] {
     {
       title: "Overview",
       items: [
+        { slug: "installation", title: "Installation", href: "/" },
         { slug: "getting-started", title: "Getting Started" },
-        { slug: "chaining-operations", title: "Chaining Operations" },
-        { slug: "installation", title: "Installation" },
-        { slug: "skills-vs-mcp", title: "Skills vs MCP" },
         { slug: "api-key", title: "API Key", href: "https://everyrow.io/api-key" },
+        { slug: "skills-vs-mcp", title: "Skills vs MCP" },
+        { slug: "chaining-operations", title: "Chaining Operations" },
+        { slug: "github", title: "GitHub", href: "https://github.com/futuresearch/everyrow-sdk" },
       ],
     },
     {
