@@ -63,11 +63,16 @@ class ProgressInfo:
 
 
 def _get_progress(status: TaskStatusResponse) -> ProgressInfo | None:
-    """Extract progress info from a status response's additional_properties."""
-    raw = status.additional_properties.get("progress")
-    if raw is None or not isinstance(raw, dict):
+    """Extract progress info from a status response."""
+    if status.progress is None:
         return None
-    return ProgressInfo.from_dict(raw)
+    return ProgressInfo(
+        pending=status.progress.pending,
+        running=status.progress.running,
+        completed=status.progress.completed,
+        failed=status.progress.failed,
+        total=status.progress.total,
+    )
 
 
 def _ts() -> str:
