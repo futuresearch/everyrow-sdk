@@ -10,10 +10,11 @@ from everyrow.result import ScalarResult, TableResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_single_agent_returns_scalar_result():
+async def test_single_agent_returns_scalar_result(session):
     """Test that single_agent returns a ScalarResult by default."""
     result = await single_agent(
         task="What is the capital of France? Answer with just the city name.",
+        session=session,
     )
 
     assert isinstance(result, ScalarResult)
@@ -25,7 +26,7 @@ async def test_single_agent_returns_scalar_result():
     assert "paris" in result.data.answer.lower()
 
 
-async def test_single_agent_with_custom_response_model():
+async def test_single_agent_with_custom_response_model(session):
     """Test single_agent with a custom response model."""
 
     class CapitalResponse(BaseModel):
@@ -35,6 +36,7 @@ async def test_single_agent_with_custom_response_model():
     result = await single_agent(
         task="What is the capital of Germany?",
         response_model=CapitalResponse,
+        session=session,
     )
 
     assert isinstance(result, ScalarResult)
@@ -44,7 +46,7 @@ async def test_single_agent_with_custom_response_model():
     assert "germany" in result.data.country.lower()
 
 
-async def test_single_agent_return_table():
+async def test_single_agent_return_table(session):
     """Test single_agent with return_table=True returns TableResult."""
 
     class Country(BaseModel):
@@ -55,6 +57,7 @@ async def test_single_agent_return_table():
         task="List exactly 3 countries in Europe with their capitals: France, Germany, and Italy.",
         response_model=Country,
         return_table=True,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -64,7 +67,7 @@ async def test_single_agent_return_table():
     assert "capital" in result.data.columns
 
 
-async def test_single_agent_with_table_input():
+async def test_single_agent_with_table_input(session):
     """Test single_agent can analyze a DataFrame input."""
     companies = pd.DataFrame(
         [
@@ -77,6 +80,7 @@ async def test_single_agent_with_table_input():
     result = await single_agent(  # pyright: ignore[reportCallIssue]
         task="Which company has the highest revenue? Answer with just the company name.",
         input=companies,  # pyright: ignore[reportArgumentType]
+        session=session,
     )
 
     assert isinstance(result, ScalarResult)

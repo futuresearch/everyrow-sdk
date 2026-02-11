@@ -9,7 +9,7 @@ from everyrow.result import MergeResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_merge_returns_joined_table(trials_df, pharma_df):
+async def test_merge_returns_joined_table(trials_df, pharma_df, session):
     """Test that merge returns a MergeResult with joined data and breakdown."""
     result = await merge(
         task="""
@@ -21,6 +21,7 @@ async def test_merge_returns_joined_table(trials_df, pharma_df):
         right_table=pharma_df,
         merge_on_left="sponsor",
         merge_on_right="company",
+        session=session,
     )
 
     assert isinstance(result, MergeResult)
@@ -33,7 +34,7 @@ async def test_merge_returns_joined_table(trials_df, pharma_df):
     assert result.breakdown is not None
 
 
-async def test_merge_subsidiary_to_parent():
+async def test_merge_subsidiary_to_parent(session):
     """Test merge matching subsidiaries to parent companies."""
     subsidiaries = pd.DataFrame(
         [
@@ -61,6 +62,7 @@ async def test_merge_subsidiary_to_parent():
         right_table=parents,
         merge_on_left="subsidiary",
         merge_on_right="parent_company",
+        session=session,
     )
 
     assert isinstance(result, MergeResult)
@@ -76,7 +78,7 @@ async def test_merge_subsidiary_to_parent():
     assert "Microsoft" in linkedin_row["parent_company"].iloc[0]  # pyright: ignore[reportAttributeAccessIssue]
 
 
-async def test_merge_fuzzy_matches_abbreviations():
+async def test_merge_fuzzy_matches_abbreviations(session):
     """Test that merge correctly matches abbreviated names."""
     employees = pd.DataFrame(
         [
@@ -102,6 +104,7 @@ async def test_merge_fuzzy_matches_abbreviations():
         right_table=departments,
         merge_on_left="dept",
         merge_on_right="department",
+        session=session,
     )
 
     assert isinstance(result, MergeResult)
@@ -110,7 +113,7 @@ async def test_merge_fuzzy_matches_abbreviations():
     assert "budget" in result.data.columns
 
 
-async def test_merge_breakdown_structure():
+async def test_merge_breakdown_structure(session):
     """Test that merge returns a proper breakdown structure."""
     # Create small tables for a simple merge
     left = pd.DataFrame([{"id": "A", "value": 1}, {"id": "B", "value": 2}])
@@ -122,6 +125,7 @@ async def test_merge_breakdown_structure():
         right_table=right,
         merge_on_left="id",
         merge_on_right="id",
+        session=session,
     )
 
     assert isinstance(result, MergeResult)

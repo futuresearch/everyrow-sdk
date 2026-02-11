@@ -10,7 +10,7 @@ from everyrow.result import TableResult
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def test_agent_map_returns_table_result():
+async def test_agent_map_returns_table_result(session):
     """Test that agent_map returns a TableResult."""
     input_df = pd.DataFrame(
         [
@@ -22,6 +22,7 @@ async def test_agent_map_returns_table_result():
     result = await agent_map(
         task="What year was this company founded?",
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -30,7 +31,7 @@ async def test_agent_map_returns_table_result():
     assert "answer" in result.data.columns
 
 
-async def test_agent_map_with_custom_response_model():
+async def test_agent_map_with_custom_response_model(session):
     """Test agent_map with a custom response model."""
 
     class FoundedYear(BaseModel):
@@ -47,6 +48,7 @@ async def test_agent_map_with_custom_response_model():
         task="When was this company founded?",
         input=input_df,
         response_model=FoundedYear,
+        session=session,
     )
 
     assert isinstance(result, TableResult)
@@ -60,7 +62,7 @@ async def test_agent_map_with_custom_response_model():
     assert msft_row["founded_year"].iloc[0] == 1975  # pyright: ignore[reportAttributeAccessIssue]
 
 
-async def test_agent_map_preserves_input_columns():
+async def test_agent_map_preserves_input_columns(session):
     """Test that agent_map joins results with input columns."""
     input_df = pd.DataFrame(
         [
@@ -72,6 +74,7 @@ async def test_agent_map_preserves_input_columns():
     result = await agent_map(
         task="What city is the headquarters of this company located in?",
         input=input_df,
+        session=session,
     )
 
     assert isinstance(result, TableResult)

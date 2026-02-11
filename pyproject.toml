@@ -79,3 +79,4 @@ markers = [
     "integration: marks tests as integration tests (require EVERYROW_API_KEY)",
 ]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
