@@ -75,6 +75,9 @@ jobs:
         working-directory: ./docs-site
         run: pnpm build
 
+      - name: Check for broken links
+        run: python docs-site/scripts/check-links.py
+
       - name: Log in to Google Cloud
         if: ${{ github.ref == 'refs/heads/main' || inputs.deploy_production }}
         uses: google-github-actions/auth@v2

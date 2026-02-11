@@ -23,7 +23,7 @@ pip install everyrow
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io
 ```
 
-We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](data/company_info.csv) and [valuations.csv](data/valuations.csv), or run the [full notebook](case_studies/match-software-vendors-to-requirements/notebook.ipynb).
+We'll use two datasets of S&P 500 companies from different sources. Download [company_info.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/company_info.csv) and [valuations.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/valuations.csv), or run the [full notebook](notebooks/match-software-vendors-to-requirements).
 
 ```python
 import asyncio
@@ -71,4 +71,4 @@ This approach works well when your tables represent the same entities but use di
 
 ---
 
-See the full analysis with multiple experiments in the [merge tutorial notebook](case_studies/match-software-vendors-to-requirements/notebook.ipynb).
+See the full analysis with multiple experiments in the [merge tutorial notebook](notebooks/match-software-vendors-to-requirements).
