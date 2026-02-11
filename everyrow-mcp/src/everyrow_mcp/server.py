@@ -21,6 +21,7 @@ from everyrow.generated.api.tasks import (
     get_task_result_tasks_task_id_result_get,
     get_task_status_tasks_task_id_status_get,
 )
+from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.types import Unset
 from everyrow.ops import (
     agent_map,
@@ -120,7 +121,7 @@ def _write_task_state(
 
 def _register_submitted_task(
     cohort_task: Any,
-    client: Any,
+    client: AuthenticatedClient,
     session: Any,
     session_ctx: Any,
     session_url: str,
