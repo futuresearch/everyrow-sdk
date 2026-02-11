@@ -352,6 +352,10 @@ class MergeInput(BaseModel):
         default=None,
         description='Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.',
     )
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+        default=None,
+        description='Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.',
+    )
 
     @field_validator("left_csv", "right_csv")
     @classmethod
@@ -394,6 +398,7 @@ async def everyrow_merge(params: MergeInput) -> str:
         merge_on_left=params.merge_on_left,
         merge_on_right=params.merge_on_right,
         use_web_search=params.use_web_search,
+        relationship_type=params.relationship_type,
     )
 
     output_file = resolve_output_path(params.output_path, params.left_csv, "merged")

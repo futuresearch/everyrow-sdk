@@ -24,6 +24,7 @@ from .merge_operation import MergeOperation
 from .merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
 from .merge_operation_left_input_type_2 import MergeOperationLeftInputType2
 from .merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
+from .merge_operation_relationship_type_type_0 import MergeOperationRelationshipTypeType0
 from .merge_operation_right_input_type_2 import MergeOperationRightInputType2
 from .merge_operation_use_web_search_type_0 import MergeOperationUseWebSearchType0
 from .operation_response import OperationResponse
@@ -75,6 +76,7 @@ __all__ = (
     "MergeOperationLeftInputType1Item",
     "MergeOperationLeftInputType2",
     "MergeOperationRightInputType1Item",
+    "MergeOperationRelationshipTypeType0",
     "MergeOperationRightInputType2",
     "MergeOperationUseWebSearchType0",
     "OperationResponse",
