@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -198,7 +198,7 @@ wheels = [
 
 [[package]]
 name = "everyrow"
-version = "0.1.5"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -207,9 +207,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/26/13102e63cbe650c659c3118fec98b9c0795bb6323bdc770a641d730328ac/everyrow-0.1.5.tar.gz", hash = "sha256:f89a34eda6a698fc5c4faeffcfebd1ae34ce432b713e44e94d0f9a2ee2d54543", size = 223301, upload-time = "2026-01-23T02:45:58.009Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/89/bda848c297e665ace9374458d5cd17c2911983c20547c808728335ecabdd/everyrow-0.2.1.tar.gz", hash = "sha256:c9a98b85e09fc48e0d21f0bb8c7c8932de70117341e51e003026dbb845032236", size = 392223, upload-time = "2026-02-10T16:02:14.678Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/4d/f864602d5b42685b0b9e2cdabd14cf0548215bf25a8c6a7bc2206f7e6383/everyrow-0.1.5-py3-none-any.whl", hash = "sha256:2f9b6ff81cb15fc7c23548fcdd4430c24b2f3828dbf40c516cf438f2fff37160", size = 214560, upload-time = "2026-01-23T02:45:56.316Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/5a/21dcb81413009a196a926f4996e09007be0e97c9f38f4c5bde46cd66ba9d/everyrow-0.2.1-py3-none-any.whl", hash = "sha256:a7b329d6863e5652797ebffb1177045171722d07b1758642a2892d877024a78e", size = 86263, upload-time = "2026-02-10T16:02:11.636Z" },
 ]
 
 [[package]]
@@ -233,7 +233,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "everyrow", specifier = ">=0.1.5" },
+    { name = "everyrow", specifier = ">=0.2.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
