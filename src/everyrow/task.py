@@ -183,10 +183,8 @@ def _extract_scalar_data[T: BaseModel](
 
 def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
     """Extract merge breakdown from task result response."""
-    # The merge_breakdown is stored in additional_properties, not as a direct attribute
-    mb = result.additional_properties.get("merge_breakdown", None)
+    mb = result.merge_breakdown
     if mb is None or isinstance(mb, Unset):
-        # Return empty breakdown if not present
         return MergeBreakdown(
             exact=[],
             fuzzy=[],
@@ -196,14 +194,21 @@ def _extract_merge_breakdown(result: TaskResultResponse) -> MergeBreakdown:
             unmatched_right=[],
         )
 
-    # mb is a dict from additional_properties, access fields with .get()
     return MergeBreakdown(
-        exact=[tuple(p) for p in mb.get("exact", []) or []],
-        fuzzy=[tuple(p) for p in mb.get("fuzzy", []) or []],
-        llm=[tuple(p) for p in mb.get("llm", []) or []],
-        web=[tuple(p) for p in mb.get("web", []) or []],
-        unmatched_left=list(mb.get("unmatched_left", []) or []),
-        unmatched_right=list(mb.get("unmatched_right", []) or []),
+        exact=[(p[0], p[1]) for p in mb.exact]
+        if not isinstance(mb.exact, Unset)
+        else [],
+        fuzzy=[(p[0], p[1]) for p in mb.fuzzy]
+        if not isinstance(mb.fuzzy, Unset)
+        else [],
+        llm=[(p[0], p[1]) for p in mb.llm] if not isinstance(mb.llm, Unset) else [],
+        web=[(p[0], p[1]) for p in mb.web] if not isinstance(mb.web, Unset) else [],
+        unmatched_left=list(mb.unmatched_left)
+        if not isinstance(mb.unmatched_left, Unset)
+        else [],
+        unmatched_right=list(mb.unmatched_right)
+        if not isinstance(mb.unmatched_right, Unset)
+        else [],
     )
 
 
