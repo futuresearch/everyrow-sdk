@@ -29,9 +29,6 @@ dev = [
     "ruff>=0.9.9",
 ]
 
-[tool.uv.sources]
-everyrow = { path = "../", editable = true }
-
 [tool.basedpyright]
 venvPath = "."
 venv = ".venv"
