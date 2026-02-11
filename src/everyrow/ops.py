@@ -51,6 +51,7 @@ T = TypeVar("T", bound=BaseModel)
 InputData = UUID | list[dict[str, Any]] | dict[str, Any]
 
 
+DEFAULT_EFFORT_LEVEL = EffortLevel.MEDIUM
 class DefaultAgentResponse(BaseModel):
     answer: str
 
@@ -137,7 +138,7 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -151,7 +152,7 @@ async def single_agent(
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -164,7 +165,7 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -220,7 +221,7 @@ async def single_agent_async[T: BaseModel](
     task: str,
     session: Session,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -258,7 +259,7 @@ async def agent_map(
     task: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -321,7 +322,7 @@ async def agent_map_async(
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
