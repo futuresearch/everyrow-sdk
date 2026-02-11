@@ -100,7 +100,8 @@ export function getDocSlugs(): string[] {
 // Navigation structure
 export interface NavSection {
   title: string;
-  items: { slug: string; title: string }[];
+  href?: string;
+  items: { slug: string; title: string; href?: string }[];
 }
 
 export function getNavigation(): NavSection[] {
@@ -118,10 +119,12 @@ export function getNavigation(): NavSection[] {
         { slug: "chaining-operations", title: "Chaining Operations" },
         { slug: "installation", title: "Installation" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
+        { slug: "api-key", title: "API Key", href: "https://everyrow.io/api-key" },
       ],
     },
     {
       title: "API Reference",
+      href: "/api",
       items: reference.map((d) => ({
         slug: d.slug,
         title: d.title.replace(/^reference\//, ""),
@@ -129,12 +132,14 @@ export function getNavigation(): NavSection[] {
     },
     {
       title: "Guides",
+      href: "/guides",
       items: guides
-        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp"].includes(d.slug))
+        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp", "guides", "notebooks", "api"].includes(d.slug))
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
       title: "Case Studies",
+      href: "/notebooks",
       items: notebooks.map((n) => ({
         slug: `notebooks/${n.slug}`,
         title: n.title,

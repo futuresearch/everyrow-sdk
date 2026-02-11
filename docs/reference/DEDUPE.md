@@ -136,7 +136,15 @@ Output (selected rows only):
 | 500 | ~2 min | ~$1.67 |
 | 2,000 | ~8 min | ~$7 |
 
-## Case studies
+## Related docs
 
-- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) — 500 rows down to 124 (75% were duplicates)
-- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) — 98% accuracy handling career changes and typos
+### Guides
+- [Remove Duplicates from ML Training Data](/deduplicate-training-data-ml)
+- [Resolve Duplicate Entities](/resolve-entities-python)
+
+### Notebooks
+- [Dedupe CRM Company Records](/notebooks/dedupe-crm-company-records)
+
+### Blog posts
+- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/)
+- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/)

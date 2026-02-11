@@ -65,8 +65,18 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 | 2,000 × 50 | ~8 min | ~$9 |
 | 1,000 × 1,000 | ~12 min | ~$15 |
 
-## Case studies
+## Related docs
 
-- [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/) — 2,000 products to 50 vendors, 91% accuracy, zero false positives
-- [HubSpot Contact Merge](https://futuresearch.ai/merge-hubspot-contacts/) — 99.9% recall despite GitHub handles, typos, and partial emails
-- [CRM Merge Workflow](https://futuresearch.ai/crm-merge-workflow/) — joining fund-level and contact-level data
+### Guides
+- [Fuzzy Join Without Matching Keys](/fuzzy-join-without-keys)
+
+### Notebooks
+- [LLM Merging at Scale](/notebooks/llm-powered-merging-at-scale)
+- [Match Software Vendors to Requirements](/notebooks/match-software-vendors-to-requirements)
+- [Merge Contacts with Company Data](/notebooks/merge-contacts-with-company-data)
+- [Merge Overlapping Contact Lists](/notebooks/merge-overlapping-contact-lists)
+
+### Blog posts
+- [Software Supplier Matching](https://futuresearch.ai/software-supplier-matching/)
+- [HubSpot Contact Merge](https://futuresearch.ai/merge-hubspot-contacts/)
+- [CRM Merge Workflow](https://futuresearch.ai/crm-merge-workflow/)

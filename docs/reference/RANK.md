@@ -81,7 +81,16 @@ When specifying a response model, make sure that it contains `field_name`. Other
 | `ascending_order` | bool | True = lowest first (default) |
 | `preview` | bool | True = process only a few rows |
 
-## Case studies
+## Related docs
 
-- [Ranking 1000 Businesses by Data Fragmentation Risk](https://futuresearch.ai/lead-scoring-data-fragmentation/): Ranking 1,000 B2B leads by data fragmentation risk
-- [Rank Leads Like an Analyst, Not a Marketer](https://futuresearch.ai/lead-scoring-without-crm/): Using `rank` to score leads instead of a CRM
+### Guides
+- [Sort a Dataset Using Web Data](/rank-by-external-metric)
+
+### Notebooks
+- [Score Leads from Fragmented Data](/notebooks/score-leads-from-fragmented-data)
+- [Score Leads Without CRM History](/notebooks/score-leads-without-crm-history)
+- [Research and Rank Permit Times](/notebooks/research-and-rank-permit-times)
+
+### Blog posts
+- [Ranking by Data Fragmentation Risk](https://futuresearch.ai/lead-scoring-data-fragmentation/)
+- [Rank Leads Like an Analyst](https://futuresearch.ai/lead-scoring-without-crm/)
