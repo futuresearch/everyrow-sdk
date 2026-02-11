@@ -112,5 +112,4 @@ The transaction dataset is the hardest because the same address can appear in di
 
 - [How to Resolve Duplicate Entities in Python](/resolve-entities-python) — 500-row CRM walkthrough
 - [How to Deduplicate Training Data in Python](/deduplicate-training-data-ml) — semantic deduplication for ML datasets
-- [How to Replace Human Data Annotators with LLMs](/active-learning-llm-oracle) — LLM oracle for active learning
 - [API reference](/reference/DEDUPE)

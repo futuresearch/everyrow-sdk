@@ -116,4 +116,3 @@ The full pipeline is available as a [companion notebook on Kaggle](https://www.k
 
 - [How to Classify DataFrame Rows with an LLM](/classify-dataframe-rows-llm) — label data at scale with `agent_map`
 - [How to Deduplicate Training Data in Python](/deduplicate-training-data-ml) — clean ML datasets before training
-- [How to Scale LLM Deduplication to 20,000 Rows](/scale-deduplication-20k-rows) — benchmarks at scale
