@@ -12,9 +12,7 @@ from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
     from ..models.merge_breakdown_response import MergeBreakdownResponse
-    from ..models.task_result_response_data_type_0_item import (
-        TaskResultResponseDataType0Item,
-    )
+    from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
     from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
 
 
@@ -44,9 +42,7 @@ class TaskResultResponse:
 
     def to_dict(self) -> dict[str, Any]:
         from ..models.merge_breakdown_response import MergeBreakdownResponse
-        from ..models.task_result_response_data_type_1 import (
-            TaskResultResponseDataType1,
-        )
+        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
 
         task_id = str(self.task_id)
 
@@ -110,12 +106,8 @@ class TaskResultResponse:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.merge_breakdown_response import MergeBreakdownResponse
-        from ..models.task_result_response_data_type_0_item import (
-            TaskResultResponseDataType0Item,
-        )
-        from ..models.task_result_response_data_type_1 import (
-            TaskResultResponseDataType1,
-        )
+        from ..models.task_result_response_data_type_0_item import TaskResultResponseDataType0Item
+        from ..models.task_result_response_data_type_1 import TaskResultResponseDataType1
 
         d = dict(src_dict)
         task_id = UUID(d.pop("task_id"))

@@ -25,6 +25,7 @@ from everyrow.generated.models import (
     CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
+    DedupeOperationStrategy,
     LLMEnumPublic,
     MergeOperation,
     MergeOperationLeftInputType1Item,
@@ -111,7 +112,9 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
         data=CreateArtifactRequestDataType1.from_dict(input.model_dump()),
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(client=session.client, body=body)
+    response = await create_artifact_artifacts_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
     return response.artifact_id
 
@@ -123,7 +126,9 @@ async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
         data=[CreateArtifactRequestDataType0Item.from_dict(r) for r in records],
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(client=session.client, body=body)
+    response = await create_artifact_artifacts_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
     return response.artifact_id
 
@@ -227,25 +232,35 @@ async def single_agent_async[T: BaseModel](
     return_table: bool = False,
 ) -> EveryrowTask[T]:
     """Submit a single_agent task asynchronously."""
-    input_data = _prepare_single_input(input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2)
+    input_data = _prepare_single_input(
+        input, SingleAgentOperationInputType1Item, SingleAgentOperationInputType2
+    )
 
     # Build the operation body with either preset or custom params
     body = SingleAgentOperation(
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=SingleAgentOperationResponseSchemaType0.from_dict(response_model.model_json_schema()),
-        effort_level=PublicEffortLevel(effort_level.value) if effort_level is not None else UNSET,
+        response_schema=SingleAgentOperationResponseSchemaType0.from_dict(
+            response_model.model_json_schema()
+        ),
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
         llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
         iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
         include_research=include_research if include_research is not None else UNSET,
         return_list=return_table,
     )
 
-    response = await single_agent_operations_single_agent_post.asyncio(client=session.client, body=body)
+    response = await single_agent_operations_single_agent_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(response_model=response_model, is_map=False, is_expand=return_table)
+    cohort_task: EveryrowTask[T] = EveryrowTask(
+        response_model=response_model, is_map=False, is_expand=return_table
+    )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
     return cohort_task
 
@@ -335,8 +350,12 @@ async def agent_map_async(
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=AgentMapOperationResponseSchemaType0.from_dict(response_model.model_json_schema()),
-        effort_level=PublicEffortLevel(effort_level.value) if effort_level is not None else UNSET,
+        response_schema=AgentMapOperationResponseSchemaType0.from_dict(
+            response_model.model_json_schema()
+        ),
+        effort_level=PublicEffortLevel(effort_level.value)
+        if effort_level is not None
+        else UNSET,
         llm=LLMEnumPublic(llm.value) if llm is not None else UNSET,
         iteration_budget=iteration_budget if iteration_budget is not None else UNSET,
         include_research=include_research if include_research is not None else UNSET,
@@ -344,10 +363,14 @@ async def agent_map_async(
         enforce_row_independence=enforce_row_independence,
     )
 
-    response = await agent_map_operations_agent_map_post.asyncio(client=session.client, body=body)
+    response = await agent_map_operations_agent_map_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
-    cohort_task = EveryrowTask(response_model=response_model, is_map=True, is_expand=False)
+    cohort_task = EveryrowTask(
+        response_model=response_model, is_map=True, is_expand=False
+    )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
     return cohort_task
 
@@ -386,7 +409,9 @@ async def screen[T: BaseModel](
             if isinstance(result, TableResult):
                 return result
             raise EveryrowError("Screen task did not return a table result")
-    cohort_task = await screen_async(task=task, session=session, input=input, response_model=response_model)
+    cohort_task = await screen_async(
+        task=task, session=session, input=input, response_model=response_model
+    )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
         return result
@@ -407,10 +432,14 @@ async def screen_async[T: BaseModel](
         input_=input_data,  # type: ignore
         task=task,
         session_id=session.session_id,
-        response_schema=ScreenOperationResponseSchemaType0.from_dict(actual_response_model.model_json_schema()),
+        response_schema=ScreenOperationResponseSchemaType0.from_dict(
+            actual_response_model.model_json_schema()
+        ),
     )
 
-    response = await screen_operations_screen_post.asyncio(client=session.client, body=body)
+    response = await screen_operations_screen_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     cohort_task: EveryrowTask[T] = EveryrowTask(
@@ -497,7 +526,9 @@ async def rank_async[T: BaseModel](
         # Validate that field_name exists in the model
         properties = response_schema.get("properties", {})
         if field_name not in properties:
-            raise ValueError(f"Field {field_name} not in response model {response_model.__name__}")
+            raise ValueError(
+                f"Field {field_name} not in response model {response_model.__name__}"
+            )
     else:
         # Build a minimal JSON schema with just the sort field
         json_type_map = {
@@ -508,7 +539,9 @@ async def rank_async[T: BaseModel](
         }
         response_schema = {
             "type": "object",
-            "properties": {field_name: {"type": json_type_map.get(field_type, field_type)}},
+            "properties": {
+                field_name: {"type": json_type_map.get(field_type, field_type)}
+            },
             "required": [field_name],
         }
 
@@ -544,6 +577,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
 ) -> MergeResult:
     """Merge two tables using AI.
 
@@ -555,6 +589,7 @@ async def merge(
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
         use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
+        relationship_type: Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -577,6 +612,7 @@ async def merge(
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
                 use_web_search=use_web_search,
+                relationship_type=relationship_type,
             )
             return await merge_task.await_result()
     merge_task = await merge_async(
@@ -587,6 +623,7 @@ async def merge(
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
         use_web_search=use_web_search,
+        relationship_type=relationship_type,
     )
     return await merge_task.await_result()
 
@@ -599,6 +636,7 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
@@ -615,10 +653,13 @@ async def merge_async(
         left_key=merge_on_left or UNSET,
         right_key=merge_on_right or UNSET,
         use_web_search=use_web_search or UNSET,  # type: ignore
+        relationship_type=relationship_type or UNSET,  # type: ignore
         session_id=session.session_id,
     )
 
-    response = await merge_operations_merge_post.asyncio(client=session.client, body=body)
+    response = await merge_operations_merge_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     merge_task = MergeTask()
@@ -633,16 +674,39 @@ async def dedupe(
     equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using AI.
 
     Args:
-        equivalence_relation: Description of what makes items equivalent
+        equivalence_relation: Natural-language description of what makes two rows
+            equivalent/duplicates. Be as specific as needed — the LLM uses this to
+            reason about equivalence, handling abbreviations, typos, name variations,
+            and entity relationships that string matching cannot capture.
         session: Optional session. If not provided, one will be created automatically.
-        input: The input table (DataFrame, UUID, or TableResult)
+        input: The input table (DataFrame, UUID, or TableResult).
+        strategy: Controls what happens after duplicate clusters are identified.
+            - "identify": Cluster only. Adds `equivalence_class_id` and
+              `equivalence_class_name` columns but does NOT select or remove any rows.
+              Use this when you want to review clusters before deciding what to do.
+            - "select" (default): Picks the best representative row from each cluster.
+              Adds `equivalence_class_id`, `equivalence_class_name`, and `selected`
+              columns. Rows with `selected=True` are the canonical records. To get the
+              deduplicated table: `result.data[result.data["selected"] == True]`.
+            - "combine": Synthesizes a single combined row per cluster by merging the
+              best information from all duplicates. Original rows are kept with
+              `selected=False`, and new combined rows are appended with `selected=True`.
+              Useful when no single row has all the information (e.g., one row has the
+              email, another has the phone number).
+        strategy_prompt: Optional natural-language instructions that guide how the LLM
+            selects or combines rows. Only used with "select" and "combine" strategies.
+            Examples: "Prefer the record with the most complete contact information",
+            "For each field, keep the most recent and complete value",
+            "Prefer records from the CRM system over spreadsheet imports".
 
     Returns:
-        TableResult containing the deduped table
+        TableResult containing the deduped table with cluster metadata columns.
     """
     if input is None:
         raise EveryrowError("input is required for dedupe")
@@ -652,6 +716,8 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                strategy=strategy,
+                strategy_prompt=strategy_prompt,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -661,6 +727,8 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        strategy=strategy,
+        strategy_prompt=strategy_prompt,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -672,6 +740,8 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
@@ -680,9 +750,13 @@ async def dedupe_async(
         input_=input_data,  # type: ignore
         equivalence_relation=equivalence_relation,
         session_id=session.session_id,
+        strategy=DedupeOperationStrategy(strategy) if strategy is not None else UNSET,
+        strategy_prompt=strategy_prompt if strategy_prompt is not None else UNSET,
     )
 
-    response = await dedupe_operations_dedupe_post.asyncio(client=session.client, body=body)
+    response = await dedupe_operations_dedupe_post.asyncio(
+        client=session.client, body=body
+    )
     response = handle_response(response)
 
     cohort_task = EveryrowTask(response_model=BaseModel, is_map=True, is_expand=False)

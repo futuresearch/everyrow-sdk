@@ -35,9 +35,60 @@ result = await dedupe(
 print(result.data.head())
 ```
 
+## Strategies
+
+Control what happens after clusters are identified using the `strategy` parameter:
+
+### `select` (default)
+
+Picks the best representative from each cluster. Three columns are added:
+
+- `equivalence_class_id` — rows with the same ID are duplicates of each other
+- `equivalence_class_name` — human-readable label for the cluster
+- `selected` — True for the canonical record in each cluster
+
+```python
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Same legal entity",
+    strategy="select",
+    strategy_prompt="Prefer the record with the most complete contact information",
+)
+deduped = result.data[result.data["selected"] == True]
+```
+
+### `identify`
+
+Cluster only — no selection or combining. Useful when you want to review clusters before deciding what to do.
+
+- `equivalence_class_id` — rows with the same ID are duplicates of each other
+- `equivalence_class_name` — human-readable label for the cluster
+
+```python
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Same legal entity",
+    strategy="identify",
+)
+```
+
+### `combine`
+
+Synthesizes a single combined row per cluster, merging the best information from all duplicates. Original rows are marked `selected=False`, and new combined rows are added with `selected=True`.
+
+```python
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Same legal entity",
+    strategy="combine",
+    strategy_prompt="For each field, keep the most recent and complete value",
+)
+combined = result.data[result.data["selected"] == True]
+```
+
 ## What you get back
 
-Three columns added to your data:
+Three columns added to your data (when using `select` or `combine` strategy):
 
 - `equivalence_class_id` — rows with the same ID are duplicates of each other
 - `equivalence_class_name` — human-readable label for the cluster ("Alexandra Butoi", "Naomi Saphra", etc.)
@@ -73,6 +124,8 @@ Output (selected rows only):
 |------|------|-------------|
 | `input` | DataFrame | Data with potential duplicates |
 | `equivalence_relation` | str | What makes two rows duplicates |
+| `strategy` | str | `"identify"`, `"select"` (default), or `"combine"` |
+| `strategy_prompt` | str | Optional instructions for selection or combining |
 | `session` | Session | Optional, auto-created if omitted |
 
 ## Performance
@@ -83,7 +136,15 @@ Output (selected rows only):
 | 500 | ~2 min | ~$1.67 |
 | 2,000 | ~8 min | ~$7 |
 
-## Case studies
+## Related docs
 
-- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/) — 500 rows down to 124 (75% were duplicates)
-- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/) — 98% accuracy handling career changes and typos
+### Guides
+- [Remove Duplicates from ML Training Data](/deduplicate-training-data-ml)
+- [Resolve Duplicate Entities](/resolve-entities-python)
+
+### Notebooks
+- [Dedupe CRM Company Records](/notebooks/dedupe-crm-company-records)
+
+### Blog posts
+- [CRM Deduplication](https://futuresearch.ai/crm-deduplication/)
+- [Researcher Deduplication](https://futuresearch.ai/researcher-dedupe-case-study/)

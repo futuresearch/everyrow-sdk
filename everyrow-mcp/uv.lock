@@ -198,8 +198,8 @@ wheels = [
 
 [[package]]
 name = "everyrow"
-version = "0.1.5"
-source = { registry = "https://pypi.org/simple" }
+version = "0.2.1"
+source = { editable = "../" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
@@ -207,14 +207,37 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/26/13102e63cbe650c659c3118fec98b9c0795bb6323bdc770a641d730328ac/everyrow-0.1.5.tar.gz", hash = "sha256:f89a34eda6a698fc5c4faeffcfebd1ae34ce432b713e44e94d0f9a2ee2d54543", size = 223301, upload-time = "2026-01-23T02:45:58.009Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/4d/f864602d5b42685b0b9e2cdabd14cf0548215bf25a8c6a7bc2206f7e6383/everyrow-0.1.5-py3-none-any.whl", hash = "sha256:2f9b6ff81cb15fc7c23548fcdd4430c24b2f3828dbf40c516cf438f2fff37160", size = 214560, upload-time = "2026-01-23T02:45:56.316Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "attrs", specifier = ">=22.2.0" },
+    { name = "httpx", specifier = ">=0.20.0" },
+    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
+    { name = "python-dateutil", specifier = ">=2.7.0" },
+]
+
+[package.metadata.requires-dev]
+case-studies = [
+    { name = "ipykernel", specifier = ">=7.1.0" },
+    { name = "nbconvert", specifier = ">=7.16.0" },
+    { name = "pyarrow", specifier = ">=22.0.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+]
+dev = [
+    { name = "basedpyright", specifier = ">=1.22.0" },
+    { name = "jsonschema", specifier = ">=4.0.0" },
+    { name = "openapi-python-client", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "ruff", specifier = ">=0.9.9" },
 ]
 
 [[package]]
 name = "everyrow-mcp"
-version = "0.1.9"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "everyrow" },
@@ -233,7 +256,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "everyrow", specifier = ">=0.1.5" },
+    { name = "everyrow", editable = "../" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },

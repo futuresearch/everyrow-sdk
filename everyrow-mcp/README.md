@@ -90,7 +90,6 @@ Parameters:
 - equivalence_relation: Natural language description of what makes rows duplicates
 - input_csv: Absolute path to input CSV
 - output_path: Directory or full .csv path for output
-- select_representative: Keep one row per duplicate group (default: true)
 ```
 
 Example: Dedupe contacts where "same person even with name abbreviations or career changes"

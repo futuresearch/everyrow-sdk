@@ -120,7 +120,6 @@ class TestDedupeIntegration:
             """,
             input_csv=str(contacts_csv),
             output_path=str(tmp_path),
-            select_representative=True,
         )
 
         result = await everyrow_dedupe(params)

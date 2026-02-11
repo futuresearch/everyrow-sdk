@@ -190,6 +190,14 @@
   background-color: #f0f0f0;
 }
 
+/* Images (matplotlib plots, etc.) */
+.notebook-content .output_png img,
+.notebook-content .output_subarea img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
 /* Hide empty prompts */
 .notebook-content .prompt:empty {
   display: none;

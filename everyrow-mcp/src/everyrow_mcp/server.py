@@ -258,11 +258,6 @@ class DedupeInput(BaseModel):
         description="Output path: either a directory (file will be named 'deduped_<input_name>.csv') "
         "or a full file path ending in .csv",
     )
-    select_representative: bool = Field(
-        default=True,
-        description="If True, select one representative row per duplicate group. "
-        "If False, keep all rows but mark duplicates with equivalence class info.",
-    )
 
     @field_validator("input_csv")
     @classmethod
@@ -302,7 +297,6 @@ async def everyrow_dedupe(params: DedupeInput) -> str:
     result = await dedupe(
         equivalence_relation=params.equivalence_relation,
         input=df,
-        select_representative=params.select_representative,
     )
 
     output_file = resolve_output_path(params.output_path, params.input_csv, "deduped")
@@ -358,6 +352,10 @@ class MergeInput(BaseModel):
         default=None,
         description='Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.',
     )
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+        default=None,
+        description='Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.',
+    )
 
     @field_validator("left_csv", "right_csv")
     @classmethod
@@ -400,6 +398,7 @@ async def everyrow_merge(params: MergeInput) -> str:
         merge_on_left=params.merge_on_left,
         merge_on_right=params.merge_on_right,
         use_web_search=params.use_web_search,
+        relationship_type=params.relationship_type,
     )
 
     output_file = resolve_output_path(params.output_path, params.left_csv, "merged")
