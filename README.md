@@ -7,16 +7,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-Screen, rank, dedupe, and merge your dataframes using natural language. Or run web agents to research every row.
+Run LLM research agents at scale. Use them to intelligently sort, filter, merge, dedupe, or add columns to pandas dataframes. See the [docs site](https://everyrow.io/docs). Scales to tens of thousands of LLM agents on tens of thousands of rows.
 
 ```bash
-# ideally inside a venv
 pip install everyrow
 ```
 
-## Try it
+```bash
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
 
-Get an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit), then:
+[Get] an API key at [everyrow.io/api-key](https://everyrow.io/api-key) ($20 free credit), then:
 
 ```python
 import asyncio
@@ -57,17 +59,15 @@ export EVERYROW_API_KEY=your_key_here
 python example.py
 ```
 
-Regex can't do this. `"remote" in text` matches "No remote work available." `"$" in text` matches "$0 in funding." You need something that knows "DOE" means salary *isn't* disclosed, and "bootcamp grads welcome" means it's *not* senior-level.
-
 ## Operations
 
 | | |
 |---|---|
 | [**Screen**](#screen) | Filter by criteria that need judgment |
-| [**Rank**](#rank) | Score rows by qualitative factors |
+| [**Rank**](#rank) | Score rows from research |
 | [**Dedupe**](#dedupe) | Deduplicate when fuzzy matching fails |
 | [**Merge**](#merge) | Join tables when keys don't match |
-| [**Agent Tasks**](#agent-tasks) | Web research on every row |
+| [**Research**](#agent-tasks) | Web research on every row |
 | [**Derive**](#derive) | Add computed columns |
 
 ---
@@ -96,15 +96,13 @@ result = await screen(
 print(result.data.head())
 ```
 
-"No remote work available" fails even though it contains "remote." Works for investment screening, lead qualification, vendor vetting.
-
 **More:** [docs](docs/SCREEN.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [job posting screen](https://futuresearch.ai/job-posting-screening/) (>90% precision vs 68% regex) / [stock screen](https://futuresearch.ai/thematic-stock-screening/) ([notebook](docs/case_studies/screen-stocks-by-investment-thesis/notebook.ipynb))
 
 ---
 
 ## Rank
 
-Score rows by things you can't put in a database field.
+Score rows by researching them on the web.
 
 ```python
 from everyrow.ops import rank
@@ -116,8 +114,6 @@ result = await rank(
 )
 print(result.data.head())
 ```
-
-Ultramain Systems (sells software *to* airlines) and Ukraine International Airlines (is an airline) look similar by industry code. Completely different needs. Traditional scoring can't tell them apart.
 
 **More:** [docs](docs/RANK.md) / [basic usage](docs/case_studies/basic-usage/notebook.ipynb) / [lead scoring](https://futuresearch.ai/lead-scoring-data-fragmentation/) (1,000 leads, $13) / [vs Clay](https://futuresearch.ai/lead-scoring-without-crm/) ($28 vs $145)
 
