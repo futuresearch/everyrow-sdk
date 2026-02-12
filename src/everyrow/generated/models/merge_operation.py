@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from everyrow.generated.types import Unset
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 from uuid import UUID
 
@@ -36,9 +35,9 @@ class MergeOperation:
         use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
             tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
             without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
-        relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control relationship type:
-            'many_to_one' (default) allows multiple left rows to match one right row,
-            'one_to_one' enforces unique matching between left and right rows.
+        relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control merge relationship behavior:
+            'many_to_one' (default) allows multiple left rows to match the same right row, 'one_to_one' enforces unique
+            matches and resolves clashes Default: MergeOperationRelationshipTypeType0.MANY_TO_ONE.
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
@@ -48,7 +47,9 @@ class MergeOperation:
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
     use_web_search: MergeOperationUseWebSearchType0 | None | Unset = MergeOperationUseWebSearchType0.AUTO
-    relationship_type: MergeOperationRelationshipTypeType0 | None | Unset = UNSET
+    relationship_type: MergeOperationRelationshipTypeType0 | None | Unset = (
+        MergeOperationRelationshipTypeType0.MANY_TO_ONE
+    )
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 

@@ -9,14 +9,17 @@ from ...models.agent_map_operation import AgentMapOperation
 from ...models.error_response import ErrorResponse
 from ...models.insufficient_balance_error import InsufficientBalanceError
 from ...models.operation_response import OperationResponse
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
     body: AgentMapOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+    if not isinstance(x_cohort_source, Unset):
+        headers["X-Cohort-Source"] = x_cohort_source
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -70,6 +73,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     body: AgentMapOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """Parallel AI research agents
 
@@ -82,6 +86,7 @@ def sync_detailed(
     `include_research`
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (AgentMapOperation):
 
     Raises:
@@ -94,6 +99,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        x_cohort_source=x_cohort_source,
     )
 
     response = client.get_httpx_client().request(
@@ -107,6 +113,7 @@ def sync(
     *,
     client: AuthenticatedClient,
     body: AgentMapOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """Parallel AI research agents
 
@@ -119,6 +126,7 @@ def sync(
     `include_research`
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (AgentMapOperation):
 
     Raises:
@@ -132,6 +140,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        x_cohort_source=x_cohort_source,
     ).parsed
 
 
@@ -139,6 +148,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     body: AgentMapOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """Parallel AI research agents
 
@@ -151,6 +161,7 @@ async def asyncio_detailed(
     `include_research`
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (AgentMapOperation):
 
     Raises:
@@ -163,6 +174,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        x_cohort_source=x_cohort_source,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -174,6 +186,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     body: AgentMapOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """Parallel AI research agents
 
@@ -186,6 +199,7 @@ async def asyncio(
     `include_research`
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (AgentMapOperation):
 
     Raises:
@@ -200,5 +214,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            x_cohort_source=x_cohort_source,
         )
     ).parsed
