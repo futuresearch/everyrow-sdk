@@ -14,7 +14,7 @@ from everyrow.generated.models.create_session import CreateSession
 
 
 def get_session_url(session_id: UUID) -> str:
-    base_url = os.environ.get("EVERYROW_APP_URL", DEFAULT_EVERYROW_APP_URL)
+    base_url = os.environ.get("EVERYROW_APP_URL", DEFAULT_EVERYROW_APP_URL).rstrip("/")
     return f"{base_url}/sessions/{session_id}"
 
 
