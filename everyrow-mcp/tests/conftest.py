@@ -4,6 +4,24 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from everyrow.api_utils import create_client
+
+from everyrow_mcp import server
+
+
+@pytest.fixture
+async def everyrow_client():
+    """Initialize the everyrow client.
+
+    This fixture sets up the global _client in the server module,
+    which is normally initialized by the MCP server's lifespan context.
+    """
+    try:
+        with create_client() as client:
+            server._client = client
+            yield client
+    finally:
+        server._client = None
 
 
 @pytest.fixture

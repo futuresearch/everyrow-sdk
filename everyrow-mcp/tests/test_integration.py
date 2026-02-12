@@ -3,31 +3,36 @@
 These tests make real API calls to everyrow and require EVERYROW_API_KEY to be set.
 Run with: pytest tests/test_integration.py -v -s
 
-Note: These tests cost money ($1-2 per operation), so they are skipped by default.
-Run with --run-integration to enable them.
+Note: These tests take time and cost money (on the order of 1 minute and $0.10 per test
+case), so they are skipped by default. Set RUN_INTEGRATION_TESTS=1 to run them.
 """
 
-import json
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
 import pytest
+from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.server import (
-    AgentInput,
-    DedupeInput,
-    MergeInput,
-    RankInput,
-    ScreenInput,
-    everyrow_agent,
-    everyrow_dedupe,
-    everyrow_merge,
-    everyrow_rank,
-    everyrow_screen,
+    AgentSubmitInput,
+    DedupeSubmitInput,
+    MergeSubmitInput,
+    ProgressInput,
+    RankSubmitInput,
+    ResultsInput,
+    ScreenSubmitInput,
+    everyrow_agent_submit,
+    everyrow_dedupe_submit,
+    everyrow_merge_submit,
+    everyrow_progress,
+    everyrow_rank_submit,
+    everyrow_results,
+    everyrow_screen_submit,
 )
 
-# Skip all tests in this module unless --run-integration is passed
+# Skip all tests in this module unless environment variable is set
 pytestmark = pytest.mark.skipif(
     not os.environ.get("RUN_INTEGRATION_TESTS"),
     reason="Integration tests are skipped by default. Set RUN_INTEGRATION_TESTS=1 to run.",
@@ -36,13 +41,46 @@ pytestmark = pytest.mark.skipif(
 # CSV fixtures are defined in conftest.py
 
 
+async def poll_until_complete(task_id: str, max_polls: int = 30) -> str:
+    """Poll everyrow_progress until task completes or fails.
+
+    Returns the final status text from everyrow_progress.
+    """
+    for _ in range(max_polls):
+        result = await everyrow_progress(ProgressInput(task_id=task_id))
+        text = result[0].text
+        print(f"  Progress: {text.splitlines()[0]}")
+
+        if "Completed:" in text or "everyrow_results" in text:
+            return text
+        if "failed" in text.lower() or "revoked" in text.lower():
+            raise RuntimeError(f"Task failed: {text}")
+        # Continue polling
+
+    raise TimeoutError(f"Task {task_id} did not complete within {max_polls} polls")
+
+
+def extract_task_id(submit_text: str) -> str:
+    """Extract task_id from submit tool response."""
+    match = re.search(r"Task ID: ([a-f0-9-]+)", submit_text)
+    if not match:
+        raise ValueError(f"Could not extract task_id from: {submit_text}")
+    return match.group(1)
+
+
 class TestScreenIntegration:
     """Integration tests for the screen tool."""
 
     @pytest.mark.asyncio
-    async def test_screen_jobs(self, jobs_csv: Path, tmp_path: Path):
+    async def test_screen_jobs(
+        self,
+        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        jobs_csv: Path,
+        tmp_path: Path,
+    ):
         """Test screening jobs for remote senior roles."""
-        params = ScreenInput(
+        # 1. Submit the task
+        params = ScreenSubmitInput(
             task="""
                 Filter for positions that meet ALL criteria:
                 1. Remote-friendly (location says Remote)
@@ -50,20 +88,26 @@ class TestScreenIntegration:
                 3. Salary disclosed (specific dollar amount, not "Competitive")
             """,
             input_csv=str(jobs_csv),
-            output_path=str(tmp_path),
         )
 
-        result = await everyrow_screen(params)
-        result_data = json.loads(result)
+        result = await everyrow_screen_submit(params)
+        submit_text = result[0].text
+        print(f"\nSubmit result: {submit_text}")
 
-        assert result_data["status"] == "success"
-        assert result_data["input_rows"] == 5
+        task_id = extract_task_id(submit_text)
 
-        # Check output file was created
-        output_file = Path(result_data["output_file"])
+        # 2. Poll until complete
+        await poll_until_complete(task_id)
+
+        # 3. Retrieve results
+        output_file = tmp_path / "screened_jobs.csv"
+        results = await everyrow_results(
+            ResultsInput(task_id=task_id, output_path=str(output_file))
+        )
+        print(f"Results: {results[0].text}")
+
+        # 4. Verify output
         assert output_file.exists()
-
-        # Read and verify output
         output_df = pd.read_csv(output_file)
         print(f"\nScreen result: {len(output_df)} rows")
         print(output_df)
@@ -77,32 +121,45 @@ class TestRankIntegration:
     """Integration tests for the rank tool."""
 
     @pytest.mark.asyncio
-    async def test_rank_companies(self, companies_csv: Path, tmp_path: Path):
+    async def test_rank_companies(
+        self,
+        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        companies_csv: Path,
+        tmp_path: Path,
+    ):
         """Test ranking companies by AI/ML maturity."""
-        params = RankInput(
-            task="Score by AI/ML adoption maturity and innovation focus. Higher score = more AI focused.",
+        # 1. Submit the task
+        params = RankSubmitInput(
+            task="Score 0-10 by AI/ML adoption maturity and innovation focus. Higher score = more AI focused.",
             input_csv=str(companies_csv),
-            output_path=str(tmp_path),
             field_name="ai_score",
             field_type="float",
             ascending_order=False,  # Highest first
         )
 
-        result = await everyrow_rank(params)
-        result_data = json.loads(result)
+        result = await everyrow_rank_submit(params)
+        submit_text = result[0].text
+        print(f"\nSubmit result: {submit_text}")
 
-        assert result_data["status"] == "success"
-        assert result_data["rows"] == 5
+        task_id = extract_task_id(submit_text)
 
-        # Check output file
-        output_file = Path(result_data["output_file"])
+        # 2. Poll until complete
+        await poll_until_complete(task_id)
+
+        # 3. Retrieve results
+        output_file = tmp_path / "ranked_companies.csv"
+        results = await everyrow_results(
+            ResultsInput(task_id=task_id, output_path=str(output_file))
+        )
+        print(f"Results: {results[0].text}")
+
+        # 4. Verify output
         assert output_file.exists()
-
         output_df = pd.read_csv(output_file)
         print("\nRank result:")
         print(output_df)
 
-        # AILabs should likely be near the top
+        assert len(output_df) == 5
         assert "ai_score" in output_df.columns
 
 
@@ -110,34 +167,46 @@ class TestDedupeIntegration:
     """Integration tests for the dedupe tool."""
 
     @pytest.mark.asyncio
-    async def test_dedupe_contacts(self, contacts_csv: Path, tmp_path: Path):
+    async def test_dedupe_contacts(
+        self,
+        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        contacts_csv: Path,
+        tmp_path: Path,
+    ):
         """Test deduplicating contacts."""
-        params = DedupeInput(
+        # 1. Submit the task
+        params = DedupeSubmitInput(
             equivalence_relation="""
                 Two rows are duplicates if they represent the same person.
                 Consider name abbreviations (J. Smith = John Smith),
                 and company name variations (Acme Corp = Acme Corporation).
             """,
             input_csv=str(contacts_csv),
-            output_path=str(tmp_path),
         )
 
-        result = await everyrow_dedupe(params)
-        result_data = json.loads(result)
+        result = await everyrow_dedupe_submit(params)
+        submit_text = result[0].text
+        print(f"\nSubmit result: {submit_text}")
 
-        assert result_data["status"] == "success"
-        assert result_data["input_rows"] == 5
+        task_id = extract_task_id(submit_text)
 
-        # Check output file
-        output_file = Path(result_data["output_file"])
+        # 2. Poll until complete
+        await poll_until_complete(task_id)
+
+        # 3. Retrieve results
+        output_file = tmp_path / "deduped_contacts.csv"
+        results = await everyrow_results(
+            ResultsInput(task_id=task_id, output_path=str(output_file))
+        )
+        print(f"Results: {results[0].text}")
+
+        # 4. Verify output
         assert output_file.exists()
-
         output_df = pd.read_csv(output_file)
         print(f"\nDedupe result: {len(output_df)} rows")
         print(output_df)
 
         # Dedupe returns all rows with a 'selected' column marking representatives
-        # We expect the equivalence_class_name to group duplicates
         if "selected" in output_df.columns:
             selected_df = output_df[output_df["selected"]]
             print(f"Selected representatives: {len(selected_df)}")
@@ -153,30 +222,41 @@ class TestMergeIntegration:
 
     @pytest.mark.asyncio
     async def test_merge_products_suppliers(
-        self, products_csv: Path, suppliers_csv: Path, tmp_path: Path
+        self,
+        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        products_csv: Path,
+        suppliers_csv: Path,
+        tmp_path: Path,
     ):
         """Test merging products with suppliers."""
-        params = MergeInput(
+        # 1. Submit the task
+        params = MergeSubmitInput(
             task="""
                 Match each product to its parent company in the suppliers list.
                 Photoshop is made by Adobe, VSCode by Microsoft, Slack by Salesforce.
             """,
             left_csv=str(products_csv),
             right_csv=str(suppliers_csv),
-            output_path=str(tmp_path),
         )
 
-        result = await everyrow_merge(params)
-        result_data = json.loads(result)
+        result = await everyrow_merge_submit(params)
+        submit_text = result[0].text
+        print(f"\nSubmit result: {submit_text}")
 
-        assert result_data["status"] == "success"
-        assert result_data["left_rows"] == 3
-        assert result_data["right_rows"] == 3
+        task_id = extract_task_id(submit_text)
 
-        # Check output file
-        output_file = Path(result_data["output_file"])
+        # 2. Poll until complete
+        await poll_until_complete(task_id)
+
+        # 3. Retrieve results
+        output_file = tmp_path / "merged_products.csv"
+        results = await everyrow_results(
+            ResultsInput(task_id=task_id, output_path=str(output_file))
+        )
+        print(f"Results: {results[0].text}")
+
+        # 4. Verify output
         assert output_file.exists()
-
         output_df = pd.read_csv(output_file)
         print("\nMerge result:")
         print(output_df)
@@ -189,9 +269,13 @@ class TestAgentIntegration:
     """Integration tests for the agent tool."""
 
     @pytest.mark.asyncio
-    async def test_agent_company_research(self, tmp_path: Path):
+    async def test_agent_company_research(
+        self,
+        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        tmp_path: Path,
+    ):
         """Test agent researching companies."""
-        # Use only 2 companies to minimize cost
+        # Create input CSV with 2 companies to minimize cost
         df = pd.DataFrame(
             [
                 {"name": "Anthropic"},
@@ -201,10 +285,10 @@ class TestAgentIntegration:
         input_csv = tmp_path / "companies_to_research.csv"
         df.to_csv(input_csv, index=False)
 
-        params = AgentInput(
+        # 1. Submit the task
+        params = AgentSubmitInput(
             task="Find the company's headquarters city and approximate employee count.",
             input_csv=str(input_csv),
-            output_path=str(tmp_path),
             response_schema={
                 "properties": {
                     "headquarters": {
@@ -220,19 +304,28 @@ class TestAgentIntegration:
             },
         )
 
-        result = await everyrow_agent(params)
-        result_data = json.loads(result)
+        result = await everyrow_agent_submit(params)
+        submit_text = result[0].text
+        print(f"\nSubmit result: {submit_text}")
 
-        assert result_data["status"] == "success"
-        assert result_data["rows_processed"] == 2
+        task_id = extract_task_id(submit_text)
 
-        # Check output file
-        output_file = Path(result_data["output_file"])
+        # 2. Poll until complete
+        await poll_until_complete(task_id)
+
+        # 3. Retrieve results
+        output_file = tmp_path / "agent_companies.csv"
+        results = await everyrow_results(
+            ResultsInput(task_id=task_id, output_path=str(output_file))
+        )
+        print(f"Results: {results[0].text}")
+
+        # 4. Verify output
         assert output_file.exists()
-
         output_df = pd.read_csv(output_file)
         print("\nAgent result:")
         print(output_df)
 
+        assert len(output_df) == 2
         # Should have research results
         assert "headquarters" in output_df.columns or "answer" in output_df.columns
