@@ -23,13 +23,13 @@ from everyrow_mcp.server import (
     RankSubmitInput,
     ResultsInput,
     ScreenSubmitInput,
-    everyrow_agent_submit,
-    everyrow_dedupe_submit,
-    everyrow_merge_submit,
+    everyrow_agent,
+    everyrow_dedupe,
+    everyrow_merge,
     everyrow_progress,
-    everyrow_rank_submit,
+    everyrow_rank,
     everyrow_results,
-    everyrow_screen_submit,
+    everyrow_screen,
 )
 
 # Skip all tests in this module unless environment variable is set
@@ -90,7 +90,7 @@ class TestScreenIntegration:
             input_csv=str(jobs_csv),
         )
 
-        result = await everyrow_screen_submit(params)
+        result = await everyrow_screen(params)
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -137,7 +137,7 @@ class TestRankIntegration:
             ascending_order=False,  # Highest first
         )
 
-        result = await everyrow_rank_submit(params)
+        result = await everyrow_rank(params)
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -184,7 +184,7 @@ class TestDedupeIntegration:
             input_csv=str(contacts_csv),
         )
 
-        result = await everyrow_dedupe_submit(params)
+        result = await everyrow_dedupe(params)
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -239,7 +239,7 @@ class TestMergeIntegration:
             right_csv=str(suppliers_csv),
         )
 
-        result = await everyrow_merge_submit(params)
+        result = await everyrow_merge(params)
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -304,7 +304,7 @@ class TestAgentIntegration:
             },
         )
 
-        result = await everyrow_agent_submit(params)
+        result = await everyrow_agent(params)
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 

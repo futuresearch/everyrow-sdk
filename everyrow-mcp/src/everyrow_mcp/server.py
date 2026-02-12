@@ -262,8 +262,8 @@ class ResultsInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_agent_submit", structured_output=False)
-async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
+@mcp.tool(name="everyrow_agent", structured_output=False)
+async def everyrow_agent(params: AgentSubmitInput) -> list[TextContent]:
     """Run web research agents on each row of a CSV.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -307,8 +307,8 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_rank_submit", structured_output=False)
-async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
+@mcp.tool(name="everyrow_rank", structured_output=False)
+async def everyrow_rank(params: RankSubmitInput) -> list[TextContent]:
     """Score and sort rows in a CSV based on qualitative criteria.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -357,8 +357,8 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_screen_submit", structured_output=False)
-async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]:
+@mcp.tool(name="everyrow_screen", structured_output=False)
+async def everyrow_screen(params: ScreenSubmitInput) -> list[TextContent]:
     """Filter rows in a CSV based on criteria that require judgment.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -404,8 +404,8 @@ async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]
     ]
 
 
-@mcp.tool(name="everyrow_dedupe_submit", structured_output=False)
-async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]:
+@mcp.tool(name="everyrow_dedupe", structured_output=False)
+async def everyrow_dedupe(params: DedupeSubmitInput) -> list[TextContent]:
     """Remove duplicate rows from a CSV using semantic equivalence.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -446,8 +446,8 @@ async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]
     ]
 
 
-@mcp.tool(name="everyrow_merge_submit", structured_output=False)
-async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
+@mcp.tool(name="everyrow_merge", structured_output=False)
+async def everyrow_merge(params: MergeSubmitInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
     Submit the task and return immediately with a task_id and session_url.

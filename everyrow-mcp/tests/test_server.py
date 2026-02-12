@@ -30,7 +30,7 @@ from everyrow_mcp.server import (
     ResultsInput,
     ScreenSubmitInput,
     _schema_to_model,
-    everyrow_agent_submit,
+    everyrow_agent,
     everyrow_progress,
     everyrow_results,
 )
@@ -196,8 +196,8 @@ def _make_task_result_response(
     )
 
 
-class TestAgentSubmit:
-    """Tests for everyrow_agent_submit."""
+class TestAgent:
+    """Tests for everyrow_agent."""
 
     @pytest.mark.asyncio
     async def test_submit_returns_task_id(self, companies_csv: str):
@@ -222,7 +222,7 @@ class TestAgentSubmit:
                 task="Find HQ for each company",
                 input_csv=companies_csv,
             )
-            result = await everyrow_agent_submit(params)
+            result = await everyrow_agent(params)
             text = result[0].text
 
             assert str(mock_task.task_id) in text
