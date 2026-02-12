@@ -52,11 +52,13 @@ SKIPPED_URLS: set[str] = {
     "https://geminicli.com/docs/cli/skills/",
     "https://geminicli.com/docs/extensions/",
     "https://geminicli.com/docs/tools/mcp-server/",
+    "https://github.com/anthropics/claude-code/issues/12667",
     "https://github.com/anthropics/claude-code/issues/20377",
     "https://github.com/futuresearch/everyrow-sdk",
     "https://github.com/futuresearch/everyrow-sdk/releases",
     "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
     "https://hugovk.github.io/top-pypi-packages/",
+    "https://jqlang.org/",
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
 }
 
