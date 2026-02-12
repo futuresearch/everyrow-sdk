@@ -5,7 +5,7 @@ description: Use everyrow's agent_map as an LLM oracle in an active learning loo
 
 # How to Replace Human Data Annotators with LLMs in Active Learning
 
-![Active Learning: Ground Truth vs LLM Oracle](/docs/images/learning_curve_accuracy.png)
+![Active Learning: Ground Truth vs LLM Oracle](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs-site/public/images/learning_curve_accuracy.png)
 
 Human data labeling is slow and expensive. We replaced the human annotator with an LLM oracle in an active learning loop and achieved identical classifier performance — 200 labels in under 5 minutes for $0.26.
 

@@ -7,7 +7,7 @@ description: Scale LLM-powered deduplication to 20,000 rows with linear cost, ac
 
 LLM-powered deduplication gives you semantic understanding that string matching can't, but naive pairwise comparison is quadratic. At 20,000 rows that's 200 million pairs. Everyrow's dedupe pipeline uses a funnel of embeddings, clustering, and targeted LLM calls to keep cost linear and accuracy high.
 
-![FDA Drug Products — Deduplication at Scale](/docs/images/fda_10pct_scaling.png)
+![FDA Drug Products — Deduplication at Scale](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs-site/public/images/fda_10pct_scaling.png)
 
 Error rates stay near zero as scale increases. Cost and LLM calls scale linearly. Runtime is under 5 minutes up to 10,000 rows and 25 minutes at 20,000.
 
