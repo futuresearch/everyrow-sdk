@@ -1,3 +1,6 @@
+[tool.uv.workspace]
+members = ["everyrow-mcp"]
+
 [project]
 name = "everyrow"
 version = "0.3.0"

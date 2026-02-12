@@ -11,6 +11,9 @@ dependencies = [
     "pydantic>=2.0.0,<3.0.0",
 ]
 
+[tool.uv.sources]
+everyrow = { workspace = true }
+
 [project.scripts]
 everyrow-mcp = "everyrow_mcp.server:main"
 
