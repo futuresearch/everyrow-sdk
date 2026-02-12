@@ -214,7 +214,7 @@ wheels = [
 
 [[package]]
 name = "everyrow-mcp"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "everyrow" },
@@ -233,7 +233,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "everyrow", specifier = ">=0.2.0" },
+    { name = "everyrow", specifier = ">=0.2.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },

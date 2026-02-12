@@ -7,6 +7,7 @@ from uuid import UUID
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..models.merge_operation_relationship_type_type_0 import MergeOperationRelationshipTypeType0
 from ..models.merge_operation_use_web_search_type_0 import MergeOperationUseWebSearchType0
 from ..types import UNSET, Unset
 
@@ -34,6 +35,9 @@ class MergeOperation:
         use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
             tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
             without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
+        relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control merge relationship behavior:
+            'many_to_one' (default) allows multiple left rows to match the same right row, 'one_to_one' enforces unique
+            matches and resolves clashes Default: MergeOperationRelationshipTypeType0.MANY_TO_ONE.
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 
@@ -43,6 +47,9 @@ class MergeOperation:
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
     use_web_search: MergeOperationUseWebSearchType0 | None | Unset = MergeOperationUseWebSearchType0.AUTO
+    relationship_type: MergeOperationRelationshipTypeType0 | None | Unset = (
+        MergeOperationRelationshipTypeType0.MANY_TO_ONE
+    )
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -93,6 +100,14 @@ class MergeOperation:
         else:
             use_web_search = self.use_web_search
 
+        relationship_type: None | str | Unset
+        if isinstance(self.relationship_type, Unset):
+            relationship_type = UNSET
+        elif isinstance(self.relationship_type, MergeOperationRelationshipTypeType0):
+            relationship_type = self.relationship_type.value
+        else:
+            relationship_type = self.relationship_type
+
         session_id: None | str | Unset
         if isinstance(self.session_id, Unset):
             session_id = UNSET
@@ -116,6 +131,8 @@ class MergeOperation:
             field_dict["right_key"] = right_key
         if use_web_search is not UNSET:
             field_dict["use_web_search"] = use_web_search
+        if relationship_type is not UNSET:
+            field_dict["relationship_type"] = relationship_type
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
 
@@ -231,6 +248,23 @@ class MergeOperation:
 
         use_web_search = _parse_use_web_search(d.pop("use_web_search", UNSET))
 
+        def _parse_relationship_type(data: object) -> MergeOperationRelationshipTypeType0 | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, str):
+                    raise TypeError()
+                relationship_type_type_0 = MergeOperationRelationshipTypeType0(data)
+
+                return relationship_type_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(MergeOperationRelationshipTypeType0 | None | Unset, data)
+
+        relationship_type = _parse_relationship_type(d.pop("relationship_type", UNSET))
+
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
                 return data
@@ -255,6 +289,7 @@ class MergeOperation:
             left_key=left_key,
             right_key=right_key,
             use_web_search=use_web_search,
+            relationship_type=relationship_type,
             session_id=session_id,
         )
 

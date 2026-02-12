@@ -5,6 +5,8 @@ import httpx
 import jsonschema
 import pytest
 
+import everyrow
+
 
 def test_version_consistency(pytestconfig: pytest.Config):
     """Check that version is consistent across pyproject.toml, plugin.json, gemini-extension.json, marketplace.json, everyrow-mcp/pyproject.toml, and everyrow-mcp/server.json."""
@@ -66,6 +68,9 @@ def test_version_consistency(pytestconfig: pytest.Config):
     )
     assert pyproject_version == manifest_version, (
         f"pyproject.toml version ({pyproject_version}) != everyrow-mcp/manifest.json version ({manifest_version})"
+    )
+    assert pyproject_version == everyrow.__version__, (
+        f"pyproject.toml version ({pyproject_version}) != everyrow.__version__ ({everyrow.__version__})"
     )
 
 

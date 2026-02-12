@@ -103,7 +103,16 @@ async with create_session(name="Background Ranking") as session:
 
 See [Progress Monitoring](/docs/progress-monitoring) for details on tracking long-running operations.
 
-## Case studies
+## Related docs
 
-- [Ranking 1000 Businesses by Data Fragmentation Risk](https://futuresearch.ai/lead-scoring-data-fragmentation/): Ranking 1,000 B2B leads by data fragmentation risk
-- [Rank Leads Like an Analyst, Not a Marketer](https://futuresearch.ai/lead-scoring-without-crm/): Using `rank` to score leads instead of a CRM
+### Guides
+- [Sort a Dataset Using Web Data](/docs/rank-by-external-metric)
+
+### Notebooks
+- [Score Leads from Fragmented Data](/docs/notebooks/score-leads-from-fragmented-data)
+- [Score Leads Without CRM History](/docs/notebooks/score-leads-without-crm-history)
+- [Research and Rank Permit Times](/docs/notebooks/research-and-rank-permit-times)
+
+### Blog posts
+- [Ranking by Data Fragmentation Risk](https://futuresearch.ai/lead-scoring-data-fragmentation/)
+- [Rank Leads Like an Analyst](https://futuresearch.ai/lead-scoring-without-crm/)

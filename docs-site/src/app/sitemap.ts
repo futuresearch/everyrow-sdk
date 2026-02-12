@@ -10,11 +10,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const docSlugs = getDocSlugs();
   const notebookSlugs = getNotebookSlugs();
 
+  const hubSlugs = new Set(["guides", "notebooks", "api"]);
+
   const docPages = docSlugs.map((slug) => ({
     url: `${baseUrl}/${slug}`,
     lastModified: new Date(),
     changeFrequency: "weekly" as const,
-    priority: 0.8,
+    priority: hubSlugs.has(slug) ? 0.9 : 0.8,
   }));
 
   const notebookPages = notebookSlugs.map((slug) => ({

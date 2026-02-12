@@ -26,16 +26,28 @@ Requires Python 3.12+.
 **Quick example:**
 
 ```python
-import everyrow
+import asyncio
+import pandas as pd
+from everyrow.ops import screen
+from pydantic import BaseModel, Field
 
-df = everyrow.research(
-    "companies.csv",
-    {"industry": "What industry is this company in?"}
-)
-df.to_csv("companies_enriched.csv")
+companies = pd.DataFrame([
+    {"company": "Airtable",}, {"company": "Vercel",}, {"company": "Notion",}
+])
+
+class JobScreenResult(BaseModel):
+    qualifies: bool = Field(description="True if company lists jobs with all criteria")
+
+async def main():
+    result = await screen(
+        task="""Qualifies if: 1. Remote-friendly, 2. Senior, and 3. Discloses salary""",
+        input=companies,
+        response_model=JobScreenResult,
+    )
+    print(result.data.head())
+
+asyncio.run(main())
 ```
-
-See the [API Reference](/docs/reference/RESEARCH) for full documentation.
 
 </TabContent>
 
@@ -50,16 +62,30 @@ Requires Python 3.12+.
 **Quick example:**
 
 ```python
-import everyrow
+import asyncio
+import pandas as pd
+from everyrow.ops import screen
+from pydantic import BaseModel, Field
 
-df = everyrow.research(
-    "companies.csv",
-    {"industry": "What industry is this company in?"}
-)
-df.to_csv("companies_enriched.csv")
+companies = pd.DataFrame([
+    {"company": "Airtable",}, {"company": "Vercel",}, {"company": "Notion",}
+])
+
+class JobScreenResult(BaseModel):
+    qualifies: bool = Field(description="True if company lists jobs with all criteria")
+
+async def main():
+    result = await screen(
+        task="""Qualifies if: 1. Remote-friendly, 2. Senior, and 3. Discloses salary""",
+        input=companies,
+        response_model=JobScreenResult,
+    )
+    print(result.data.head())
+
+asyncio.run(main())
 ```
 
-See the [API Reference](/docs/reference/RESEARCH) for full documentation.
+See the [API Reference](/docs/api) for full documentation.
 
 </TabContent>
 

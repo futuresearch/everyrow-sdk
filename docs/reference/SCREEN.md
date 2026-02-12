@@ -90,8 +90,19 @@ class Detailed(BaseModel):
 
 Compare: regex on "remote-friendly" job postings gets 68% precision.
 
-## Case studies
+## Related docs
 
-- [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/) — 63 of 502 S&P 500 companies passed, $3.29
-- [Job Posting Screen](https://futuresearch.ai/job-posting-screening/) — >90% precision vs 68% for regex
-- [Screening Workflow](https://futuresearch.ai/screening-workflow/) — iterate on criteria without rerunning everything
+### Guides
+- [Filter a DataFrame with LLMs](/docs/filter-dataframe-with-llm)
+
+### Notebooks
+- [LLM Screening at Scale](/docs/notebooks/llm-powered-screening-at-scale)
+- [Screen Job Postings by Criteria](/docs/notebooks/screen-job-postings-by-criteria)
+- [Screen Stocks by Investment Thesis](/docs/notebooks/screen-stocks-by-investment-thesis)
+- [Screen Stocks by Margin Sensitivity](/docs/notebooks/screen-stocks-by-margin-sensitivity)
+- [Multi-Stage Lead Qualification](/docs/notebooks/multi-stage-lead-qualification)
+
+### Blog posts
+- [Thematic Stock Screen](https://futuresearch.ai/thematic-stock-screening/)
+- [Job Posting Screen](https://futuresearch.ai/job-posting-screening/)
+- [Screening Workflow](https://futuresearch.ai/screening-workflow/)

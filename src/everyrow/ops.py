@@ -25,6 +25,7 @@ from everyrow.generated.models import (
     CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
+    DedupeOperationStrategy,
     LLMEnumPublic,
     MergeOperation,
     MergeOperationLeftInputType1Item,
@@ -48,6 +49,9 @@ from everyrow.task import LLM, EffortLevel, EveryrowTask, MergeTask
 
 T = TypeVar("T", bound=BaseModel)
 InputData = UUID | list[dict[str, Any]] | dict[str, Any]
+
+
+DEFAULT_EFFORT_LEVEL = EffortLevel.MEDIUM
 
 
 class DefaultAgentResponse(BaseModel):
@@ -140,7 +144,7 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -154,7 +158,7 @@ async def single_agent(
     task: str,
     session: Session | None = None,
     input: BaseModel | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -167,7 +171,7 @@ async def single_agent[T: BaseModel](
     task: str,
     session: Session | None = None,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -181,7 +185,7 @@ async def single_agent[T: BaseModel](
         session: Optional session. If not provided, one will be created automatically.
         input: Input data (BaseModel, DataFrame, UUID, or Result).
         effort_level: Effort level preset (low/medium/high). Mutually exclusive with
-            custom params (llm, iteration_budget, include_research). Default: low.
+            custom params (llm, iteration_budget, include_research). Default: medium.
         llm: LLM to use. Required when effort_level is None.
         iteration_budget: Number of agent iterations (0-20). Required when effort_level is None.
         include_research: Include research notes. Required when effort_level is None.
@@ -223,7 +227,7 @@ async def single_agent_async[T: BaseModel](
     task: str,
     session: Session,
     input: BaseModel | DataFrame | UUID | Result | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -271,7 +275,7 @@ async def agent_map(
     task: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -334,7 +338,7 @@ async def agent_map_async(
     task: str,
     session: Session,
     input: DataFrame | UUID | TableResult,
-    effort_level: EffortLevel | None = EffortLevel.LOW,
+    effort_level: EffortLevel | None = DEFAULT_EFFORT_LEVEL,
     llm: LLM | None = None,
     iteration_budget: int | None = None,
     include_research: bool | None = None,
@@ -576,6 +580,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
 ) -> MergeResult:
     """Merge two tables using AI.
 
@@ -587,6 +592,7 @@ async def merge(
         merge_on_left: Optional column name in left table to merge on
         merge_on_right: Optional column name in right table to merge on
         use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
+        relationship_type: Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -609,6 +615,7 @@ async def merge(
                 merge_on_left=merge_on_left,
                 merge_on_right=merge_on_right,
                 use_web_search=use_web_search,
+                relationship_type=relationship_type,
             )
             return await merge_task.await_result()
     merge_task = await merge_async(
@@ -619,6 +626,7 @@ async def merge(
         merge_on_left=merge_on_left,
         merge_on_right=merge_on_right,
         use_web_search=use_web_search,
+        relationship_type=relationship_type,
     )
     return await merge_task.await_result()
 
@@ -631,6 +639,7 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
@@ -647,6 +656,7 @@ async def merge_async(
         left_key=merge_on_left or UNSET,
         right_key=merge_on_right or UNSET,
         use_web_search=use_web_search or UNSET,  # type: ignore
+        relationship_type=relationship_type or UNSET,  # type: ignore
         session_id=session.session_id,
     )
 
@@ -667,16 +677,39 @@ async def dedupe(
     equivalence_relation: str,
     session: Session | None = None,
     input: DataFrame | UUID | TableResult | None = None,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> TableResult:
     """Dedupe a table by removing duplicates using AI.
 
     Args:
-        equivalence_relation: Description of what makes items equivalent
+        equivalence_relation: Natural-language description of what makes two rows
+            equivalent/duplicates. Be as specific as needed — the LLM uses this to
+            reason about equivalence, handling abbreviations, typos, name variations,
+            and entity relationships that string matching cannot capture.
         session: Optional session. If not provided, one will be created automatically.
-        input: The input table (DataFrame, UUID, or TableResult)
+        input: The input table (DataFrame, UUID, or TableResult).
+        strategy: Controls what happens after duplicate clusters are identified.
+            - "identify": Cluster only. Adds `equivalence_class_id` and
+              `equivalence_class_name` columns but does NOT select or remove any rows.
+              Use this when you want to review clusters before deciding what to do.
+            - "select" (default): Picks the best representative row from each cluster.
+              Adds `equivalence_class_id`, `equivalence_class_name`, and `selected`
+              columns. Rows with `selected=True` are the canonical records. To get the
+              deduplicated table: `result.data[result.data["selected"] == True]`.
+            - "combine": Synthesizes a single combined row per cluster by merging the
+              best information from all duplicates. Original rows are kept with
+              `selected=False`, and new combined rows are appended with `selected=True`.
+              Useful when no single row has all the information (e.g., one row has the
+              email, another has the phone number).
+        strategy_prompt: Optional natural-language instructions that guide how the LLM
+            selects or combines rows. Only used with "select" and "combine" strategies.
+            Examples: "Prefer the record with the most complete contact information",
+            "For each field, keep the most recent and complete value",
+            "Prefer records from the CRM system over spreadsheet imports".
 
     Returns:
-        TableResult containing the deduped table
+        TableResult containing the deduped table with cluster metadata columns.
     """
     if input is None:
         raise EveryrowError("input is required for dedupe")
@@ -686,6 +719,8 @@ async def dedupe(
                 session=internal_session,
                 input=input,
                 equivalence_relation=equivalence_relation,
+                strategy=strategy,
+                strategy_prompt=strategy_prompt,
             )
             result = await cohort_task.await_result()
             if isinstance(result, TableResult):
@@ -695,6 +730,8 @@ async def dedupe(
         session=session,
         input=input,
         equivalence_relation=equivalence_relation,
+        strategy=strategy,
+        strategy_prompt=strategy_prompt,
     )
     result = await cohort_task.await_result()
     if isinstance(result, TableResult):
@@ -706,6 +743,8 @@ async def dedupe_async(
     session: Session,
     input: DataFrame | UUID | TableResult,
     equivalence_relation: str,
+    strategy: Literal["identify", "select", "combine"] | None = None,
+    strategy_prompt: str | None = None,
 ) -> EveryrowTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
@@ -714,6 +753,8 @@ async def dedupe_async(
         input_=input_data,  # type: ignore
         equivalence_relation=equivalence_relation,
         session_id=session.session_id,
+        strategy=DedupeOperationStrategy(strategy) if strategy is not None else UNSET,
+        strategy_prompt=strategy_prompt if strategy_prompt is not None else UNSET,
     )
 
     response = await dedupe_operations_dedupe_post.asyncio(

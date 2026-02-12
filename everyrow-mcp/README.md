@@ -97,6 +97,7 @@ Remove duplicate rows using semantic equivalence.
 Parameters:
 - equivalence_relation: Natural language description of what makes rows duplicates
 - input_csv: Absolute path to input CSV
+- output_path: Directory or full .csv path for output
 ```
 
 Example: Dedupe contacts where "same person even with name abbreviations or career changes"

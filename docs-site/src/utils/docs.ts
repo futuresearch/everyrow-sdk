@@ -93,14 +93,20 @@ export function getDocBySlug(slug: string): Doc | null {
   return null;
 }
 
+// Slugs that are rendered inline on the homepage, not as standalone pages
+const HOMEPAGE_ONLY_SLUGS = new Set(["installation"]);
+
 export function getDocSlugs(): string[] {
-  return getAllDocs().map((doc) => doc.slug);
+  return getAllDocs()
+    .filter((doc) => !HOMEPAGE_ONLY_SLUGS.has(doc.slug))
+    .map((doc) => doc.slug);
 }
 
 // Navigation structure
 export interface NavSection {
   title: string;
-  items: { slug: string; title: string }[];
+  href?: string;
+  items: { slug: string; title: string; href?: string }[];
 }
 
 export function getNavigation(): NavSection[] {
@@ -112,28 +118,44 @@ export function getNavigation(): NavSection[] {
 
   return [
     {
-      title: "Getting Started",
+      title: "Overview",
       items: [
-        { slug: "installation", title: "Installation" },
+        { slug: "installation", title: "Installation", href: "/" },
+        { slug: "getting-started", title: "Getting Started" },
+        { slug: "api-key", title: "API Key", href: "https://everyrow.io/api-key" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
         { slug: "progress-monitoring", title: "Progress Monitoring" },
+        { slug: "chaining-operations", title: "Chaining Operations" },
+        { slug: "github", title: "GitHub", href: "https://github.com/futuresearch/everyrow-sdk" },
       ],
     },
     {
-      title: "Guides",
-      items: guides
-        .filter((d) => d.slug !== "installation" && d.slug !== "skills-vs-mcp" && d.slug !== "progress-monitoring")
-        .map((d) => ({ slug: d.slug, title: d.title })),
-    },
-    {
       title: "API Reference",
+      href: "/api",
       items: reference.map((d) => ({
         slug: d.slug,
         title: d.title.replace(/^reference\//, ""),
       })),
     },
     {
+      title: "Guides",
+      href: "/guides",
+      items: guides
+        .filter((d) => ![
+          "getting-started",
+          "chaining-operations",
+          "installation",
+          "progress-monitoring",
+          "skills-vs-mcp",
+          "guides",
+          "notebooks",
+          "api",
+        ].includes(d.slug))
+        .map((d) => ({ slug: d.slug, title: d.title })),
+    },
+    {
       title: "Case Studies",
+      href: "/notebooks",
       items: notebooks.map((n) => ({
         slug: `notebooks/${n.slug}`,
         title: n.title,

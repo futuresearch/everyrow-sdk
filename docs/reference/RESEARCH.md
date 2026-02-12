@@ -69,7 +69,7 @@ Each row gets its own agent that researches independently.
 | `task` | str | The agent task describing what to research |
 | `session` | Session | Optional, auto-created if omitted |
 | `input` | BaseModel \| DataFrame \| UUID | Optional input context |
-| `effort_level` | EffortLevel | LOW, MEDIUM, or HIGH (default: LOW) |
+| `effort_level` | EffortLevel | LOW, MEDIUM, or HIGH (default: MEDIUM) |
 | `llm` | LLM | Optional agent LLM override |
 | `response_model` | BaseModel | Optional schema for structured output |
 | `return_table` | bool | (`single_agent` only) If True, returns a table instead of a scalar result |
@@ -78,8 +78,8 @@ Each row gets its own agent that researches independently.
 
 The effort level lets you control how thorough the research is.
 
-- `LOW`: Quick lookups, basic web searches, fast and cheap (default)
-- `MEDIUM`: More thorough research, multiple sources consulted
+- `LOW`: Just a single LLM call, not a real agent, cheapest & fastest
+- `MEDIUM`: More thorough research, multiple sources consulted (default)
 - `HIGH`: Deep research, cross-referencing sources, higher accuracy
 
 ### Response model
@@ -151,3 +151,12 @@ async with create_session(name="Background Research") as session:
 ```
 
 See [Progress Monitoring](/docs/progress-monitoring) for details on tracking long-running operations.
+
+## Related docs
+
+### Guides
+- [Add a Column with Web Lookup](/docs/add-column-web-lookup)
+- [Classify and Label Data with an LLM](/docs/classify-dataframe-rows-llm)
+
+### Notebooks
+- [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)

@@ -189,7 +189,8 @@ class DedupeSubmitInput(BaseModel):
 
     equivalence_relation: str = Field(
         ...,
-        description="Natural language description of what makes two rows equivalent.",
+        description="Natural language description of what makes two rows equivalent/duplicates. "
+        "The LLM will use this to identify which rows represent the same entity.",
         min_length=1,
     )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
@@ -221,6 +222,10 @@ class MergeSubmitInput(BaseModel):
     )
     use_web_search: Literal["auto", "yes", "no"] | None = Field(
         default=None, description='Control web search: "auto", "yes", or "no".'
+    )
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+        default=None,
+        description='Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.',
     )
 
     @field_validator("left_csv", "right_csv")
@@ -402,15 +407,20 @@ async def everyrow_screen(params: ScreenSubmitInput) -> list[TextContent]:
 async def everyrow_dedupe(params: DedupeSubmitInput) -> list[TextContent]:
     """Remove duplicate rows from a CSV using semantic equivalence.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
+    Dedupe identifies rows that represent the same entity even when they
+    don't match exactly. Useful for fuzzy deduplication where string
+    matching fails.
 
     Examples:
     - Dedupe contacts: "Same person even with name abbreviations or career changes"
     - Dedupe companies: "Same company including subsidiaries and name variations"
     - Dedupe research papers: "Same work including preprints and published versions"
+
+    Args:
+        params: DedupeInput containing equivalence_relation, input_csv, output_path, and options
+
+    Returns:
+        JSON string with result summary including output file path and dedup stats
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -471,6 +481,7 @@ async def everyrow_merge(params: MergeSubmitInput) -> list[TextContent]:
             merge_on_left=params.merge_on_left,
             merge_on_right=params.merge_on_right,
             use_web_search=params.use_web_search,
+            relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
 

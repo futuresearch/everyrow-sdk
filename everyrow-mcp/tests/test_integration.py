@@ -182,6 +182,7 @@ class TestDedupeIntegration:
                 and company name variations (Acme Corp = Acme Corporation).
             """,
             input_csv=str(contacts_csv),
+            output_path=str(tmp_path),
         )
 
         result = await everyrow_dedupe(params)
