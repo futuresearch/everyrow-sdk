@@ -13,7 +13,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import pandas as pd
-from everyrow.api_utils import create_client
+from everyrow.api_utils import create_client, handle_response
 from everyrow.generated.api.billing.get_billing_balance_billing_get import (
     asyncio as get_billing,
 )
@@ -22,9 +22,7 @@ from everyrow.generated.api.tasks import (
     get_task_status_tasks_task_id_status_get,
 )
 from everyrow.generated.client import AuthenticatedClient
-from everyrow.generated.models.task_result_response import TaskResultResponse
 from everyrow.generated.models.task_status import TaskStatus
-from everyrow.generated.models.task_status_response import TaskStatusResponse
 from everyrow.generated.types import Unset
 from everyrow.ops import (
     agent_map_async,
@@ -499,7 +497,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_progress", structured_output=False)
-async def everyrow_progress(params: ProgressInput) -> list[TextContent]:  # noqa: PLR0912
+async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
     After receiving a status update, immediately call everyrow_progress again
@@ -515,14 +513,12 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:  # noqa
     await asyncio.sleep(PROGRESS_POLL_DELAY)
 
     try:
-        status_response = await get_task_status_tasks_task_id_status_get.asyncio(
-            task_id=UUID(task_id),
-            client=_client,
+        status_response = handle_response(
+            await get_task_status_tasks_task_id_status_get.asyncio(
+                task_id=UUID(task_id),
+                client=_client,
+            )
         )
-        if status_response is None:
-            raise RuntimeError("No response from status endpoint")
-        if not isinstance(status_response, TaskStatusResponse):
-            raise RuntimeError(f"Unexpected response type: {type(status_response)}")
     except Exception as e:
         return [
             TextContent(
@@ -610,7 +606,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:  # noqa
 
 
 @mcp.tool(name="everyrow_results", structured_output=False)
-async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
+async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
@@ -623,23 +619,12 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     output_file = Path(params.output_path)
 
     try:
-        status_response = await get_task_status_tasks_task_id_status_get.asyncio(
-            task_id=UUID(task_id),
-            client=_client,
+        status_response = handle_response(
+            await get_task_status_tasks_task_id_status_get.asyncio(
+                task_id=UUID(task_id),
+                client=_client,
+            )
         )
-        if status_response is None:
-            return [
-                TextContent(
-                    type="text", text="Error: No response from status endpoint."
-                )
-            ]
-        if not isinstance(status_response, TaskStatusResponse):
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Error: Unexpected response type: {type(status_response)}",
-                )
-            ]
         status = status_response.status
         if status not in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
             return [
@@ -655,23 +640,12 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
         return [TextContent(type="text", text=f"Error checking task status: {e!r}")]
 
     try:
-        result_response = await get_task_result_tasks_task_id_result_get.asyncio(
-            task_id=UUID(task_id),
-            client=_client,
+        result_response = handle_response(
+            await get_task_result_tasks_task_id_result_get.asyncio(
+                task_id=UUID(task_id),
+                client=_client,
+            )
         )
-        if result_response is None:
-            return [
-                TextContent(
-                    type="text", text="Error: No response from result endpoint."
-                )
-            ]
-        if not isinstance(result_response, TaskResultResponse):
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Error: Unexpected response type: {type(result_response)}",
-                )
-            ]
 
         if isinstance(result_response.data, list):
             records = [item.additional_properties for item in result_response.data]
