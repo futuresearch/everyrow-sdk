@@ -1,26 +1,27 @@
 ---
 title: MCP Server
-description: Reference for all 9 everyrow MCP server tools — blocking operations, submit/poll for long-running tasks, and result retrieval.
+description: Reference for all everyrow MCP server tools — async operations with progress polling and result retrieval.
 ---
 
 # MCP Server Reference
 
-The everyrow MCP server exposes 9 tools for AI-powered data processing. These tools are called directly by Claude Code, Codex CLI, and other MCP clients — no Python code is needed.
+The everyrow MCP server exposes tools for AI-powered data processing. These tools are called directly by Claude Code, Codex CLI, and other MCP clients — no Python code is needed.
 
-## Blocking Tools
+All operations use an async pattern: submit the task, poll for progress, then retrieve results. This allows long-running operations (1–10+ minutes) to work reliably with MCP clients.
 
-These tools run the operation to completion and return results inline. Use them for small datasets or quick operations.
+## Operation Tools
 
 ### everyrow_screen
 
-Filter rows by natural language criteria.
+Filter rows in a CSV based on criteria that require judgment.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `task` | string | Yes | Screening criteria. Rows that meet the criteria pass. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `output_path` | string | Yes | Directory or full .csv path for output. |
 | `response_schema` | object | No | JSON schema for custom fields. Default: `{passes: bool}`. |
+
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
 ### everyrow_rank
 
@@ -30,11 +31,12 @@ Score and sort rows by qualitative criteria.
 |-----------|------|----------|-------------|
 | `task` | string | Yes | What makes a row score higher or lower. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `output_path` | string | Yes | Directory or full .csv path for output. |
 | `field_name` | string | Yes | Column name for the score. |
 | `field_type` | string | No | Score type: `float` (default), `int`, `str`, `bool`. |
 | `ascending_order` | bool | No | `true` = lowest first (default). |
 | `response_schema` | object | No | JSON schema for additional fields. |
+
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
 ### everyrow_dedupe
 
@@ -44,8 +46,8 @@ Remove semantic duplicates.
 |-----------|------|----------|-------------|
 | `equivalence_relation` | string | Yes | What makes two rows duplicates. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `output_path` | string | Yes | Directory or full .csv path for output. |
-| `select_representative` | bool | No | `true` (default) = keep one per group. `false` = mark all with class info. |
+
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
 ### everyrow_merge
 
@@ -56,52 +58,25 @@ Join two CSVs using intelligent entity matching.
 | `task` | string | Yes | How to match rows between tables. |
 | `left_csv` | string | Yes | Absolute path to primary CSV. |
 | `right_csv` | string | Yes | Absolute path to secondary CSV. |
-| `output_path` | string | Yes | Directory or full .csv path for output. |
 | `merge_on_left` | string | No | Column in left table to match on. |
 | `merge_on_right` | string | No | Column in right table to match on. |
 | `use_web_search` | string | No | `auto` (default), `yes`, or `no`. |
 
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
+
 ### everyrow_agent
 
-Run web research agents on each row (blocking).
+Run web research agents on each row.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `task` | string | Yes | Task for the agent to perform on each row. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `output_path` | string | Yes | Directory or full .csv path for output. |
 | `response_schema` | object | No | JSON schema for structured output. Default: `{answer: str}`. |
 
-## Submit/Poll Tools
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
-For long-running operations (agent_map, rank), use the submit/poll pattern. This returns immediately and lets the agent poll for progress.
-
-### everyrow_agent_submit
-
-Submit an agent_map operation (returns immediately).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `task` | string | Yes | Task for the agent to perform on each row. |
-| `input_csv` | string | Yes | Absolute path to input CSV. |
-| `response_schema` | object | No | JSON schema for structured output. |
-
-Returns `task_id` and `session_url`. The agent should immediately call `everyrow_progress` with the `task_id`.
-
-### everyrow_rank_submit
-
-Submit a rank operation (returns immediately).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `task` | string | Yes | Ranking criteria. |
-| `input_csv` | string | Yes | Absolute path to input CSV. |
-| `field_name` | string | Yes | Column name for the score. |
-| `field_type` | string | No | Score type (default: `float`). |
-| `ascending_order` | bool | No | `true` = lowest first (default). |
-| `response_schema` | object | No | JSON schema for additional fields. |
-
-Returns `task_id` and `session_url`.
+## Progress and Results Tools
 
 ### everyrow_progress
 
@@ -109,7 +84,7 @@ Check progress of a running task. **Blocks ~12 seconds** before returning.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `task_id` | string | Yes | The task ID from a `_submit` tool. |
+| `task_id` | string | Yes | The task ID from an operation tool. |
 
 Returns status text with completion counts and elapsed time. Instructs the agent to call again immediately until the task completes or fails.
 
@@ -124,10 +99,10 @@ Retrieve results from a completed task and save to CSV.
 
 Returns confirmation with row count and file path.
 
-## Submit/Poll Workflow
+## Workflow
 
 ```
-1. everyrow_agent_submit(task, input_csv)
+1. everyrow_agent(task, input_csv)
    → Returns task_id + session_url (~0.6s)
 
 2. everyrow_progress(task_id)
@@ -172,7 +147,7 @@ Supported types: `string`, `integer`, `number`, `boolean`, `array`, `object`.
 
 The Claude Code plugin (`.claude-plugin/plugin.json`) bundles:
 
-1. MCP server, with all 9 tools above
+1. MCP server, with all tools above
 2. Hooks, such as stop guard (prevents ending turn during operations), results notification (macOS), session cleanup
 3. Skill, to guide agents with quick SDK code generation for the Python SDK path
 

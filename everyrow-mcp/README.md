@@ -54,13 +54,13 @@ Alternatively, install with pip (ideally in a venv) and use `"command": "everyro
 
 All operations follow an async pattern:
 
-1. **Submit** - Call `everyrow_*_submit` to start a task. Returns immediately with a task ID and session URL.
-2. **Monitor** - Call `everyrow_progress(task_id)` repeatedly to check status. The tool blocks for a bit to limit the polling rate.
+1. **Start** - Call an operation tool (e.g., `everyrow_agent`) to start a task. Returns immediately with a task ID and session URL.
+2. **Monitor** - Call `everyrow_progress(task_id)` repeatedly to check status. The tool blocks ~12s to limit the polling rate.
 3. **Retrieve** - Once complete, call `everyrow_results(task_id, output_path)` to save results to CSV.
 
 ## Available Tools
 
-### everyrow_screen_submit
+### everyrow_screen
 
 Filter CSV rows based on criteria that require judgment.
 
@@ -73,7 +73,7 @@ Parameters:
 
 Example: Filter job postings for "remote-friendly AND senior-level AND salary disclosed"
 
-### everyrow_rank_submit
+### everyrow_rank
 
 Score and sort CSV rows based on qualitative criteria.
 
@@ -89,7 +89,7 @@ Parameters:
 
 Example: Rank leads by "likelihood to need data integration solutions"
 
-### everyrow_dedupe_submit
+### everyrow_dedupe
 
 Remove duplicate rows using semantic equivalence.
 
@@ -101,7 +101,7 @@ Parameters:
 
 Example: Dedupe contacts where "same person even with name abbreviations or career changes"
 
-### everyrow_merge_submit
+### everyrow_merge
 
 Join two CSV files using intelligent entity matching.
 
@@ -117,7 +117,7 @@ Parameters:
 
 Example: Match software products to parent companies (Photoshop -> Adobe)
 
-### everyrow_agent_submit
+### everyrow_agent
 
 Run web research agents on each row of a CSV.
 
@@ -136,7 +136,7 @@ Check progress of a running task.
 
 ```
 Parameters:
-- task_id: The task ID returned by a submit tool
+- task_id: The task ID returned by an operation tool
 ```
 
 Blocks ~12s before returning status. Call repeatedly until task completes.

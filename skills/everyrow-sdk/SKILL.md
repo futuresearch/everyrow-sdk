@@ -192,9 +192,9 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ## Everyrow Long-Running Operations (MCP)
 
 Everyrow operations (screen, rank, dedupe, merge, agent) take 1-10+ minutes.
-Always use the _submit variant, then poll:
+All MCP tools use an async pattern:
 
-1. Call everyrow_*_submit(...) to get task_id and session_url
+1. Call the operation tool (e.g., `everyrow_agent(...)`) to get task_id and session_url
 2. Share session_url with the user
 3. Call everyrow_progress(task_id) — the tool handles pacing internally
 4. After each status update, immediately call everyrow_progress again
