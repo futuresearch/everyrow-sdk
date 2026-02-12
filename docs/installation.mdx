@@ -115,6 +115,8 @@ Config file location:
 
 [Choosing the right scope](https://code.claude.com/docs/en/mcp#choosing-the-right-scope)
 
+You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
+
 </TabContent>
 
 <TabContent agent="claude-code" type="plugin">
@@ -128,7 +130,9 @@ claude plugin install everyrow@futuresearch
 
 This installs both the skill and MCP server together. You can toggle each on/off in Claude Code settings.
 
-[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
+You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
+
+[Official Claude Code Plugin Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 
 </TabContent>
 
@@ -330,3 +334,9 @@ Config file location:
 </TabContent>
 
 </InstallationTabs>
+
+## Dependencies
+
+The MCP server requires **uv** (if using `uvx`) or **pip** (if installed directly). The Python SDK requires **Python 3.12+**.
+
+For the optional terminal progress bar, see the [jq dependency](/docs/progress-monitoring#status-line-progress-bar) in the progress monitoring guide.

@@ -1,22 +1,17 @@
 # SDK Skills vs MCP
 
-everyrow integrates with your agent through **SDK Skills** or **MCP server**. Here's how they compare:
+everyrow integrates with your agent through SDK Skills or MCP server. Here's how they compare:
 
-### SDK skills
+### SDK
 
-Skills give your agent **guided workflows** with best practices built in.
+The SDK exposes the Python methods to build on, and the Skill gives your agent guided workflows with best practices built in:
 
-**How it works:**
 1. Your agent reads your skill instructions
 2. Your agent writes Python code using the everyrow SDK following everyrow patterns
 3. The code runs in your local environment
 4. Results save to your filesystem
 
-**Best for:**
-- Complex multi-step workflows (dedupe → merge → research)
-- Custom data transformations
-- Integration with your existing Python scripts
-- Full control over execution
+This gives you full control, and lets you build with the SDK. But the streaming experience is not as nice as the agent-native UIs using the MCP server.
 
 <svg width="420" height="320" viewBox="0 0 420 320" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -46,17 +41,7 @@ Skills give your agent **guided workflows** with best practices built in.
 
 ### MCP Server
 
-MCP provides **direct tool calls** without code generation.
-
-**How it works:**
-1. Your agent calls everyrow MCP tools directly
-2. Results saved to your filesystem and returned in the conversation
-3. No intermediate Python code
-
-**Best for:**
-- Quick one-off operations
-- Simple lookups and enrichments
-- Environments where code execution is restricted, or more guarantees are needed
+MCP provides direct tool calls without code generation. Your agent calls everyrow MCP tools directly, with results saved to your filesystem and returned in the conversation. No intermediate Python code needed.
 
 <svg width="420" height="220" viewBox="0 0 420 220" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -78,17 +63,30 @@ MCP provides **direct tool calls** without code generation.
 
 ### Comparison Table
 
-| Feature | SDK skills | MCP Server |
+| Feature | SDK Skills | MCP Server |
 |---------|--------|------------|
-| Setup complexity | Requires python environment | Requires MCP client (e.g. Claude Desktop) |
+| Setup complexity | Requires Python environment | Requires MCP client (e.g. Claude Code) |
 | Code visibility | Full Python code shown | Tool calls only |
 | Customization | High (edit generated code) | Limited |
-| Multi-step workflows | Excellent | Basic |
-| Works in Claude Desktop | Cowork mode only | Yes (For now, Chat mode only) |
-| Debugging | Requires some python knowledge | Not needed |
+| Multi-step workflows | Excellent (in-memory chaining) | Basic (CSV round-trips) |
+| Progress visibility | Customizable progress callback | Conversational updates every few seconds + status bar |
+| Preview mode | Yes (`preview=True`) | Not available |
+| Custom response models | Full Pydantic BaseModel | JSON schema only |
+| Effort/LLM control | `effort_level`, `llm`, `iteration_budget` | Not available |
+| Works in Claude Desktop | Cowork mode only | Yes (Chat mode only for now) |
+| Debugging | Requires some Python knowledge | Not needed |
 
-## Next Steps
+### Which Should I Start With?
+
+Start with MCP. Install the plugin, set your API key, and ask Claude to process your data. No Python needed, and you get automatic progress tracking with a status bar.
+
+When you need `preview=True` to test cheaply, full Pydantic response models with validators, custom effort levels, or multi-step pipelines that chain operations in memory — ask Claude to "write a Python script instead." The SDK Skill kicks in automatically.
+
+They're the same product at different abstraction levels. The plugin ships both. A user who starts with MCP tools and later needs more control just switches to the SDK path within the same session.
+
+## Related Reading
 
 - [Installation Guide](/docs) - Full setup instructions
+- [Progress Monitoring](/docs/progress-monitoring) - Status bar, stop guard, and session URLs
 - [API Reference](/docs/reference/RESEARCH) - Detailed function documentation
 - [Case Studies](/docs/notebooks/dedupe-crm-company-records) - Real-world examples

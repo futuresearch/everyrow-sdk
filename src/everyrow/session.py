@@ -5,11 +5,17 @@ from datetime import datetime
 from uuid import UUID
 
 from everyrow.api_utils import create_client, handle_response
+from everyrow.constants import DEFAULT_EVERYROW_APP_URL
 from everyrow.generated.api.sessions import (
     create_session_endpoint_sessions_post,
 )
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.create_session import CreateSession
+
+
+def get_session_url(session_id: UUID) -> str:
+    base_url = os.environ.get("EVERYROW_APP_URL", DEFAULT_EVERYROW_APP_URL).rstrip("/")
+    return f"{base_url}/sessions/{session_id}"
 
 
 class Session:
@@ -20,15 +26,8 @@ class Session:
         self.session_id = session_id
 
     def get_url(self) -> str:
-        """Get the URL to view this session in the web interface.
-
-        Returns:
-            str: URL to the session in the format {EVERYROW_BASE_URL}/sessions/{session_id}
-                 Defaults to https://everyrow.io/sessions/{session_id} if EVERYROW_BASE_URL
-                 is not set in environment variables.
-        """
-        base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
-        return f"{base_url}/sessions/{self.session_id}"
+        """Get the URL to view this session in the web interface."""
+        return get_session_url(self.session_id)
 
 
 @asynccontextmanager

@@ -59,6 +59,33 @@ def validate_output_path(path: str) -> None:
         raise ValueError(f"{label} is not a directory: {dir_to_check}")
 
 
+def validate_csv_output_path(path: str) -> None:
+    """Validate that an output path is a full CSV file path.
+
+    Unlike validate_output_path, this requires a full file path ending in .csv,
+    not a directory.
+
+    Args:
+        path: Output path to validate (must be absolute and end in .csv)
+
+    Raises:
+        ValueError: If path is not absolute, doesn't end in .csv, or parent doesn't exist
+    """
+    p = Path(path)
+
+    if not p.is_absolute():
+        raise ValueError(f"Output path must be absolute: {path}")
+
+    if p.suffix.lower() != ".csv":
+        raise ValueError(f"Output path must end in .csv: {path}")
+
+    if not p.parent.exists():
+        raise ValueError(f"Parent directory does not exist: {p.parent}")
+
+    if not p.parent.is_dir():
+        raise ValueError(f"Parent path is not a directory: {p.parent}")
+
+
 def resolve_output_path(output_path: str, input_path: str, prefix: str) -> Path:
     """Resolve the output path, generating a filename if needed.
 

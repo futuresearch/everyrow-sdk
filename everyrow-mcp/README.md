@@ -50,6 +50,14 @@ Add this to your MCP config. If you have [uv](https://docs.astral.sh/uv/) instal
 
 Alternatively, install with pip (ideally in a venv) and use `"command": "everyrow-mcp"` instead of uvx.
 
+## Workflow
+
+All operations follow an async pattern:
+
+1. **Start** - Call an operation tool (e.g., `everyrow_agent`) to start a task. Returns immediately with a task ID and session URL.
+2. **Monitor** - Call `everyrow_progress(task_id)` repeatedly to check status. The tool blocks ~12s to limit the polling rate.
+3. **Retrieve** - Once complete, call `everyrow_results(task_id, output_path)` to save results to CSV.
+
 ## Available Tools
 
 ### everyrow_screen
@@ -60,7 +68,7 @@ Filter CSV rows based on criteria that require judgment.
 Parameters:
 - task: Natural language description of screening criteria
 - input_csv: Absolute path to input CSV
-- output_path: Directory or full .csv path for output
+- response_schema: (optional) JSON schema for custom response fields
 ```
 
 Example: Filter job postings for "remote-friendly AND senior-level AND salary disclosed"
@@ -73,10 +81,10 @@ Score and sort CSV rows based on qualitative criteria.
 Parameters:
 - task: Natural language description of ranking criteria
 - input_csv: Absolute path to input CSV
-- output_path: Directory or full .csv path for output
 - field_name: Name of the score field to add
 - field_type: Type of field (float, int, str, bool)
 - ascending_order: Sort direction (default: true)
+- response_schema: (optional) JSON schema for custom response fields
 ```
 
 Example: Rank leads by "likelihood to need data integration solutions"
@@ -103,9 +111,9 @@ Parameters:
 - task: Natural language description of how to match rows
 - left_csv: Absolute path to primary CSV
 - right_csv: Absolute path to secondary CSV
-- output_path: Directory or full .csv path for output
 - merge_on_left: (optional) Column name in left table
 - merge_on_right: (optional) Column name in right table
+- use_web_search: (optional) "auto", "yes", or "no"
 ```
 
 Example: Match software products to parent companies (Photoshop -> Adobe)
@@ -118,24 +126,33 @@ Run web research agents on each row of a CSV.
 Parameters:
 - task: Natural language description of research task
 - input_csv: Absolute path to input CSV
-- output_path: Directory or full .csv path for output
+- response_schema: (optional) JSON schema for custom response fields
 ```
 
 Example: "Find this company's latest funding round and lead investors"
 
-## Output Path Handling
+### everyrow_progress
 
-The `output_path` parameter accepts two formats:
+Check progress of a running task.
 
-1. **Directory**: Output file is named `{operation}_{input_name}.csv`
-   - Input: `/data/companies.csv`, Output path: `/output/`
-   - Result: `/output/screened_companies.csv`
+```
+Parameters:
+- task_id: The task ID returned by an operation tool
+```
 
-2. **Full file path**: Use the exact path specified
-   - Output path: `/output/my_results.csv`
-   - Result: `/output/my_results.csv`
+Blocks ~12s before returning status. Call repeatedly until task completes.
 
-The server validates output paths before making API requests to avoid wasted costs.
+### everyrow_results
+
+Retrieve and save results from a completed task.
+
+```
+Parameters:
+- task_id: The task ID of the completed task
+- output_path: Full absolute path to output CSV file (must end in .csv)
+```
+
+Only call after `everyrow_progress` reports status "completed".
 
 ## Development
 
