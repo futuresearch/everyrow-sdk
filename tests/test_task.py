@@ -13,7 +13,7 @@ from everyrow.generated.models import (
     TaskStatus,
     TaskStatusResponse,
 )
-from everyrow.task import await_task_completion
+from everyrow.task import await_task_completion, print_progress
 
 
 def _make_status(
@@ -147,12 +147,13 @@ async def test_callback_skips_duplicate_snapshot(
 
 
 @pytest.mark.asyncio
-async def test_stderr_output_format(
+async def test_print_progress_output_format(
     mocker,
     mock_client,
-    caplog,
+    capsys,
 ):
-    """Default progress output is logged in expected format."""
+    """print_progress outputs progress in expected format"""
+
     task_id = uuid.uuid4()
 
     statuses = [
@@ -172,13 +173,11 @@ async def test_stderr_output_format(
         side_effect=statuses,
     )
 
-    with caplog.at_level("INFO", logger="everyrow"):
-        await await_task_completion(task_id, mock_client)
+    await await_task_completion(task_id, mock_client, on_progress=print_progress)
 
-    # Progress is logged via the everyrow logger
-    log_text = caplog.text
-    assert "[0/5]" in log_text or "[5/5]" in log_text
-    assert "running" in log_text
+    captured = capsys.readouterr()
+    assert "0/5" in captured.out or "5/5" in captured.out
+    assert "running" in captured.out
 
 
 @pytest.mark.asyncio
@@ -262,12 +261,12 @@ async def test_retries_exhausted_raises(
 
 
 @pytest.mark.asyncio
-async def test_session_url_in_output(
+async def test_no_output_without_callback(
     mocker,
     mock_client,
-    caplog,
+    capsys,
 ):
-    """Session URL is logged when provided."""
+    """No progress output when on_progress callback is not provided."""
     task_id = uuid.uuid4()
 
     statuses = [
@@ -287,9 +286,8 @@ async def test_session_url_in_output(
         side_effect=statuses,
     )
 
-    with caplog.at_level("INFO", logger="everyrow"):
-        await await_task_completion(
-            task_id, mock_client, session_url="https://everyrow.io/sessions/abc123"
-        )
+    await await_task_completion(task_id, mock_client)
 
-    assert "https://everyrow.io/sessions/abc123" in caplog.text
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == ""

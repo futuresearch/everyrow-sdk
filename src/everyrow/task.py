@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import sys
-import time
 from collections.abc import Callable
 from enum import StrEnum
 from typing import TypeVar
@@ -27,19 +25,8 @@ from everyrow.generated.models import (
 )
 from everyrow.generated.types import Unset
 from everyrow.result import MergeBreakdown, MergeResult, ScalarResult, TableResult
-from everyrow.session import get_session_url
 
 LLM = LLMEnumPublic
-
-# Configure the everyrow logger. Users can customize this logger to redirect
-# or silence progress output (e.g., logging.getLogger("everyrow").setLevel(logging.WARNING))
-_logger = logging.getLogger("everyrow")
-if not _logger.handlers:
-    # Only add handler if none exists (avoids duplicate handlers on re-import)
-    _handler = logging.StreamHandler(sys.stderr)
-    _handler.setFormatter(logging.Formatter("%(message)s"))
-    _logger.addHandler(_handler)
-    _logger.setLevel(logging.INFO)
 
 
 class EffortLevel(StrEnum):
@@ -48,23 +35,16 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
-def _default_progress_output(task_status: TaskStatusResponse) -> None:
-    progress = task_status.progress
-    completed = progress and progress.completed
-    running = progress and progress.running
-    failed = progress and progress.failed
-    total = progress and progress.total
-    pct = (completed / total * 100) if total and completed else 0
-    elapsed_str = ""
-    if task_status.created_at:
-        elapsed_str = f"({time.time() - task_status.created_at.timestamp():.0f}s)"
-    log_total = len(str(total))
+def print_progress(progress: TaskProgressInfo) -> None:
+    """Print task progress. Pass this to on_progress for progress output."""
+    pct = (progress.completed / progress.total * 100) if progress.total else 0
+    width = len(str(progress.total))
     message = (
-        f"{elapsed_str:>7s} [{completed:>{log_total}}/{total}] {pct:3.0f}%"
-        + (f" | {running:>{log_total}} running" if running is not None else "")
-        + (f" | {failed} failed" if failed else "")
+        f"{progress.completed:>{width}}/{progress.total} {pct:3.0f}%"
+        + (f" | {progress.running:>{width}} running" if progress.running else "")
+        + (f" | {progress.failed} failed" if progress.failed else "")
     )
-    _logger.info(message)
+    print(message)
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -113,9 +93,8 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        session_url = get_session_url(self.session_id) if self.session_id else None
         final_status = await await_task_completion(
-            self.task_id, client, session_url=session_url, on_progress=on_progress
+            self.task_id, client, on_progress=on_progress
         )
 
         result_response = await get_task_result(self.task_id, client)
@@ -147,13 +126,11 @@ class EveryrowTask[T: BaseModel]:
 async def await_task_completion(
     task_id: UUID,
     client: AuthenticatedClient,
-    session_url: str | None = None,
     on_progress: Callable[[TaskProgressInfo], None] | None = None,
 ) -> TaskStatusResponse:
     max_retries = 3
     retries = 0
     last_progress: TaskProgressInfo | None = None
-    total_announced = False
 
     while True:
         try:
@@ -168,24 +145,13 @@ async def await_task_completion(
             continue
 
         retries = 0
-        if status_response.progress and status_response.progress.total > 0:
-            if not total_announced:
-                total_announced = True
-                _logger.info(f"Processing {status_response.progress.total} rows...")
-                if session_url:
-                    _logger.info(f"Session: {session_url}")
-
+        if on_progress and status_response.progress:
             if status_response.progress != last_progress:
                 last_progress = status_response.progress
-                if on_progress:
-                    try:
-                        on_progress(status_response.progress)
-                    except Exception as e:
-                        _logger.warning(
-                            "on_progress callback raised %s: %s", type(e).__name__, e
-                        )
-                else:
-                    _default_progress_output(status_response)
+                try:
+                    on_progress(status_response.progress)
+                except Exception as e:
+                    logging.debug(f"on_progress callback error: {e!r}")
 
         if status_response.status in (
             TaskStatus.COMPLETED,
@@ -319,10 +285,7 @@ class MergeTask:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        session_url = get_session_url(self.session_id) if self.session_id else None
-        final_status = await await_task_completion(
-            self.task_id, client, session_url=session_url
-        )
+        final_status = await await_task_completion(self.task_id, client)
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
