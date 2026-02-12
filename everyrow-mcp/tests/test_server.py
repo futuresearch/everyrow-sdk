@@ -103,7 +103,7 @@ class TestInputValidation:
                 task="test",
                 input_csv=str(csv_file),
                 field_name="score",
-                field_type="invalid",
+                field_type="invalid",  # pyright: ignore[reportArgumentType]
             )
 
     def test_merge_input_validates_both_csvs(self, tmp_path: Path):

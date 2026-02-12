@@ -149,7 +149,7 @@ class RankSubmitInput(BaseModel):
     )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     field_name: str = Field(..., description="Name of the field to sort by.")
-    field_type: str = Field(
+    field_type: Literal["float", "int", "str", "bool"] = Field(
         default="float", description="Type: 'float', 'int', 'str', or 'bool'"
     )
     ascending_order: bool = Field(
@@ -164,14 +164,6 @@ class RankSubmitInput(BaseModel):
     @classmethod
     def validate_input_csv(cls, v: str) -> str:
         validate_csv_path(v)
-        return v
-
-    @field_validator("field_type")
-    @classmethod
-    def validate_field_type(cls, v: str) -> str:
-        valid_types = {"float", "int", "str", "bool"}
-        if v not in valid_types:
-            raise ValueError(f"field_type must be one of {valid_types}")
         return v
 
 
@@ -346,7 +338,7 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
             session=session,
             input=df,
             field_name=params.field_name,
-            field_type=params.field_type,  # type: ignore
+            field_type=params.field_type,
             response_model=response_model,
             ascending_order=params.ascending_order,
         )
