@@ -52,6 +52,10 @@ _client: AuthenticatedClient | None = None
 async def lifespan(_server: FastMCP):
     """Initialize singleton client and validate credentials on startup."""
     global _client  # noqa: PLW0603
+
+    # Clean up stale task state from previous runs
+    _clear_task_state()
+
     try:
         _client = create_client()
         await _client.__aenter__()
@@ -74,6 +78,11 @@ mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
 
 PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
+
+
+def _clear_task_state() -> None:
+    if TASK_STATE_FILE.exists():
+        TASK_STATE_FILE.unlink()
 
 
 def _get_session_url(session_id: UUID) -> str:
@@ -284,6 +293,7 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
 
+    _clear_task_state()
     df = pd.read_csv(params.input_csv)
 
     response_model: type[BaseModel] | None = None
@@ -328,6 +338,7 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
 
+    _clear_task_state()
     df = pd.read_csv(params.input_csv)
 
     response_model: type[BaseModel] | None = None
@@ -377,6 +388,7 @@ async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
 
+    _clear_task_state()
     df = pd.read_csv(params.input_csv)
 
     response_model: type[BaseModel] | None = None
@@ -423,6 +435,7 @@ async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
 
+    _clear_task_state()
     df = pd.read_csv(params.input_csv)
 
     async with create_session(client=_client) as session:
@@ -464,6 +477,7 @@ async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
 
+    _clear_task_state()
     left_df = pd.read_csv(params.left_csv)
     right_df = pd.read_csv(params.right_csv)
 
