@@ -106,8 +106,8 @@ def _write_task_state(
         }
         with open(TASK_STATE_FILE, "w") as f:
             json.dump(state, f)
-    except Exception:
-        pass  # Non-critical — hooks/status line just won't update
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Failed to write task state: {e!r}")
 
 
 class AgentInput(BaseModel):
