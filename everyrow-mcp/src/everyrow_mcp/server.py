@@ -44,6 +44,8 @@ from everyrow_mcp.utils import (
     validate_csv_path,
 )
 
+PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
+TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 # Singleton client, initialized in lifespan
 _client: AuthenticatedClient | None = None
 
@@ -53,31 +55,23 @@ async def lifespan(_server: FastMCP):
     """Initialize singleton client and validate credentials on startup."""
     global _client  # noqa: PLW0603
 
-    # Clean up stale task state from previous runs
     _clear_task_state()
 
     try:
-        _client = create_client()
-        await _client.__aenter__()
-        response = await get_billing(client=_client)
-        if response is None:
-            raise RuntimeError("Failed to authenticate with everyrow API")
+        with create_client() as _client:
+            response = await get_billing(client=_client)
+            if response is None:
+                raise RuntimeError("Failed to authenticate with everyrow API")
+            yield
     except Exception as e:
         logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
         raise
-
-    yield
-
-    # Cleanup on shutdown
-    if _client is not None:
-        await _client.__aexit__(None, None, None)
+    finally:
         _client = None
+        _clear_task_state()
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
-
-PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
-TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 
 
 def _clear_task_state() -> None:
