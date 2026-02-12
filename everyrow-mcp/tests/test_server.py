@@ -20,6 +20,7 @@ from everyrow.generated.models.task_result_response_data_type_0_item import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
+from pydantic import ValidationError
 
 from everyrow_mcp.server import (
     AgentSubmitInput,
@@ -98,7 +99,7 @@ class TestInputValidation:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("a,b\n1,2\n")
 
-        with pytest.raises(ValueError, match="must be one of"):
+        with pytest.raises(ValidationError, match="Input should be"):
             RankSubmitInput(
                 task="test",
                 input_csv=str(csv_file),
