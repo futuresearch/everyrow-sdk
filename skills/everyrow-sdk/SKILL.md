@@ -479,18 +479,16 @@ If the user asks about progress bar setup, status line configuration, or how to 
 }
 ```
 
-Replace `<path-to-plugin>` with the absolute path to the installed plugin directory. If the everyrow-sdk repo is in the project tree, use:
+Replace `<path-to-plugin>` with the absolute path to the installed plugin directory.
 
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "\"$CLAUDE_PROJECT_DIR\"/everyrow-sdk/everyrow-mcp/scripts/everyrow-statusline.sh",
-    "padding": 1
-  }
-}
+The status line requires `jq` to be installed:
+
+```bash
+# macOS
+brew install jq
+
+# Linux
+apt install jq
 ```
-
-The status line requires `jq` to be installed (`brew install jq` on macOS).
 
 After adding the config, the user must restart Claude Code for it to take effect.

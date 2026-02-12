@@ -23,11 +23,14 @@ Every operation is part of a session, which you can view at `https://everyrow.io
 When using the SDK directly, progress is printed to stderr by default:
 
 ```
-Processing 50 rows...
 Session: https://everyrow.io/sessions/abc123
- (5s) [5/50]  10% | 5 running
-(15s) [20/50] 40% | 8 running
-(45s) [50/50] 100%
+Processing 10 rows...
+   (2s) [ 0/10]   0% | 10 running
+  (13s) [ 2/10]  20% |  8 running
+  (15s) [ 4/10]  40% |  6 running
+  (17s) [ 6/10]  60% |  4 running
+  (40s) [ 8/10]  80% |  2 running
+ (100s) [10/10] 100% |  0 running
 ```
 
 You can also provide a custom `on_progress` callback for programmatic progress handling (see below).
@@ -36,7 +39,7 @@ You can also provide a custom `on_progress` callback for programmatic progress h
 
 When you run an everyrow operation via MCP:
 
-1. The operation returns immediately with a session URL
+1. The tool returns immediately with a session URL
 2. Progress updates appear every few seconds during execution
 3. Results are saved as a CSV file when the operation completes
 4. If you've installed the plugin, a desktop notification (macOS and Linux) tells you when it's done
