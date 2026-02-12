@@ -39,8 +39,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
       # --- Python setup for notebook conversion ---
       - name: Install uv
