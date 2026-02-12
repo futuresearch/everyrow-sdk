@@ -20,17 +20,23 @@ Every operation is part of a session, which you can view at `https://everyrow.io
 
 ### Python SDK
 
-When using the SDK directly, progress is printed to stderr by default:
+To see progress updates while a task is running, use the `print_progress` callback:
+
+```python
+from everyrow import print_progress
+
+result = await task.await_result(on_progress=print_progress)
+```
+
+Output:
 
 ```
-Session: https://everyrow.io/sessions/abc123
-Processing 10 rows...
-   (2s) [ 0/10]   0% | 10 running
-  (13s) [ 2/10]  20% |  8 running
-  (15s) [ 4/10]  40% |  6 running
-  (17s) [ 6/10]  60% |  4 running
-  (40s) [ 8/10]  80% |  2 running
- (100s) [10/10] 100% |  0 running
+ 0/10   0% | 10 running
+ 2/10  20% |  8 running
+ 4/10  40% |  6 running
+ 6/10  60% |  4 running
+ 8/10  80% |  2 running
+10/10 100%
 ```
 
 You can also provide a custom `on_progress` callback for programmatic progress handling (see below).
@@ -117,7 +123,15 @@ This is expected behavior, not an error. The "error:" prefix is a [known cosmeti
 
 ## Python SDK Progress
 
-Progress is printed to stderr by default. You can customize this with the `on_progress` callback:
+For printing progress updates as a task runs, use the provided `print_progress` callback:
+
+```python
+from everyrow import print_progress
+
+result = await task.await_result(on_progress=print_progress)
+```
+
+Or provide a custom callback:
 
 ```python
 from everyrow.generated.models import TaskProgressInfo
@@ -128,4 +142,4 @@ def my_progress_handler(progress: TaskProgressInfo):
 result = await task.await_result(on_progress=my_progress_handler)
 ```
 
-The callback receives a `TaskProgressInfo` object and only fires when the progress snapshot actually changes.
+The callback receives a `TaskProgressInfo` object and only fires when the progress snapshot changes.
