@@ -1,13 +1,11 @@
 import asyncio
-import json
 import logging
 import os
 import sys
 import time
 from collections.abc import Callable
 from enum import StrEnum
-from pathlib import Path
-from typing import Any, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from pandas import DataFrame
@@ -52,46 +50,22 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
-def _get_progress(status: TaskStatusResponse) -> TaskProgressInfo | None:
-    """Extract progress info from a status response."""
-    return status.progress
-
-
-def _ts() -> str:
-    """Format current time as [HH:MM:SS]."""
-    return time.strftime("[%H:%M:%S]")
-
-
-def _format_eta(completed: int, total: int, elapsed: float) -> str:
-    """Estimate remaining time based on completion rate."""
-    if completed <= 0 or elapsed <= 0:
-        return ""
-    rate = completed / elapsed
-    remaining = (total - completed) / rate
-    return f"~{remaining:.0f}s remaining"
-
-
-def _default_progress_output(
-    progress: TaskProgressInfo, total: int, elapsed: float
-) -> None:
-    """Log a progress line."""
-    pct = (progress.completed / total * 100) if total > 0 else 0
-    parts = [
-        f"{_ts()}   [{progress.completed}/{total}] {pct:3.0f}%",
-        f"| {progress.running} running"
-        + (f", {progress.failed} failed" if progress.failed else ""),
-    ]
-    eta = _format_eta(progress.completed, total, elapsed)
-    if eta:
-        parts.append(f"| {eta}")
-    _logger.info(" ".join(parts))
-
-
-def _log_jsonl(path: Path, entry: dict[str, Any]) -> None:
-    """Append a JSON line to the progress log file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+def _default_progress_output(task_status: TaskStatusResponse) -> None:
+    progress = task_status.progress
+    completed = progress and progress.completed
+    running = progress and progress.running
+    failed = progress and progress.failed
+    total = progress and progress.total
+    pct = (completed / total * 100) if total and completed else 0
+    elapsed_str = ""
+    if task_status.created_at:
+        elapsed_str = f"({time.time() - task_status.created_at.timestamp():.0f}s)"
+    message = (
+        f"{elapsed_str:>5s} [{completed}/{total}] {pct:3.0f}%"
+        + (f"| {running} running" if running else "")
+        + (f"| {failed} failed" if failed else "")
+    )
+    _logger.info(message)
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -198,10 +172,8 @@ async def await_task_completion(
     _maybe_show_plugin_hint()
     max_retries = 3
     retries = 0
-    last_snapshot: tuple[int, int, int, int] = (-1, -1, -1, -1)
-    start_time = time.time()
+    last_progress: TaskProgressInfo | None = None
     total_announced = False
-    jsonl_path = Path(os.path.expanduser("~/.everyrow/progress.jsonl"))
 
     while True:
         try:
@@ -216,53 +188,24 @@ async def await_task_completion(
             continue
 
         retries = 0
-        progress = _get_progress(status_response)
-
-        if progress and progress.total > 0:
+        if status_response.progress and status_response.progress.total > 0:
             if not total_announced:
                 total_announced = True
-                msg = f"{_ts()} Starting ({progress.total} agents)..."
+                _logger.info(f"Processing {status_response.progress.total} rows...")
                 if session_url:
-                    msg = f"{_ts()} Session: {session_url}\n" + msg
-                _logger.info(msg)
-                _log_jsonl(
-                    jsonl_path,
-                    {
-                        "ts": time.time(),
-                        "step": "start",
-                        "total": progress.total,
-                        "session_url": session_url,
-                    },
-                )
+                    _logger.info(f"Session: {session_url}")
 
-            snapshot = (
-                progress.pending,
-                progress.running,
-                progress.completed,
-                progress.failed,
-            )
-            if snapshot != last_snapshot:
-                last_snapshot = snapshot
-                elapsed = time.time() - start_time
+            if status_response.progress != last_progress:
+                last_progress = status_response.progress
                 if on_progress:
                     try:
-                        on_progress(progress)
+                        on_progress(status_response.progress)
                     except Exception as e:
                         _logger.warning(
                             "on_progress callback raised %s: %s", type(e).__name__, e
                         )
                 else:
-                    _default_progress_output(progress, progress.total, elapsed)
-                _log_jsonl(
-                    jsonl_path,
-                    {
-                        "ts": time.time(),
-                        "completed": progress.completed,
-                        "running": progress.running,
-                        "failed": progress.failed,
-                        "total": progress.total,
-                    },
-                )
+                    _default_progress_output(status_response)
 
         if status_response.status in (
             TaskStatus.COMPLETED,
@@ -271,34 +214,6 @@ async def await_task_completion(
         ):
             break
         await asyncio.sleep(2)
-
-    elapsed = time.time() - start_time
-    if progress and progress.total > 0:
-        succeeded = progress.completed
-        failed = progress.failed
-        _logger.info(
-            "%s   [%d/%d] 100%% | Done (%.1fs total)",
-            _ts(),
-            progress.total,
-            progress.total,
-            elapsed,
-        )
-        _logger.info(
-            "%s Results: %d succeeded%s",
-            _ts(),
-            succeeded,
-            f", {failed} failed" if failed else "",
-        )
-        _log_jsonl(
-            jsonl_path,
-            {
-                "ts": time.time(),
-                "step": "done",
-                "elapsed": round(elapsed, 1),
-                "succeeded": succeeded,
-                "failed": failed,
-            },
-        )
 
     if status_response.status == TaskStatus.FAILED:
         error_msg = (

@@ -1,6 +1,5 @@
 """Unit tests for everyrow.task — progress polling, callbacks, ETA, JSONL logging."""
 
-import json
 import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
@@ -14,11 +13,7 @@ from everyrow.generated.models import (
     TaskStatus,
     TaskStatusResponse,
 )
-from everyrow.task import (
-    _format_eta,
-    _get_progress,
-    await_task_completion,
-)
+from everyrow.task import await_task_completion
 
 
 def _make_status(
@@ -38,51 +33,6 @@ def _make_status(
     )
 
 
-class TestGetProgress:
-    def test_returns_none_when_missing(self):
-        status = _make_status()
-        assert _get_progress(status) is None
-
-    def test_returns_progress_info(self):
-        status = _make_status(
-            progress=TaskProgressInfo(
-                pending=0,
-                running=1,
-                completed=9,
-                failed=0,
-                total=10,
-            )
-        )
-        info = _get_progress(status)
-        assert info is not None
-        assert info.completed == 9
-        assert info.running == 1
-
-
-# --- ETA tests ---
-
-
-class TestFormatEta:
-    def test_no_eta_when_zero_completed(self):
-        assert _format_eta(0, 10, 5.0) == ""
-
-    def test_no_eta_when_zero_elapsed(self):
-        assert _format_eta(5, 10, 0.0) == ""
-
-    def test_eta_calculation(self):
-        # 5 of 10 done in 10s → rate = 0.5/s → 5 remaining → ~10s
-        result = _format_eta(5, 10, 10.0)
-        assert result == "~10s remaining"
-
-    def test_eta_rounds(self):
-        # 3 of 10 done in 9s → rate = 0.333/s → 7 remaining → ~21s
-        result = _format_eta(3, 10, 9.0)
-        assert result == "~21s remaining"
-
-
-# --- await_task_completion tests ---
-
-
 @pytest.fixture(autouse=True)
 def no_sleep(monkeypatch):
     """Replace asyncio.sleep with a no-op to avoid real waits."""
@@ -94,24 +44,10 @@ def mock_client():
     return MagicMock()
 
 
-@pytest.fixture
-def jsonl_tmp(tmp_path, monkeypatch):
-    """Redirect JSONL log to a temp file."""
-    everyrow_dir = tmp_path / ".everyrow"
-    everyrow_dir.mkdir()
-    log_path = everyrow_dir / "progress.jsonl"
-    monkeypatch.setattr(
-        "everyrow.task.os.path.expanduser",
-        lambda p: str(log_path) if "progress.jsonl" in p else p,
-    )
-    return log_path
-
-
 @pytest.mark.asyncio
 async def test_immediate_completion(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """Task already completed on first poll — no progress output."""
     mock_status = mocker.patch(
@@ -129,7 +65,6 @@ async def test_immediate_completion(
 async def test_progress_callback_fires_on_change(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """on_progress callback fires when snapshot changes."""
     task_id = uuid.uuid4()
@@ -177,7 +112,6 @@ async def test_progress_callback_fires_on_change(
 async def test_callback_skips_duplicate_snapshot(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """on_progress callback does NOT fire when snapshot is unchanged."""
     task_id = uuid.uuid4()
@@ -213,44 +147,9 @@ async def test_callback_skips_duplicate_snapshot(
 
 
 @pytest.mark.asyncio
-async def test_jsonl_log_written(mocker, mock_client, jsonl_tmp):
-    """Progress entries are logged to the JSONL file."""
-    task_id = uuid.uuid4()
-
-    statuses = [
-        _make_status(
-            TaskStatus.PENDING,
-            TaskProgressInfo(pending=5, running=0, completed=0, failed=0, total=5),
-        ),
-        _make_status(
-            TaskStatus.COMPLETED,
-            TaskProgressInfo(pending=0, running=0, completed=5, failed=0, total=5),
-        ),
-    ]
-
-    mocker.patch(
-        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
-        new_callable=AsyncMock,
-        side_effect=statuses,
-    )
-
-    await await_task_completion(task_id, mock_client)
-
-    assert jsonl_tmp.exists()
-    lines = [json.loads(line) for line in jsonl_tmp.read_text().strip().split("\n")]
-    # Expect: start entry, 2 progress entries (different snapshots), done entry
-    assert len(lines) >= 3
-    assert lines[0]["step"] == "start"
-    assert lines[0]["total"] == 5
-    assert lines[-1]["step"] == "done"
-    assert lines[-1]["succeeded"] == 5
-
-
-@pytest.mark.asyncio
 async def test_stderr_output_format(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
     caplog,
 ):
     """Default progress output is logged in expected format."""
@@ -280,14 +179,12 @@ async def test_stderr_output_format(
     log_text = caplog.text
     assert "[0/5]" in log_text or "[5/5]" in log_text
     assert "running" in log_text
-    assert "Done" in log_text
 
 
 @pytest.mark.asyncio
 async def test_failed_task_raises(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """A task that ends in FAILED raises EveryrowError."""
     task_id = uuid.uuid4()
@@ -306,7 +203,6 @@ async def test_failed_task_raises(
 async def test_revoked_task_raises(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """A task that ends in REVOKED raises EveryrowError."""
     task_id = uuid.uuid4()
@@ -325,7 +221,6 @@ async def test_revoked_task_raises(
 async def test_retries_on_transient_error(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """Transient status fetch errors are retried up to max_retries."""
     task_id = uuid.uuid4()
@@ -353,7 +248,6 @@ async def test_retries_on_transient_error(
 async def test_retries_exhausted_raises(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
 ):
     """Exceeding max_retries raises EveryrowError."""
     task_id = uuid.uuid4()
@@ -371,7 +265,6 @@ async def test_retries_exhausted_raises(
 async def test_session_url_in_output(
     mocker,
     mock_client,
-    jsonl_tmp,  # noqa: ARG001
     caplog,
 ):
     """Session URL is logged when provided."""
@@ -400,37 +293,3 @@ async def test_session_url_in_output(
         )
 
     assert "https://everyrow.io/sessions/abc123" in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_final_summary_line(
-    mocker,
-    mock_client,
-    jsonl_tmp,  # noqa: ARG001
-    caplog,
-):
-    """Completion logs a summary with succeeded/failed counts."""
-    task_id = uuid.uuid4()
-
-    statuses = [
-        _make_status(
-            TaskStatus.PENDING,
-            TaskProgressInfo(pending=2, running=1, completed=0, failed=0, total=3),
-        ),
-        _make_status(
-            TaskStatus.COMPLETED,
-            TaskProgressInfo(pending=0, running=0, completed=2, failed=1, total=3),
-        ),
-    ]
-
-    mocker.patch(
-        "everyrow.task.get_task_status_tasks_task_id_status_get.asyncio",
-        new_callable=AsyncMock,
-        side_effect=statuses,
-    )
-
-    with caplog.at_level("INFO", logger="everyrow"):
-        await await_task_completion(task_id, mock_client)
-
-    assert "2 succeeded" in caplog.text
-    assert "1 failed" in caplog.text
