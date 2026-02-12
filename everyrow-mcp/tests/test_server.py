@@ -5,16 +5,24 @@ without making actual API calls.
 """
 
 import json
-import time
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pandas as pd
 import pytest
+from everyrow.generated.models.public_task_type import PublicTaskType
+from everyrow.generated.models.task_progress_info import TaskProgressInfo
+from everyrow.generated.models.task_result_response import TaskResultResponse
+from everyrow.generated.models.task_result_response_data_type_0_item import (
+    TaskResultResponseDataType0Item,
+)
+from everyrow.generated.models.task_status import TaskStatus
+from everyrow.generated.models.task_status_response import TaskStatusResponse
 
 from everyrow_mcp.server import (
-    ActiveTask,
     AgentInput,
     AgentSubmitInput,
     DedupeInput,
@@ -23,7 +31,6 @@ from everyrow_mcp.server import (
     RankInput,
     ResultsInput,
     ScreenInput,
-    _active_tasks,
     _schema_to_model,
     everyrow_agent,
     everyrow_agent_submit,
@@ -389,6 +396,59 @@ def _make_mock_client():
     return client
 
 
+def _make_async_context_manager(return_value):
+    """Create a mock async context manager that yields return_value."""
+
+    @asynccontextmanager
+    async def mock_ctx():
+        yield return_value
+
+    return mock_ctx()
+
+
+def _make_task_status_response(
+    *,
+    task_id: UUID | None = None,
+    session_id: UUID | None = None,
+    status: str = "running",
+    completed: int = 0,
+    failed: int = 0,
+    running: int = 0,
+    pending: int = 0,
+    total: int = 10,
+) -> TaskStatusResponse:
+    """Create a real TaskStatusResponse for testing."""
+    return TaskStatusResponse(
+        task_id=task_id or uuid4(),
+        session_id=session_id or uuid4(),
+        status=TaskStatus(status),
+        task_type=PublicTaskType.AGENT,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        progress=TaskProgressInfo(
+            pending=pending,
+            running=running,
+            completed=completed,
+            failed=failed,
+            total=total,
+        ),
+    )
+
+
+def _make_task_result_response(
+    data: list[dict],
+    *,
+    task_id: UUID | None = None,
+) -> TaskResultResponse:
+    """Create a real TaskResultResponse for testing."""
+    items = [TaskResultResponseDataType0Item.from_dict(d) for d in data]
+    return TaskResultResponse(
+        task_id=task_id or uuid4(),
+        status=TaskStatus.COMPLETED,
+        data=items,
+    )
+
+
 class TestAgentSubmit:
     """Tests for everyrow_agent_submit."""
 
@@ -398,17 +458,16 @@ class TestAgentSubmit:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
         with (
             patch(
                 "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.server.create_client", return_value=mock_client),
-            patch("everyrow_mcp.server.create_session", return_value=mock_session_ctx),
-            patch("everyrow_mcp.server._write_task_state"),
+            patch("everyrow_mcp.server._client", mock_client),
+            patch(
+                "everyrow_mcp.server.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
         ):
             mock_op.return_value = mock_task
 
@@ -423,186 +482,155 @@ class TestAgentSubmit:
             assert "Session:" in text
             assert "everyrow_progress" in text
 
-            # Verify task was stored
-            assert str(mock_task.task_id) in _active_tasks
-            # Clean up
-            del _active_tasks[str(mock_task.task_id)]
-
 
 class TestProgress:
     """Tests for everyrow_progress."""
 
     @pytest.mark.asyncio
-    async def test_progress_unknown_task(self):
-        """Test progress with unknown task_id."""
-        params = ProgressInput(task_id="nonexistent-id")
-        result = await everyrow_progress(params)
-        assert "Unknown task_id" in result[0].text
+    async def test_progress_api_error(self):
+        """Test progress with API error returns helpful message."""
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+
+        with (
+            patch("everyrow_mcp.server._client", mock_client),
+            patch(
+                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("API error"),
+            ),
+            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            params = ProgressInput(task_id=task_id)
+            result = await everyrow_progress(params)
+
+        assert "Error polling task" in result[0].text
+        assert "Retry:" in result[0].text
 
     @pytest.mark.asyncio
     async def test_progress_running_task(self):
         """Test progress returns status counts for a running task."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
-
-        _active_tasks[task_id] = ActiveTask(
-            client=mock_client,
-            started_at=time.time(),
-            session=MagicMock(),
-            session_ctx=MagicMock(),
-            total=10,
-            session_url="https://everyrow.io/sessions/test",
-            input_csv="/tmp/test.csv",
-            prefix="agent",
-        )
-
-        # Mock the status response
-        mock_status = MagicMock()
-        mock_status.status = MagicMock(value="running")
-        mock_status.error = None
-        mock_status.progress = MagicMock(
-            pending=2,
-            running=3,
+        status_response = _make_task_status_response(
+            status="running",
             completed=4,
             failed=1,
+            running=3,
+            pending=2,
             total=10,
         )
 
-        try:
-            with (
-                patch(
-                    "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
-                    new_callable=AsyncMock,
-                    return_value=mock_status,
-                ),
-                patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
-                patch("everyrow_mcp.server._write_task_state"),
-            ):
-                params = ProgressInput(task_id=task_id)
-                result = await everyrow_progress(params)
-            text = result[0].text
+        with (
+            patch("everyrow_mcp.server._client", mock_client),
+            patch(
+                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.server._write_task_state"),
+        ):
+            params = ProgressInput(task_id=task_id)
+            result = await everyrow_progress(params)
+        text = result[0].text
 
-            assert "4/10 complete" in text
-            assert "1 failed" in text
-            assert "3 running" in text
-            assert "everyrow_progress" in text
-        finally:
-            _active_tasks.pop(task_id, None)
+        assert "4/10 complete" in text
+        assert "1 failed" in text
+        assert "3 running" in text
+        assert "everyrow_progress" in text
 
     @pytest.mark.asyncio
     async def test_progress_completed_task(self):
         """Test progress returns completion instructions when done."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
-
-        _active_tasks[task_id] = ActiveTask(
-            client=mock_client,
-            started_at=time.time(),
-            session=MagicMock(),
-            session_ctx=MagicMock(),
-            total=5,
-            session_url="https://everyrow.io/sessions/test",
-            input_csv="/tmp/test.csv",
-            prefix="agent",
-        )
-
-        mock_status = MagicMock()
-        mock_status.status = MagicMock(value="completed")
-        mock_status.error = None
-        mock_status.progress = MagicMock(
-            pending=0,
-            running=0,
+        status_response = _make_task_status_response(
+            status="completed",
             completed=5,
             failed=0,
+            running=0,
+            pending=0,
             total=5,
         )
 
-        try:
-            with (
-                patch(
-                    "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
-                    new_callable=AsyncMock,
-                    return_value=mock_status,
-                ),
-                patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
-                patch("everyrow_mcp.server._write_task_state"),
-            ):
-                params = ProgressInput(task_id=task_id)
-                result = await everyrow_progress(params)
-            text = result[0].text
+        with (
+            patch("everyrow_mcp.server._client", mock_client),
+            patch(
+                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.server._write_task_state"),
+        ):
+            params = ProgressInput(task_id=task_id)
+            result = await everyrow_progress(params)
+        text = result[0].text
 
-            assert "Completed: 5/5" in text
-            assert "everyrow_results" in text
-        finally:
-            _active_tasks.pop(task_id, None)
+        assert "Completed: 5/5" in text
+        assert "everyrow_results" in text
 
 
 class TestResults:
     """Tests for everyrow_results."""
 
     @pytest.mark.asyncio
-    async def test_results_unknown_task(self, tmp_path: Path):
-        """Test results with unknown task_id."""
-        params = ResultsInput(task_id="nonexistent-id", output_path=str(tmp_path))
-        result = await everyrow_results(params)
-        assert "Unknown task_id" in result[0].text
-
-    @pytest.mark.asyncio
-    async def test_results_saves_csv(self, companies_csv: str, tmp_path: Path):
-        """Test results retrieves data and saves to CSV."""
-        task_id = str(uuid4())
+    async def test_results_api_error(self, tmp_path: Path):
+        """Test results with API error returns helpful message."""
         mock_client = _make_mock_client()
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
-
-        _active_tasks[task_id] = ActiveTask(
-            client=mock_client,
-            started_at=time.time(),
-            session=MagicMock(),
-            session_ctx=mock_session_ctx,
-            total=3,
-            session_url="https://everyrow.io/sessions/test",
-            input_csv=companies_csv,
-            prefix="agent",
-        )
-
-        # Mock status response (for completion check)
-        mock_status = MagicMock()
-        mock_status.status = MagicMock(value="completed")
-
-        # Mock result response with additional_properties data
-        mock_item1 = MagicMock()
-        mock_item1.additional_properties = {"name": "TechStart", "answer": "Series A"}
-        mock_item2 = MagicMock()
-        mock_item2.additional_properties = {"name": "AILabs", "answer": "Seed"}
-
-        mock_result = MagicMock()
-        mock_result.data = [mock_item1, mock_item2]
+        task_id = str(uuid4())
+        output_file = tmp_path / "output.csv"
 
         with (
+            patch("everyrow_mcp.server._client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
-                return_value=mock_status,
+                side_effect=RuntimeError("API error"),
+            ),
+        ):
+            params = ResultsInput(task_id=task_id, output_path=str(output_file))
+            result = await everyrow_results(params)
+
+        assert "Error checking task status" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_results_saves_csv(self, tmp_path: Path):
+        """Test results retrieves data and saves to CSV."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        output_file = tmp_path / "output.csv"
+
+        status_response = _make_task_status_response(status="completed")
+        result_response = _make_task_result_response(
+            [
+                {"name": "TechStart", "answer": "Series A"},
+                {"name": "AILabs", "answer": "Seed"},
+            ]
+        )
+
+        with (
+            patch("everyrow_mcp.server._client", mock_client),
+            patch(
+                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
             ),
             patch(
                 "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
-                return_value=mock_result,
+                return_value=result_response,
             ),
         ):
-            params = ResultsInput(task_id=task_id, output_path=str(tmp_path))
+            params = ResultsInput(task_id=task_id, output_path=str(output_file))
             result = await everyrow_results(params)
         text = result[0].text
 
         assert "Saved 2 rows to" in text
-        assert "agent_companies.csv" in text
+        assert "output.csv" in text
 
-        # Extract output path from result text (first line only) and verify CSV was written
-        output_file = text.split("Saved 2 rows to ")[1].split("\n")[0].strip()
+        # Verify CSV was written
         output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]
-
-        # Verify task was cleaned up
-        assert task_id not in _active_tasks
