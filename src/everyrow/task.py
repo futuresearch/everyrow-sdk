@@ -41,8 +41,6 @@ if not _logger.handlers:
     _logger.addHandler(_handler)
     _logger.setLevel(logging.INFO)
 
-_plugin_hint_shown = False
-
 
 class EffortLevel(StrEnum):
     LOW = "low"
@@ -151,25 +149,12 @@ class EveryrowTask[T: BaseModel]:
             )
 
 
-def _maybe_show_plugin_hint() -> None:
-    """Show a one-time hint about the Claude Code plugin if not running inside the MCP server."""
-    global _plugin_hint_shown  # noqa: PLW0603
-    if _plugin_hint_shown or os.environ.get("EVERYROW_MCP_SERVER"):
-        return
-    _plugin_hint_shown = True
-    _logger.info(
-        "Tip: Use the plugin or MCP server for better management of long-running tasks.\n"
-        "     See: https://everyrow.io/docs/installation#tab-claude-code-plugin"
-    )
-
-
 async def await_task_completion(
     task_id: UUID,
     client: AuthenticatedClient,
     session_url: str | None = None,
     on_progress: Callable[[TaskProgressInfo], None] | None = None,
 ) -> TaskStatusResponse:
-    _maybe_show_plugin_hint()
     max_retries = 3
     retries = 0
     last_progress: TaskProgressInfo | None = None
