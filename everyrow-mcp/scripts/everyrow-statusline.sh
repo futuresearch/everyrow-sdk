@@ -4,18 +4,11 @@ set -e
 # Check for jq dependency (exit silently to avoid breaking Claude Code UI)
 command -v jq >/dev/null 2>&1 || exit 0
 
-input=$(cat)
-
-MODEL=$(echo "$input" | jq -r '.model.display_name')
-PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
-
 GREEN='\033[32m'
 YELLOW='\033[33m'
 CYAN='\033[36m'
 DIM='\033[2m'
 RESET='\033[0m'
-
-echo -e "${CYAN}[$MODEL]${RESET} ${PCT}% context"
 
 TASK_FILE="$HOME/.everyrow/task.json"
 
