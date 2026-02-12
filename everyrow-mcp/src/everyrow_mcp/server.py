@@ -23,6 +23,7 @@ from everyrow.generated.api.tasks import (
 )
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.task_result_response import TaskResultResponse
+from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 from everyrow.generated.types import Unset
 from everyrow.ops import (
@@ -493,7 +494,7 @@ async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_progress", structured_output=False)
-async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
+async def everyrow_progress(params: ProgressInput) -> list[TextContent]:  # noqa: PLR0912
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
     After receiving a status update, immediately call everyrow_progress again
@@ -525,8 +526,13 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
             )
         ]
 
-    status_str = status_response.status.value
+    status = status_response.status
     progress = status_response.progress
+    is_terminal = status in (
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+        TaskStatus.REVOKED,
+    )
     session_url = _get_session_url(status_response.session_id)
 
     completed = progress.completed if progress else 0
@@ -534,14 +540,23 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     running = progress.running if progress else 0
     total = progress.total if progress else 0
 
-    # Calculate elapsed time from API's created_at timestamp
+    # Calculate elapsed time from API timestamps.
+    # For terminal states, use updated_at - created_at (actual task duration).
+    # For running/pending, use now - created_at (ongoing elapsed time).
     if status_response.created_at:
-        now = datetime.now(UTC)
         created_at = status_response.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        elapsed_s = round((now - created_at).total_seconds())
         started_at = created_at.timestamp()
+
+        if is_terminal and status_response.updated_at:
+            updated_at = status_response.updated_at
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=UTC)
+            elapsed_s = round((updated_at - created_at).total_seconds())
+        else:
+            now = datetime.now(UTC)
+            elapsed_s = round((now - created_at).total_seconds())
     else:
         elapsed_s = 0
         started_at = time.time()
@@ -553,15 +568,15 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         completed,
         failed,
         running,
-        status_str,
+        status.value,
         started_at,
     )
 
-    if status_str in ("completed", "failed", "revoked"):
+    if is_terminal:
         error = status_response.error
         if error and not isinstance(error, Unset):
-            return [TextContent(type="text", text=f"Task {status_str}: {error}")]
-        if status_str == "completed":
+            return [TextContent(type="text", text=f"Task {status.value}: {error}")]
+        if status == TaskStatus.COMPLETED:
             return [
                 TextContent(
                     type="text",
@@ -573,7 +588,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
             ]
         return [
             TextContent(
-                type="text", text=f"Task {status_str}. Report the error to the user."
+                type="text", text=f"Task {status.value}. Report the error to the user."
             )
         ]
 
@@ -620,13 +635,13 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
                     text=f"Error: Unexpected response type: {type(status_response)}",
                 )
             ]
-        status_str = status_response.status.value
-        if status_str not in ("completed", "failed", "revoked"):
+        status = status_response.status
+        if status not in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
             return [
                 TextContent(
                     type="text",
                     text=(
-                        f"Task status is {status_str}. Cannot fetch results yet.\n"
+                        f"Task status is {status.value}. Cannot fetch results yet.\n"
                         f"Call everyrow_progress(task_id='{task_id}') to check again."
                     ),
                 )
