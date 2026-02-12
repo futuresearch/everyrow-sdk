@@ -140,14 +140,14 @@ export function getNavigation(): NavSection[] {
       title: "Guides",
       href: "/guides",
       items: guides
-        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp", "guides", "notebooks", "api"].includes(d.slug))
+        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp", "guides", "case-studies", "api"].includes(d.slug))
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {
       title: "Case Studies",
-      href: "/notebooks",
+      href: "/case-studies",
       items: notebooks.map((n) => ({
-        slug: `notebooks/${n.slug}`,
+        slug: `case-studies/${n.slug}`,
         title: n.title,
       })),
     },

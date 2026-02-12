@@ -137,5 +137,5 @@ companies = await single_agent(
 - [Add a Column with Web Lookup](/docs/add-column-web-lookup)
 - [Classify and Label Data with an LLM](/docs/classify-dataframe-rows-llm)
 
-### Notebooks
-- [LLM Web Research Agents at Scale](/docs/notebooks/llm-web-research-agents-at-scale)
+### Case Studies
+- [LLM Web Research Agents at Scale](/docs/case-studies/llm-web-research-agents-at-scale)
