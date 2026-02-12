@@ -58,10 +58,11 @@ def _default_progress_output(task_status: TaskStatusResponse) -> None:
     elapsed_str = ""
     if task_status.created_at:
         elapsed_str = f"({time.time() - task_status.created_at.timestamp():.0f}s)"
+    log_total = len(str(total))
     message = (
-        f"{elapsed_str:>5s} [{completed}/{total}] {pct:3.0f}%"
-        + (f"| {running} running" if running else "")
-        + (f"| {failed} failed" if failed else "")
+        f"{elapsed_str:>7s} [{completed:>{log_total}}/{total}] {pct:3.0f}%"
+        + (f" | {running:>{log_total}} running" if running is not None else "")
+        + (f" | {failed} failed" if failed else "")
     )
     _logger.info(message)
 
