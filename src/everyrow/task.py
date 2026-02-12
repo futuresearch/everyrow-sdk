@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import sys
 import time
 from collections.abc import Callable
@@ -28,6 +27,7 @@ from everyrow.generated.models import (
 )
 from everyrow.generated.types import Unset
 from everyrow.result import MergeBreakdown, MergeResult, ScalarResult, TableResult
+from everyrow.session import get_session_url
 
 LLM = LLMEnumPublic
 
@@ -88,12 +88,6 @@ class EveryrowTask[T: BaseModel]:
         self.session_id = session_id
         self._client = client
 
-    def _get_session_url(self) -> str | None:
-        if self.session_id is None:
-            return None
-        base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
-        return f"{base_url}/sessions/{self.session_id}"
-
     async def get_status(
         self, client: AuthenticatedClient | None = None
     ) -> TaskStatusResponse:
@@ -118,7 +112,7 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        session_url = self._get_session_url()
+        session_url = get_session_url(self.session_id) if self.session_id else None
         final_status = await await_task_completion(
             self.task_id, client, session_url=session_url, on_progress=on_progress
         )
@@ -297,12 +291,6 @@ class MergeTask:
         self.session_id = session_id
         self._client = client
 
-    def _get_session_url(self) -> str | None:
-        if self.session_id is None:
-            return None
-        base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
-        return f"{base_url}/sessions/{self.session_id}"
-
     async def get_status(
         self, client: AuthenticatedClient | None = None
     ) -> TaskStatusResponse:
@@ -325,7 +313,7 @@ class MergeTask:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        session_url = self._get_session_url()
+        session_url = get_session_url(self.session_id) if self.session_id else None
         final_status = await await_task_completion(
             self.task_id, client, session_url=session_url
         )

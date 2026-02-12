@@ -33,7 +33,7 @@ from everyrow.ops import (
     rank_async,
     screen_async,
 )
-from everyrow.session import create_session
+from everyrow.session import create_session, get_session_url
 from mcp.server.fastmcp import FastMCP
 from mcp.types import TextContent
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
@@ -77,12 +77,6 @@ mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
 def _clear_task_state() -> None:
     if TASK_STATE_FILE.exists():
         TASK_STATE_FILE.unlink()
-
-
-def _get_session_url(session_id: UUID) -> str:
-    """Derive session URL from session ID."""
-    base_url = os.environ.get("EVERYROW_BASE_URL", "https://everyrow.io")
-    return f"{base_url}/sessions/{session_id}"
 
 
 def _write_task_state(
@@ -533,7 +527,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:  # noqa
         TaskStatus.FAILED,
         TaskStatus.REVOKED,
     )
-    session_url = _get_session_url(status_response.session_id)
+    session_url = get_session_url(status_response.session_id)
 
     completed = progress.completed if progress else 0
     failed = progress.failed if progress else 0
