@@ -80,7 +80,7 @@ Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
 ### everyrow_progress
 
-Check progress of a running task. **Blocks ~12 seconds** before returning.
+Check progress of a running task. **Blocks for a few seconds** before returning.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

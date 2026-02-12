@@ -37,7 +37,7 @@ You can also provide a custom `on_progress` callback for programmatic progress h
 When you run an everyrow operation via MCP:
 
 1. The operation returns immediately with a session URL
-2. Progress updates appear every ~15 seconds during execution
+2. Progress updates appear every few seconds during execution
 3. Results are saved as a CSV file when the operation completes
 4. If you've installed the plugin, a desktop notification (macOS and Linux) tells you when it's done
 
@@ -45,7 +45,7 @@ The workflow:
 
 ```
 everyrow_agent        →  start the operation, get a task_id and session URL
-everyrow_progress     →  check status (blocks ~12s, then returns progress)
+everyrow_progress     →  check status (blocks for a few seconds, then returns progress)
 everyrow_progress     →  check again (the agent loops automatically)
 everyrow_results      →  download results when complete
 ```
