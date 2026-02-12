@@ -185,6 +185,14 @@ def check_file(
                 continue
 
             if domain in CHECKED_DOMAINS:
+                # For everyrow.io docs links, check against the build
+                # output first. This avoids a chicken-and-egg problem
+                # where new pages can't deploy because their canonical
+                # URL doesn't exist on the live site yet.
+                if domain == "everyrow.io" and parsed.path.startswith("/docs"):
+                    local_path = parsed.path.rstrip("/") or "/docs"
+                    if local_path in valid_paths or local_path + "/" in valid_paths:
+                        continue
                 result = check_url(href, url_cache)
                 if isinstance(result, int) and 200 <= result < 400:
                     continue
