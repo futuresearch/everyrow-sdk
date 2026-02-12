@@ -16,13 +16,13 @@ import pytest
 from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.server import (
-    AgentSubmitInput,
-    DedupeSubmitInput,
-    MergeSubmitInput,
+    AgentInput,
+    DedupeInput,
+    MergeInput,
     ProgressInput,
-    RankSubmitInput,
+    RankInput,
     ResultsInput,
-    ScreenSubmitInput,
+    ScreenInput,
     everyrow_agent,
     everyrow_dedupe,
     everyrow_merge,
@@ -80,7 +80,7 @@ class TestScreenIntegration:
     ):
         """Test screening jobs for remote senior roles."""
         # 1. Submit the task
-        params = ScreenSubmitInput(
+        params = ScreenInput(
             task="""
                 Filter for positions that meet ALL criteria:
                 1. Remote-friendly (location says Remote)
@@ -129,7 +129,7 @@ class TestRankIntegration:
     ):
         """Test ranking companies by AI/ML maturity."""
         # 1. Submit the task
-        params = RankSubmitInput(
+        params = RankInput(
             task="Score 0-10 by AI/ML adoption maturity and innovation focus. Higher score = more AI focused.",
             input_csv=str(companies_csv),
             field_name="ai_score",
@@ -175,14 +175,13 @@ class TestDedupeIntegration:
     ):
         """Test deduplicating contacts."""
         # 1. Submit the task
-        params = DedupeSubmitInput(
+        params = DedupeInput(
             equivalence_relation="""
                 Two rows are duplicates if they represent the same person.
                 Consider name abbreviations (J. Smith = John Smith),
                 and company name variations (Acme Corp = Acme Corporation).
             """,
             input_csv=str(contacts_csv),
-            output_path=str(tmp_path),
         )
 
         result = await everyrow_dedupe(params)
@@ -231,7 +230,7 @@ class TestMergeIntegration:
     ):
         """Test merging products with suppliers."""
         # 1. Submit the task
-        params = MergeSubmitInput(
+        params = MergeInput(
             task="""
                 Match each product to its parent company in the suppliers list.
                 Photoshop is made by Adobe, VSCode by Microsoft, Slack by Salesforce.
@@ -287,7 +286,7 @@ class TestAgentIntegration:
         df.to_csv(input_csv, index=False)
 
         # 1. Submit the task
-        params = AgentSubmitInput(
+        params = AgentInput(
             task="Find the company's headquarters city and approximate employee count.",
             input_csv=str(input_csv),
             response_schema={

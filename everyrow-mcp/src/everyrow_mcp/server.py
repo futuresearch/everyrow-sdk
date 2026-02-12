@@ -112,7 +112,7 @@ def _write_task_state(
         pass  # Non-critical — hooks/status line just won't update
 
 
-class AgentSubmitInput(BaseModel):
+class AgentInput(BaseModel):
     """Input for the agent operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -133,7 +133,7 @@ class AgentSubmitInput(BaseModel):
         return v
 
 
-class RankSubmitInput(BaseModel):
+class RankInput(BaseModel):
     """Input for the rank operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -161,7 +161,7 @@ class RankSubmitInput(BaseModel):
         return v
 
 
-class ScreenSubmitInput(BaseModel):
+class ScreenInput(BaseModel):
     """Input for the screen operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -182,7 +182,7 @@ class ScreenSubmitInput(BaseModel):
         return v
 
 
-class DedupeSubmitInput(BaseModel):
+class DedupeInput(BaseModel):
     """Input for the dedupe operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -202,7 +202,7 @@ class DedupeSubmitInput(BaseModel):
         return v
 
 
-class MergeSubmitInput(BaseModel):
+class MergeInput(BaseModel):
     """Input for the merge operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -240,7 +240,7 @@ class ProgressInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    task_id: str = Field(..., description="The task ID returned by the submit tool.")
+    task_id: str = Field(..., description="The task ID returned by the operation tool.")
 
 
 class ResultsInput(BaseModel):
@@ -262,7 +262,7 @@ class ResultsInput(BaseModel):
 
 
 @mcp.tool(name="everyrow_agent", structured_output=False)
-async def everyrow_agent(params: AgentSubmitInput) -> list[TextContent]:
+async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     """Run web research agents on each row of a CSV.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -307,7 +307,7 @@ async def everyrow_agent(params: AgentSubmitInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_rank", structured_output=False)
-async def everyrow_rank(params: RankSubmitInput) -> list[TextContent]:
+async def everyrow_rank(params: RankInput) -> list[TextContent]:
     """Score and sort rows in a CSV based on qualitative criteria.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -357,7 +357,7 @@ async def everyrow_rank(params: RankSubmitInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_screen", structured_output=False)
-async def everyrow_screen(params: ScreenSubmitInput) -> list[TextContent]:
+async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     """Filter rows in a CSV based on criteria that require judgment.
 
     Submit the task and return immediately with a task_id and session_url.
@@ -404,7 +404,7 @@ async def everyrow_screen(params: ScreenSubmitInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_dedupe", structured_output=False)
-async def everyrow_dedupe(params: DedupeSubmitInput) -> list[TextContent]:
+async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     """Remove duplicate rows from a CSV using semantic equivalence.
 
     Dedupe identifies rows that represent the same entity even when they
@@ -451,7 +451,7 @@ async def everyrow_dedupe(params: DedupeSubmitInput) -> list[TextContent]:
 
 
 @mcp.tool(name="everyrow_merge", structured_output=False)
-async def everyrow_merge(params: MergeSubmitInput) -> list[TextContent]:
+async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
     Submit the task and return immediately with a task_id and session_url.
