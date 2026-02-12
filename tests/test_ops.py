@@ -56,6 +56,7 @@ def _make_status_response(
         created_at=datetime.now(),
         updated_at=datetime.now(),
         artifact_id=artifact_id,
+        progress=None,
     )
 
 
