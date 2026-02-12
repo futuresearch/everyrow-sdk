@@ -115,6 +115,8 @@ Config file location:
 
 [Choosing the right scope](https://code.claude.com/docs/en/mcp#choosing-the-right-scope)
 
+You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
+
 </TabContent>
 
 <TabContent agent="claude-code" type="plugin">
@@ -128,7 +130,9 @@ claude plugin install everyrow@futuresearch
 
 This installs both the skill and MCP server together. You can toggle each on/off in Claude Code settings.
 
-[Official Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
+You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
+
+[Official Claude Code Plugin Docs](https://code.claude.com/docs/en/discover-plugins#add-from-github)
 
 </TabContent>
 
@@ -330,34 +334,6 @@ Config file location:
 </TabContent>
 
 </InstallationTabs>
-
-## Sample output (Claude Code)
-
-After installing the Claude Code plugin, try an operation:
-
-> "Find the headquarter city and country for each company in companies.csv"
-
-Here's what you'll see in Claude Code:
-
-```
-⏺ everyrow_agent
-  ⎿  Submitted: 21 agents starting.
-     Session: https://everyrow.io/sessions/df2b0daa-...
-
-⏺ everyrow_progress
-  ⎿  Running: 4/21 complete, 4 running (16s elapsed)
-
-⏺ everyrow_progress
-  ⎿  Running: 17/21 complete, 4 running (46s elapsed)
-
-⏺ everyrow_progress
-  ⎿  Completed: 21/21 (0 failed) in 63s.
-
-⏺ everyrow_results
-  ⎿  Saved 20 rows to /Users/you/demo_results.csv
-```
-
-For a persistent progress bar in your terminal, see [Progress Monitoring](/docs/progress-monitoring).
 
 ## Dependencies
 
