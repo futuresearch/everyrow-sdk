@@ -115,7 +115,7 @@ def _write_task_state(
 
 
 class AgentSubmitInput(BaseModel):
-    """Input for submitting an agent_map operation (non-blocking)."""
+    """Input for the agent operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -136,7 +136,7 @@ class AgentSubmitInput(BaseModel):
 
 
 class RankSubmitInput(BaseModel):
-    """Input for submitting a rank operation (non-blocking)."""
+    """Input for the rank operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -172,7 +172,7 @@ class RankSubmitInput(BaseModel):
 
 
 class ScreenSubmitInput(BaseModel):
-    """Input for submitting a screen operation (non-blocking)."""
+    """Input for the screen operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -193,7 +193,7 @@ class ScreenSubmitInput(BaseModel):
 
 
 class DedupeSubmitInput(BaseModel):
-    """Input for submitting a dedupe operation (non-blocking)."""
+    """Input for the dedupe operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -212,7 +212,7 @@ class DedupeSubmitInput(BaseModel):
 
 
 class MergeSubmitInput(BaseModel):
-    """Input for submitting a merge operation (non-blocking)."""
+    """Input for the merge operation."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
@@ -245,7 +245,7 @@ class ProgressInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    task_id: str = Field(..., description="The task ID returned by a _submit tool.")
+    task_id: str = Field(..., description="The task ID returned by the submit tool.")
 
 
 class ResultsInput(BaseModel):
@@ -268,13 +268,17 @@ class ResultsInput(BaseModel):
 
 @mcp.tool(name="everyrow_agent_submit", structured_output=False)
 async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
-    """Submit a web research agent task on each row of a CSV (returns immediately).
+    """Run web research agents on each row of a CSV.
 
-    Use this instead of everyrow_agent for long-running operations. Returns a task_id
-    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+    Submit the task and return immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
 
-    After receiving a result from this tool, share the session_url with the user,
-    then immediately call everyrow_progress with the returned task_id.
+    Examples:
+    - "Find this company's latest funding round and lead investors"
+    - "Research the CEO's background and previous companies"
+    - "Find pricing information for this product"
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -308,13 +312,17 @@ async def everyrow_agent_submit(params: AgentSubmitInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_rank_submit", structured_output=False)
 async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
-    """Submit a rank/score operation on a CSV (returns immediately).
+    """Score and sort rows in a CSV based on qualitative criteria.
 
-    Use this instead of everyrow_rank for long-running operations. Returns a task_id
-    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+    Submit the task and return immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
 
-    After receiving a result from this tool, share the session_url with the user,
-    then immediately call everyrow_progress with the returned task_id.
+    Examples:
+    - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
+    - "Score this company out of 100 by AI/ML adoption maturity"
+    - "Score this candidate by fit for a senior engineering role, with 100 being the best"
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -353,13 +361,17 @@ async def everyrow_rank_submit(params: RankSubmitInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_screen_submit", structured_output=False)
 async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]:
-    """Submit a screen/filter operation on a CSV (returns immediately).
+    """Filter rows in a CSV based on criteria that require judgment.
 
-    Use this instead of everyrow_screen for long-running operations. Returns a task_id
-    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+    Submit the task and return immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
 
-    After receiving a result from this tool, share the session_url with the user,
-    then immediately call everyrow_progress with the returned task_id.
+    Examples:
+    - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
+    - "Is this vendor financially stable AND does it have good security practices?"
+    - "Is this lead likely to need our product based on company description?"
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -395,13 +407,17 @@ async def everyrow_screen_submit(params: ScreenSubmitInput) -> list[TextContent]
 
 @mcp.tool(name="everyrow_dedupe_submit", structured_output=False)
 async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]:
-    """Submit a dedupe operation on a CSV (returns immediately).
+    """Remove duplicate rows from a CSV using semantic equivalence.
 
-    Use this instead of everyrow_dedupe for long-running operations. Returns a task_id
-    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+    Submit the task and return immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
 
-    After receiving a result from this tool, share the session_url with the user,
-    then immediately call everyrow_progress with the returned task_id.
+    Examples:
+    - Dedupe contacts: "Same person even with name abbreviations or career changes"
+    - Dedupe companies: "Same company including subsidiaries and name variations"
+    - Dedupe research papers: "Same work including preprints and published versions"
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -432,13 +448,17 @@ async def everyrow_dedupe_submit(params: DedupeSubmitInput) -> list[TextContent]
 
 @mcp.tool(name="everyrow_merge_submit", structured_output=False)
 async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
-    """Submit a merge operation on two CSVs (returns immediately).
+    """Join two CSV files using intelligent entity matching.
 
-    Use this instead of everyrow_merge for long-running operations. Returns a task_id
-    and session_url immediately. Then call everyrow_progress(task_id) to monitor.
+    Submit the task and return immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
 
-    After receiving a result from this tool, share the session_url with the user,
-    then immediately call everyrow_progress with the returned task_id.
+    Examples:
+    - Match software products to parent companies (Photoshop -> Adobe)
+    - Match clinical trial sponsors to pharma companies (Genentech -> Roche)
+    - Join contact lists with different name formats
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -474,11 +494,11 @@ async def everyrow_merge_submit(params: MergeSubmitInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_progress", structured_output=False)
 async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
-    """Check progress of a running everyrow task. Blocks ~12s before returning.
+    """Check progress of a running task. Blocks for a time to limit the polling rate.
 
     After receiving a status update, immediately call everyrow_progress again
     unless the task is completed or failed. The tool handles pacing internally.
-    Do not add commentary between progress calls — just call again immediately.
+    Do not add commentary between progress calls, just call again immediately.
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -571,7 +591,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_results", structured_output=False)
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
-    """Retrieve results from a completed everyrow task and save to CSV.
+    """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
     The output_path must be a full file path ending in .csv.
