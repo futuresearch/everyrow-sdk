@@ -23,12 +23,12 @@ from everyrow.generated.models.task_status_response import TaskStatusResponse
 from pydantic import ValidationError
 
 from everyrow_mcp.server import (
-    AgentSubmitInput,
-    MergeSubmitInput,
+    AgentInput,
+    MergeInput,
     ProgressInput,
-    RankSubmitInput,
+    RankInput,
     ResultsInput,
-    ScreenSubmitInput,
+    ScreenInput,
     _schema_to_model,
     everyrow_agent,
     everyrow_progress,
@@ -87,20 +87,20 @@ class TestInputValidation:
     """Tests for input validation."""
 
     def test_screen_input_validates_csv_path(self, tmp_path: Path):
-        """Test ScreenSubmitInput validates CSV path."""
+        """Test ScreenInput validates CSV path."""
         with pytest.raises(ValueError, match="does not exist"):
-            ScreenSubmitInput(
+            ScreenInput(
                 task="test",
                 input_csv=str(tmp_path / "nonexistent.csv"),
             )
 
     def test_rank_input_validates_field_type(self, tmp_path: Path):
-        """Test RankSubmitInput validates field_type."""
+        """Test RankInput validates field_type."""
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("a,b\n1,2\n")
 
         with pytest.raises(ValidationError, match="Input should be"):
-            RankSubmitInput(
+            RankInput(
                 task="test",
                 input_csv=str(csv_file),
                 field_name="score",
@@ -108,12 +108,12 @@ class TestInputValidation:
             )
 
     def test_merge_input_validates_both_csvs(self, tmp_path: Path):
-        """Test MergeSubmitInput validates both CSV paths."""
+        """Test MergeInput validates both CSV paths."""
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("a,b\n1,2\n")
 
         with pytest.raises(ValueError, match="does not exist"):
-            MergeSubmitInput(
+            MergeInput(
                 task="test",
                 left_csv=str(csv_file),
                 right_csv=str(tmp_path / "nonexistent.csv"),
@@ -218,7 +218,7 @@ class TestAgent:
         ):
             mock_op.return_value = mock_task
 
-            params = AgentSubmitInput(
+            params = AgentInput(
                 task="Find HQ for each company",
                 input_csv=companies_csv,
             )
