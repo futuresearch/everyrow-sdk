@@ -86,3 +86,21 @@ jobs:
 
       - name: Run tests
         run: uv run --directory everyrow-mcp pytest tests
+
+  shell-tests:
+    name: shell-scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Run status line tests
+        run: bash everyrow-mcp/tests/test_statusline.sh
+
+      - name: Run stop guard tests
+        run: bash everyrow-mcp/tests/test_hook_stop_guard.sh
+
+      - name: Run results hook tests
+        run: bash everyrow-mcp/tests/test_hook_results.sh

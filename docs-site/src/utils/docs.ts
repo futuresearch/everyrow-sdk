@@ -123,7 +123,9 @@ export function getNavigation(): NavSection[] {
         { slug: "installation", title: "Installation", href: "/" },
         { slug: "getting-started", title: "Getting Started" },
         { slug: "api-key", title: "API Key", href: "https://everyrow.io/api-key" },
+        { slug: "mcp-server", title: "MCP Server" },
         { slug: "skills-vs-mcp", title: "Skills vs MCP" },
+        { slug: "progress-monitoring", title: "Progress Monitoring" },
         { slug: "chaining-operations", title: "Chaining Operations" },
         { slug: "github", title: "GitHub", href: "https://github.com/futuresearch/everyrow-sdk" },
       ],
@@ -140,7 +142,17 @@ export function getNavigation(): NavSection[] {
       title: "Guides",
       href: "/guides",
       items: guides
-        .filter((d) => !["getting-started", "chaining-operations", "installation", "skills-vs-mcp", "guides", "case-studies", "api"].includes(d.slug))
+        .filter((d) => ![
+          "getting-started",
+          "chaining-operations",
+          "installation",
+          "progress-monitoring",
+          "mcp-server",
+          "skills-vs-mcp",
+          "guides",
+          "notebooks",
+          "api",
+        ].includes(d.slug))
         .map((d) => ({ slug: d.slug, title: d.title })),
     },
     {

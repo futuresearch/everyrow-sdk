@@ -9,14 +9,17 @@ from ...models.dedupe_operation import DedupeOperation
 from ...models.error_response import ErrorResponse
 from ...models.insufficient_balance_error import InsufficientBalanceError
 from ...models.operation_response import OperationResponse
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
     body: DedupeOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+    if not isinstance(x_cohort_source, Unset):
+        headers["X-Cohort-Source"] = x_cohort_source
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -70,12 +73,14 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
     body: DedupeOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """AI-powered deduplication
 
      Use AI to identify and remove duplicate rows based on the equivalence relation.
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (DedupeOperation):
 
     Raises:
@@ -88,6 +93,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        x_cohort_source=x_cohort_source,
     )
 
     response = client.get_httpx_client().request(
@@ -101,12 +107,14 @@ def sync(
     *,
     client: AuthenticatedClient,
     body: DedupeOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """AI-powered deduplication
 
      Use AI to identify and remove duplicate rows based on the equivalence relation.
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (DedupeOperation):
 
     Raises:
@@ -120,6 +128,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        x_cohort_source=x_cohort_source,
     ).parsed
 
 
@@ -127,12 +136,14 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
     body: DedupeOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
     """AI-powered deduplication
 
      Use AI to identify and remove duplicate rows based on the equivalence relation.
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (DedupeOperation):
 
     Raises:
@@ -145,6 +156,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        x_cohort_source=x_cohort_source,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -156,12 +168,14 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
     body: DedupeOperation,
+    x_cohort_source: None | str | Unset = UNSET,
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
     """AI-powered deduplication
 
      Use AI to identify and remove duplicate rows based on the equivalence relation.
 
     Args:
+        x_cohort_source (None | str | Unset):
         body (DedupeOperation):
 
     Raises:
@@ -176,5 +190,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            x_cohort_source=x_cohort_source,
         )
     ).parsed

@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from collections.abc import Callable
 from enum import StrEnum
 from typing import TypeVar
 from uuid import UUID
@@ -15,6 +17,7 @@ from everyrow.generated.api.tasks import (
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models import (
     LLMEnumPublic,
+    TaskProgressInfo,
     TaskResultResponse,
     TaskResultResponseDataType1,
     TaskStatus,
@@ -30,6 +33,18 @@ class EffortLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+def print_progress(progress: TaskProgressInfo) -> None:
+    """Print task progress. Pass this to on_progress for progress output."""
+    pct = (progress.completed / progress.total * 100) if progress.total else 0
+    width = len(str(progress.total))
+    message = (
+        f"{progress.completed:>{width}}/{progress.total} {pct:3.0f}%"
+        + (f" | {progress.running:>{width}} running" if progress.running else "")
+        + (f" | {progress.failed} failed" if progress.failed else "")
+    )
+    print(message)
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -67,7 +82,9 @@ class EveryrowTask[T: BaseModel]:
         return await get_task_status(self.task_id, client)
 
     async def await_result(
-        self, client: AuthenticatedClient | None = None
+        self,
+        client: AuthenticatedClient | None = None,
+        on_progress: Callable[[TaskProgressInfo], None] | None = None,
     ) -> TableResult | ScalarResult[T]:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before awaiting result")
@@ -76,7 +93,9 @@ class EveryrowTask[T: BaseModel]:
             raise EveryrowError(
                 "No client available. Provide a client or use the task within a session context."
             )
-        final_status = await await_task_completion(self.task_id, client)
+        final_status = await await_task_completion(
+            self.task_id, client, on_progress=on_progress
+        )
 
         result_response = await get_task_result(self.task_id, client)
         artifact_id = result_response.artifact_id
@@ -105,10 +124,14 @@ class EveryrowTask[T: BaseModel]:
 
 
 async def await_task_completion(
-    task_id: UUID, client: AuthenticatedClient
+    task_id: UUID,
+    client: AuthenticatedClient,
+    on_progress: Callable[[TaskProgressInfo], None] | None = None,
 ) -> TaskStatusResponse:
     max_retries = 3
     retries = 0
+    last_progress: TaskProgressInfo | None = None
+
     while True:
         try:
             status_response = await get_task_status(task_id, client)
@@ -118,15 +141,25 @@ async def await_task_completion(
                     f"Failed to get task status after {max_retries} retries"
                 ) from e
             retries += 1
-        else:
-            retries = 0
-            if status_response.status in (
-                TaskStatus.COMPLETED,
-                TaskStatus.FAILED,
-                TaskStatus.REVOKED,
-            ):
-                break
-        await asyncio.sleep(1)
+            await asyncio.sleep(2)
+            continue
+
+        retries = 0
+        if on_progress and status_response.progress:
+            if status_response.progress != last_progress:
+                last_progress = status_response.progress
+                try:
+                    on_progress(status_response.progress)
+                except Exception as e:
+                    logging.debug(f"on_progress callback error: {e!r}")
+
+        if status_response.status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.REVOKED,
+        ):
+            break
+        await asyncio.sleep(2)
 
     if status_response.status == TaskStatus.FAILED:
         error_msg = (

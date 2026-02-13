@@ -236,7 +236,7 @@ Built by [FutureSearch](https://futuresearch.ai). We kept running into the same 
   author       = {FutureSearch},
   title        = {everyrow},
   url          = {https://github.com/futuresearch/everyrow-sdk},
-  version      = {0.2.1},
+  version      = {0.3.0},
   year         = {2026},
   license      = {MIT}
 }
