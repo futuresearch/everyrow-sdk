@@ -364,6 +364,7 @@ def main() -> int:
     readme_files = [
         REPO_ROOT / "README.md",
         REPO_ROOT / "everyrow-mcp" / "README.md",
+        REPO_ROOT / "docs-site" / "README.md",
     ]
 
     url_cache: dict[str, int | str] = {}
