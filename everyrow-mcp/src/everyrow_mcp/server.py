@@ -290,6 +290,16 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             kwargs["response_model"] = response_model
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=time.time(),
+        )
 
     return [
         TextContent(
@@ -340,6 +350,16 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             ascending_order=params.ascending_order,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=time.time(),
+        )
 
     return [
         TextContent(
@@ -387,6 +407,16 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             response_model=response_model,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=time.time(),
+        )
 
     return [
         TextContent(
@@ -434,6 +464,16 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             input=df,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=time.time(),
+        )
 
     return [
         TextContent(
@@ -482,6 +522,16 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(left_df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=time.time(),
+        )
 
     return [
         TextContent(
