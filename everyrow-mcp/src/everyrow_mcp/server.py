@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import sys
-import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,8 +83,8 @@ def _write_task_state(
     completed: int,
     failed: int,
     running: int,
-    status: str,
-    started_at: float,
+    status: TaskStatus,
+    started_at: datetime,
 ) -> None:
     """Write task tracking state for hooks/status line to read.
 
@@ -101,8 +100,8 @@ def _write_task_state(
             "completed": completed,
             "failed": failed,
             "running": running,
-            "status": status,
-            "started_at": started_at,
+            "status": status.value,
+            "started_at": started_at.timestamp(),
         }
         with open(TASK_STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -301,7 +300,7 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             failed=0,
             running=0,
             status=TaskStatus.RUNNING,
-            started_at=time.time(),
+            started_at=datetime.now(UTC),
         )
 
     return [
@@ -368,7 +367,7 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             failed=0,
             running=0,
             status=TaskStatus.RUNNING,
-            started_at=time.time(),
+            started_at=datetime.now(UTC),
         )
 
     return [
@@ -432,7 +431,7 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             failed=0,
             running=0,
             status=TaskStatus.RUNNING,
-            started_at=time.time(),
+            started_at=datetime.now(UTC),
         )
 
     return [
@@ -495,7 +494,7 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             failed=0,
             running=0,
             status=TaskStatus.RUNNING,
-            started_at=time.time(),
+            started_at=datetime.now(UTC),
         )
 
     return [
@@ -563,7 +562,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             failed=0,
             running=0,
             status=TaskStatus.RUNNING,
-            started_at=time.time(),
+            started_at=datetime.now(UTC),
         )
 
     return [
@@ -631,7 +630,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         created_at = status_response.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        started_at = created_at.timestamp()
+        started_at = created_at
 
         if is_terminal and status_response.updated_at:
             updated_at = status_response.updated_at
@@ -643,7 +642,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
             elapsed_s = round((now - created_at).total_seconds())
     else:
         elapsed_s = 0
-        started_at = time.time()
+        started_at = datetime.now(UTC)
 
     _write_task_state(
         task_id,
@@ -652,7 +651,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         completed,
         failed,
         running,
-        status.value,
+        status,
         started_at,
     )
 
