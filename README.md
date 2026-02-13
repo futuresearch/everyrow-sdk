@@ -92,7 +92,7 @@ result = await agent_map(
 print(result.data.head())
 ```
 
-See the API [docs](https://everyrow.io/docs/reference/RESEARCH.md), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a notebook for [researching government data](https://everyrow.io/docs/notebooks/research-and-rank-permit-times) at scale.
+See the API [docs](https://everyrow.io/docs/reference/RESEARCH), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a notebook for [researching government data](https://everyrow.io/docs/notebooks/research-and-rank-permit-times) at scale.
 
 
 ## Sessions
