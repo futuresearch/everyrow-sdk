@@ -66,6 +66,7 @@ SKIPPED_URLS: set[str] = {
     "https://img.shields.io/badge/python-3.12+-blue.svg",
     "https://img.shields.io/pypi/v/everyrow.svg",
     "https://jqlang.org/",
+    "https://modelcontextprotocol.info/tools/registry/publishing/",
     "https://opensource.org/licenses/MIT",
     "https://pypi.org/project/everyrow/",
     "https://python.org/downloads/",
@@ -360,10 +361,10 @@ def main() -> int:
         print()
 
     # Find README files to check
-    readme_files = []
-    repo_readme = REPO_ROOT / "README.md"
-    if repo_readme.exists():
-        readme_files.append(repo_readme)
+    readme_files = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "everyrow-mcp" / "README.md",
+    ]
 
     url_cache: dict[str, int | str] = {}
     all_errors: list[str] = []
