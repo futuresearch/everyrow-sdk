@@ -664,7 +664,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
                 text=(
                     f"Saved {len(df)} rows to {output_file}\n\n"
                     "Tip: For multi-step pipelines, custom response models, or preview mode, "
-                    "ask Claude to write Python using the everyrow SDK."
+                    "ask your AI assistant to write Python using the everyrow SDK."
                 ),
             )
         ]
