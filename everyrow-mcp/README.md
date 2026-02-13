@@ -79,10 +79,10 @@ Score and sort CSV rows based on qualitative criteria.
 
 ```
 Parameters:
-- task: Natural language description of ranking criteria
+- task: Natural language instructions for scoring a single row
 - input_csv: Absolute path to input CSV
 - field_name: Name of the score field to add
-- field_type: Type of field (float, int, str, bool)
+- field_type: Type of the score field (float, int, str, bool)
 - ascending_order: Sort direction (default: true)
 - response_schema: (optional) JSON schema for custom response fields
 ```
@@ -97,7 +97,6 @@ Remove duplicate rows using semantic equivalence.
 Parameters:
 - equivalence_relation: Natural language description of what makes rows duplicates
 - input_csv: Absolute path to input CSV
-- output_path: Directory or full .csv path for output
 ```
 
 Example: Dedupe contacts where "same person even with name abbreviations or career changes"
@@ -114,6 +113,7 @@ Parameters:
 - merge_on_left: (optional) Column name in left table
 - merge_on_right: (optional) Column name in right table
 - use_web_search: (optional) "auto", "yes", or "no"
+- relationship_type: (optional) "many_to_one" (default) if multiple left rows can match one right row, or "one_to_one" matches must be unique
 ```
 
 Example: Match software products to parent companies (Photoshop -> Adobe)

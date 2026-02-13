@@ -65,7 +65,7 @@ MCP provides direct tool calls without code generation. Your agent calls everyro
 
 | Feature | SDK Skills | MCP Server |
 |---------|--------|------------|
-| Setup complexity | Requires Python environment | Requires MCP client (e.g. Claude Code) |
+| Setup complexity | Requires Python environment | Requires MCP client (e.g. Claude Code, Codex) |
 | Code visibility | Full Python code shown | Tool calls only |
 | Customization | High (edit generated code) | Limited |
 | Multi-step workflows | Excellent (in-memory chaining) | Basic (CSV round-trips) |
@@ -78,9 +78,9 @@ MCP provides direct tool calls without code generation. Your agent calls everyro
 
 ### Which Should I Start With?
 
-Start with MCP. Install the plugin, set your API key, and ask Claude to process your data. No Python needed, and you get automatic progress tracking with a status bar.
+Start with MCP. Install the plugin, set your API key, and ask your AI assistant to process your data. No Python needed, and you get automatic progress tracking with a status bar.
 
-When you need `preview=True` to test cheaply, full Pydantic response models with validators, custom effort levels, or multi-step pipelines that chain operations in memory — ask Claude to "write a Python script instead." The SDK Skill kicks in automatically.
+When you need `preview=True` to test cheaply, full Pydantic response models with validators, custom effort levels, or multi-step pipelines that chain operations in memory — ask your AI assistant to "write a Python script instead." The SDK Skill kicks in automatically.
 
 They're the same product at different abstraction levels. The plugin ships both. A user who starts with MCP tools and later needs more control just switches to the SDK path within the same session.
 

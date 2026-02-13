@@ -115,6 +115,13 @@ Config file location:
 
 [Choosing the right scope](https://code.claude.com/docs/en/mcp#choosing-the-right-scope)
 
+**Important:** either insert your API key when creating the JSON file, or supply the key when launching Claude Code:
+
+```bash
+export EVERYROW_API_KEY=sk-cho...
+claude
+```
+
 You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
 
 </TabContent>
@@ -129,6 +136,13 @@ claude plugin install everyrow@futuresearch
 ```
 
 This installs both the skill and MCP server together. You can toggle each on/off in Claude Code settings.
+
+**Important:** be sure to supply your API key when launching Claude Code:
+
+```bash
+export EVERYROW_API_KEY=sk-cho...
+claude
+```
 
 You can optionally configure Claude Code to show a [progress bar](/docs/progress-monitoring#progress-bar) for long-running tasks.
 
@@ -153,7 +167,7 @@ Add to your MCP config (requires [uv](https://docs.astral.sh/uv/)):
       "command": "uvx",
       "args": ["everyrow-mcp"],
       "env": {
-        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+        "EVERYROW_API_KEY": "sk-cho..."
       }
     }
   }
@@ -184,6 +198,13 @@ python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github
 
 Restart Codex to pick up the new skill.
 
+**Important:** be sure to supply your API key when launching Codex:
+
+```bash
+export EVERYROW_API_KEY=sk-cho...
+codex
+```
+
 [Official Docs](https://developers.openai.com/codex/skills#install-new-skills)
 
 </TabContent>
@@ -210,6 +231,13 @@ codex mcp add everyrow --env EVERYROW_API_KEY=${EVERYROW_API_KEY} -- uvx everyro
 Config file location:
 - **User scope:** `~/.codex/config.toml`
 - **Project scope:** `.codex/config.toml`
+
+**Important:** either insert your API key when creating the config file, or supply the key when launching Codex:
+
+```bash
+export EVERYROW_API_KEY=sk-cho...
+codex
+```
 
 [Official Docs](https://developers.openai.com/codex/mcp/)
 

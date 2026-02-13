@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import sys
-import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,8 +83,8 @@ def _write_task_state(
     completed: int,
     failed: int,
     running: int,
-    status: str,
-    started_at: float,
+    status: TaskStatus,
+    started_at: datetime,
 ) -> None:
     """Write task tracking state for hooks/status line to read.
 
@@ -101,8 +100,8 @@ def _write_task_state(
             "completed": completed,
             "failed": failed,
             "running": running,
-            "status": status,
-            "started_at": started_at,
+            "status": status.value,
+            "started_at": started_at.timestamp(),
         }
         with open(TASK_STATE_FILE, "w") as f:
             json.dump(state, f)
@@ -137,12 +136,15 @@ class RankInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     task: str = Field(
-        ..., description="Natural language ranking criteria.", min_length=1
+        ...,
+        description="Natural language instructions for scoring a single row.",
+        min_length=1,
     )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     field_name: str = Field(..., description="Name of the field to sort by.")
     field_type: Literal["float", "int", "str", "bool"] = Field(
-        default="float", description="Type: 'float', 'int', 'str', or 'bool'"
+        default="float",
+        description="Type of the score field: 'float', 'int', 'str', or 'bool'",
     )
     ascending_order: bool = Field(
         default=True, description="Sort ascending (True) or descending (False)."
@@ -290,6 +292,16 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             kwargs["response_model"] = response_model
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
 
     return [
         TextContent(
@@ -308,15 +320,22 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
     """Score and sort rows in a CSV based on qualitative criteria.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
     Examples:
     - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
     - "Score this company out of 100 by AI/ML adoption maturity"
     - "Score this candidate by fit for a senior engineering role, with 100 being the best"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: RankInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -340,6 +359,16 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             ascending_order=params.ascending_order,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
 
     return [
         TextContent(
@@ -358,15 +387,22 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     """Filter rows in a CSV based on criteria that require judgment.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
     Examples:
     - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
     - "Is this vendor financially stable AND does it have good security practices?"
     - "Is this lead likely to need our product based on company description?"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: ScreenInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -387,6 +423,16 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             response_model=response_model,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
 
     return [
         TextContent(
@@ -414,11 +460,17 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     - Dedupe companies: "Same company including subsidiaries and name variations"
     - Dedupe research papers: "Same work including preprints and published versions"
 
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
     Args:
-        params: DedupeInput containing equivalence_relation, input_csv, output_path, and options
+        params: DedupeInput
 
     Returns:
-        JSON string with result summary including output file path and dedup stats
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -434,6 +486,16 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             input=df,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
 
     return [
         TextContent(
@@ -452,15 +514,25 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
+    Merge combines two tables even when keys don't match exactly. The LLM
+    performs research and reasoning to identify which rows should be joined.
 
     Examples:
     - Match software products to parent companies (Photoshop -> Adobe)
     - Match clinical trial sponsors to pharma companies (Genentech -> Roche)
     - Join contact lists with different name formats
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: MergeInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -482,6 +554,16 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            session_url,
+            total=len(left_df),
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
 
     return [
         TextContent(
@@ -548,7 +630,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         created_at = status_response.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        started_at = created_at.timestamp()
+        started_at = created_at
 
         if is_terminal and status_response.updated_at:
             updated_at = status_response.updated_at
@@ -560,7 +642,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
             elapsed_s = round((now - created_at).total_seconds())
     else:
         elapsed_s = 0
-        started_at = time.time()
+        started_at = datetime.now(UTC)
 
     _write_task_state(
         task_id,
@@ -569,7 +651,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         completed,
         failed,
         running,
-        status.value,
+        status,
         started_at,
     )
 
@@ -664,7 +746,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
                 text=(
                     f"Saved {len(df)} rows to {output_file}\n\n"
                     "Tip: For multi-step pipelines, custom response models, or preview mode, "
-                    "ask Claude to write Python using the everyrow SDK."
+                    "ask your AI assistant to write Python using the everyrow SDK."
                 ),
             )
         ]
