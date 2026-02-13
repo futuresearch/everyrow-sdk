@@ -137,12 +137,15 @@ class RankInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     task: str = Field(
-        ..., description="Natural language ranking criteria.", min_length=1
+        ...,
+        description="Natural language instructions for scoring a single row.",
+        min_length=1,
     )
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     field_name: str = Field(..., description="Name of the field to sort by.")
     field_type: Literal["float", "int", "str", "bool"] = Field(
-        default="float", description="Type: 'float', 'int', 'str', or 'bool'"
+        default="float",
+        description="Type of the score field: 'float', 'int', 'str', or 'bool'",
     )
     ascending_order: bool = Field(
         default=True, description="Sort ascending (True) or descending (False)."
@@ -318,15 +321,22 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
     """Score and sort rows in a CSV based on qualitative criteria.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
     Examples:
     - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
     - "Score this company out of 100 by AI/ML adoption maturity"
     - "Score this candidate by fit for a senior engineering role, with 100 being the best"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: RankInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -378,15 +388,22 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     """Filter rows in a CSV based on criteria that require judgment.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
     Examples:
     - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
     - "Is this vendor financially stable AND does it have good security practices?"
     - "Is this lead likely to need our product based on company description?"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: ScreenInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -444,11 +461,17 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     - Dedupe companies: "Same company including subsidiaries and name variations"
     - Dedupe research papers: "Same work including preprints and published versions"
 
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
     Args:
-        params: DedupeInput containing equivalence_relation, input_csv, output_path, and options
+        params: DedupeInput
 
     Returns:
-        JSON string with result summary including output file path and dedup stats
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -492,15 +515,25 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
+    Merge combines two tables even when keys don't match exactly. The LLM
+    performs research and reasoning to identify which rows should be joined.
 
     Examples:
     - Match software products to parent companies (Photoshop -> Adobe)
     - Match clinical trial sponsors to pharma companies (Genentech -> Roche)
     - Join contact lists with different name formats
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+
+    Args:
+        params: MergeInput
+
+    Returns:
+        Success message containing session_url (for the user to open) and
+        task_id (for monitoring progress)
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
