@@ -142,8 +142,8 @@ Output (selected rows only):
 - [Remove Duplicates from ML Training Data](/docs/deduplicate-training-data-ml)
 - [Resolve Duplicate Entities](/docs/resolve-entities-python)
 
-### Notebooks
-- [Dedupe CRM Company Records](/docs/notebooks/dedupe-crm-company-records)
+### Case Studies
+- [Dedupe CRM Company Records](/docs/case-studies/dedupe-crm-company-records)
 
 ### Blog posts
 - [CRM Deduplication](https://futuresearch.ai/crm-deduplication/)

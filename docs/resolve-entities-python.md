@@ -60,4 +60,4 @@ This approach handles cases that string similarity misses entirely. "AAPL" match
 
 The equivalence relation is flexible. For matching people, you might write "Two entries are duplicates if they refer to the same person, accounting for name variations and nicknames." For products: "Two entries represent the same product if they're the same item sold under different names or SKUs."
 
-See the [full notebook](notebooks/dedupe-crm-company-records) for additional examples including how to merge the clustered records into consolidated entries.
+See the [full notebook](case-studies/dedupe-crm-company-records) for additional examples including how to merge the clustered records into consolidated entries.

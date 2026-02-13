@@ -157,9 +157,9 @@ export function getNavigation(): NavSection[] {
     },
     {
       title: "Case Studies",
-      href: "/notebooks",
+      href: "/case-studies",
       items: notebooks.map((n) => ({
-        slug: `notebooks/${n.slug}`,
+        slug: `case-studies/${n.slug}`,
         title: n.title,
       })),
     },

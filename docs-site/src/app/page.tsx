@@ -35,7 +35,7 @@ const SECTION_DESCRIPTIONS: Record<string, string> = {
 const SECTION_LINKS: Record<string, string> = {
   "API Reference": "/api",
   Guides: "/guides",
-  "Case Studies": "/notebooks",
+  "Case Studies": "/case-studies",
 };
 
 function SectionCard({ section }: { section: NavSection }) {

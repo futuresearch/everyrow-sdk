@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: PageProps) {
     return { title: "Not Found" };
   }
 
-  const canonicalUrl = `https://everyrow.io/docs/notebooks/${slug}`;
+  const canonicalUrl = `https://everyrow.io/docs/case-studies/${slug}`;
   const description = notebook.description || `Case study: ${notebook.title}`;
 
   return {

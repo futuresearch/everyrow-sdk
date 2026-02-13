@@ -57,7 +57,7 @@ Intelligent data processing can handle tens of thousands of LLM calls, or thousa
 | [**Merge**](https://everyrow.io/docs/reference/MERGE) | Join tables when keys don't match | 5k rows |
 | [**Research**](https://everyrow.io/docs/reference/RESEARCH) | Web research on every row | 10k rows |
 
-See the full [API reference](https://everyrow.io/docs/api), [guides](https://everyrow.io/docs/guides), and [notebooks](https://everyrow.io/docs/notebooks), (for example, see our [notebook](https://everyrow.io/docs/notebooks/llm-web-research-agents-at-scale) running a `Research` task on 10k rows, running agents that used 120k LLM calls.)
+See the full [API reference](https://everyrow.io/docs/api), [guides](https://everyrow.io/docs/guides), and [case studies](https://everyrow.io/docs/case-studies), (for example, see our [case study](https://everyrow.io/docs/case-studies/llm-web-research-agents-at-scale) running a `Research` task on 10k rows, running agents that used 120k LLM calls.)
 
 ---
 
@@ -92,7 +92,7 @@ result = await agent_map(
 print(result.data.head())
 ```
 
-See the API [docs](https://everyrow.io/docs/reference/RESEARCH.md), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a notebook for [researching government data](https://everyrow.io/docs/notebooks/research-and-rank-permit-times) at scale.
+See the API [docs](https://everyrow.io/docs/reference/RESEARCH.md), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a case study for [researching government data](https://everyrow.io/docs/case-studies/research-and-rank-permit-times) at scale.
 
 
 ## Sessions
