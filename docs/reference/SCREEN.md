@@ -1,5 +1,5 @@
 ---
-title: screen
+title: "Filter DataFrames with Natural Language Criteria"
 description: API reference for the EveryRow screen tool, which filters a DataFrame using natural language criteria evaluated by web research agents.
 ---
 

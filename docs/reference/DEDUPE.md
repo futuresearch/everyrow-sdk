@@ -1,5 +1,5 @@
 ---
-title: dedupe
+title: "How EveryRow Dedupe Finds Fuzzy Duplicates in Pandas DataFrames"
 description: API reference for the EveryRow dedupe tool, which groups duplicate rows in a Python Pandas DataFrame using LLM-powered semantic matching.
 ---
 

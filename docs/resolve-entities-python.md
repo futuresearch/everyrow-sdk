@@ -1,5 +1,5 @@
 ---
-title: How to resolve duplicate rows in Python with LLMs
+title: "How to Do Entity Resolution in Python with LLMs"
 description: Identify and merge duplicate records representing the same entity across messy data, handling spelling variations, abbreviations, and nicknames.
 ---
 

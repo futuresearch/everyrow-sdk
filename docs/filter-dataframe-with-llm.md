@@ -1,5 +1,5 @@
 ---
-title: Filter a Pandas DataFrame with LLMs
+title: "How to Filter a DataFrame by Subjective or Research-Based Criteria"
 description: How to screen data by criteria that require research in Python. LLM research agents will cheaply and accurately research every row to screen, filter, or qualify.
 ---
 

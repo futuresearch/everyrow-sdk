@@ -1,5 +1,5 @@
 ---
-title: How to sort a dataset using web data in Python
+title: "How to Rank a DataFrame by a Metric Not in Your Data"
 description: Rank or sort a Pandas DataFrame by criteria that don't exist in your data, using LLM research agents to look up data.
 ---
 
