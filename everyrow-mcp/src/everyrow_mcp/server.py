@@ -263,7 +263,7 @@ class ResultsInput(BaseModel):
 
 @mcp.tool(name="everyrow_agent", structured_output=False)
 async def everyrow_agent(params: AgentInput) -> list[TextContent]:
-    """Run web research agents on each row of an input tool.
+    """Run web research agents on each row of a CSV file.
 
     The dispatched agents will search the web, read pages, return the requested
     research fields as they apply to every row. Agents run large parallel
@@ -322,7 +322,7 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_rank", structured_output=False)
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
-    """Scores and sorts rows in an input table based on any criteria.
+    """Score and sort rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to rank the entities in the
     table. Conducts research, and can also apply judgment to the results if
@@ -393,7 +393,7 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_screen", structured_output=False)
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
-    """Filter rows in a table based on any criteria.
+    """Filter rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to filter the entities in the
     table. Conducts research, and can also apply judgment to the results if
@@ -461,7 +461,7 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_dedupe", structured_output=False)
 async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
-    """Remove duplicate rows from a table using semantic equivalence.
+    """Remove duplicate rows from a CSV file using semantic equivalence.
 
     Dedupe identifies rows that represent the same entity even when they
     don't match exactly. The duplicate criterion is semantic and LLM-powered:
@@ -525,7 +525,7 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_merge", structured_output=False)
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
-    """Join two tables using intelligent entity matching.
+    """Join two CSV files using intelligent entity matching.
 
     Merge combines two tables even when keys don't match exactly. Uses LLM web
     research and judgment to identify which rows from the first table should
