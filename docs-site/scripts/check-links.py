@@ -22,6 +22,12 @@ BASE_PATH = "/docs"
 # GitHub blob URLs pointing into this repo are checked as local files
 REPO_BLOB_PREFIX = "https://github.com/futuresearch/everyrow-sdk/blob/main/"
 
+# Colab URLs pointing into this repo are checked as local files
+REPO_COLAB_PREFIX = (
+    "https://colab.research.google.com/github/"
+    "futuresearch/everyrow-sdk/blob/main/"
+)
+
 # Git LFS media URLs — the correct way to link to LFS-tracked files.
 # These are checked as local files instead of fetching from GitHub.
 REPO_LFS_PREFIX = (
@@ -179,6 +185,16 @@ def check_file(
             # of fetching from GitHub.
             if url_without_fragment.startswith(REPO_LFS_PREFIX):
                 rel_path = url_without_fragment[len(REPO_LFS_PREFIX) :]
+                if not (REPO_ROOT / rel_path).exists():
+                    errors.append(
+                        f"  {page_label}: file not found for {href!r}"
+                        f" (expected {rel_path})"
+                    )
+                continue
+
+            # Colab links to this repo: check the notebook exists locally.
+            if url_without_fragment.startswith(REPO_COLAB_PREFIX):
+                rel_path = url_without_fragment[len(REPO_COLAB_PREFIX) :]
                 if not (REPO_ROOT / rel_path).exists():
                     errors.append(
                         f"  {page_label}: file not found for {href!r}"
