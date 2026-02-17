@@ -32,7 +32,7 @@ from everyrow.ops import (
 )
 from everyrow.session import create_session, get_session_url
 from mcp.server.fastmcp import FastMCP
-from mcp.types import TextContent
+from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 from everyrow_mcp.utils import (
@@ -261,7 +261,17 @@ class ResultsInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_agent", structured_output=False)
+@mcp.tool(
+    name="everyrow_agent",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Run Web Research Agents",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     """Run web research agents on each row of a CSV file.
 
@@ -320,7 +330,17 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_rank", structured_output=False)
+@mcp.tool(
+    name="everyrow_rank",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Score and Rank Rows",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
     """Score and sort rows in a CSV file based on any criteria.
 
@@ -391,7 +411,17 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_screen", structured_output=False)
+@mcp.tool(
+    name="everyrow_screen",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Filter Rows by Criteria",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     """Filter rows in a CSV file based on any criteria.
 
@@ -459,7 +489,17 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_dedupe", structured_output=False)
+@mcp.tool(
+    name="everyrow_dedupe",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Deduplicate Rows",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     """Remove duplicate rows from a CSV file using semantic equivalence.
 
@@ -523,7 +563,17 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_merge", structured_output=False)
+@mcp.tool(
+    name="everyrow_merge",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Merge Two Tables",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
@@ -592,7 +642,17 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_progress", structured_output=False)
+@mcp.tool(
+    name="everyrow_progress",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Check Task Progress",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
@@ -701,7 +761,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_results", structured_output=False)
+@mcp.tool(
+    name="everyrow_results",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Save Task Results",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     """Retrieve results from a completed everyrow task and save them to a CSV.
 
