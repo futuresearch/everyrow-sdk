@@ -263,17 +263,21 @@ class ResultsInput(BaseModel):
 
 @mcp.tool(name="everyrow_agent", structured_output=False)
 async def everyrow_agent(params: AgentInput) -> list[TextContent]:
-    """Run web research agents on each row of a CSV.
+    """Run web research agents on each row of an input tool.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
+    The dispatched agents will search the web, read pages, return the requested
+    research fields as they apply to every row. Agents run large parallel
+    batches, and are optimized to find accurate answers as minimum cost.
 
     Examples:
     - "Find this company's latest funding round and lead investors"
     - "Research the CEO's background and previous companies"
     - "Find pricing information for this product"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -318,12 +322,16 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_rank", structured_output=False)
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
-    """Score and sort rows in a CSV based on qualitative criteria.
+    """Scores and sorts rows in an input table based on any criteria.
+
+    Dispatches web agents to research the criteria to rank the entities in the
+    table. Conducts research, and can also apply judgment to the results if
+    the criteria is qualitative.
 
     Examples:
-    - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
-    - "Score this company out of 100 by AI/ML adoption maturity"
-    - "Score this candidate by fit for a senior engineering role, with 100 being the best"
+    - "Score these leads by likelihood to need data integration solutions"
+    - "Rank these companies by number of executive turnovers in the last 5 years"
+    - "Sort these candidate by most activity on github"
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -385,12 +393,16 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_screen", structured_output=False)
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
-    """Filter rows in a CSV based on criteria that require judgment.
+    """Filter rows in a table based on any criteria.
+
+    Dispatches web agents to research the criteria to filter the entities in the
+    table. Conducts research, and can also apply judgment to the results if
+    the criteria is qualitative.
 
     Examples:
-    - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
-    - "Is this vendor financially stable AND does it have good security practices?"
-    - "Is this lead likely to need our product based on company description?"
+    - "Which of these job postings are remote-friendly and senior-level?"
+    - "Find the vendors that are financially stable given recent filings."
+    - "Qualify these companies based on whether they have >100 employees." 
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -449,16 +461,17 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_dedupe", structured_output=False)
 async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
-    """Remove duplicate rows from a CSV using semantic equivalence.
+    """Remove duplicate rows from a table using semantic equivalence.
 
     Dedupe identifies rows that represent the same entity even when they
-    don't match exactly. Useful for fuzzy deduplication where string
-    matching fails.
+    don't match exactly. The duplicate criterion is semantic and LLM-powered:
+    agents reason over the data and, when needed, search the web for external
+    information to establish equivalence.
 
     Examples:
-    - Dedupe contacts: "Same person even with name abbreviations or career changes"
-    - Dedupe companies: "Same company including subsidiaries and name variations"
-    - Dedupe research papers: "Same work including preprints and published versions"
+    - "Remove duplicate people across career changes"
+    - "Find and remove extra companies present in this list multiple times"
+    - "Deduplicate this list of papers, matching preprints and published versions"
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -512,10 +525,11 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
 
 @mcp.tool(name="everyrow_merge", structured_output=False)
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
-    """Join two CSV files using intelligent entity matching.
+    """Join two tables using intelligent entity matching.
 
-    Merge combines two tables even when keys don't match exactly. The LLM
-    performs research and reasoning to identify which rows should be joined.
+    Merge combines two tables even when keys don't match exactly. Uses LLM web
+    research and judgment to identify which rows from the first table should
+    join those in the second.
 
     Examples:
     - Match software products to parent companies (Photoshop -> Adobe)
