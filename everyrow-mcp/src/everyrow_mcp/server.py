@@ -32,7 +32,7 @@ from everyrow.ops import (
 )
 from everyrow.session import create_session, get_session_url
 from mcp.server.fastmcp import FastMCP
-from mcp.types import TextContent
+from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 from everyrow_mcp.utils import (
@@ -261,19 +261,33 @@ class ResultsInput(BaseModel):
         return v
 
 
-@mcp.tool(name="everyrow_agent", structured_output=False)
+@mcp.tool(
+    name="everyrow_agent",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Run Web Research Agents",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_agent(params: AgentInput) -> list[TextContent]:
-    """Run web research agents on each row of a CSV.
+    """Run web research agents on each row of a CSV file.
 
-    Submit the task and return immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
+    The dispatched agents will search the web, read pages, and return the
+    requested research fields for each row. Agents run in parallel to save
+    time and are optimized to find accurate answers at minimum cost.
 
     Examples:
     - "Find this company's latest funding round and lead investors"
     - "Research the CEO's background and previous companies"
     - "Find pricing information for this product"
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
     """
     if _client is None:
         return [TextContent(type="text", text="Error: MCP server not initialized.")]
@@ -316,9 +330,23 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_rank", structured_output=False)
+@mcp.tool(
+    name="everyrow_rank",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Score and Rank Rows",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_rank(params: RankInput) -> list[TextContent]:
-    """Score and sort rows in a CSV based on qualitative criteria.
+    """Score and sort rows in a CSV file based on any criteria.
+
+    Dispatches web agents to research the criteria to rank the entities in the
+    table. Conducts research, and can also apply judgment to the results if the
+    criteria are qualitative.
 
     Examples:
     - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
@@ -383,9 +411,23 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_screen", structured_output=False)
+@mcp.tool(
+    name="everyrow_screen",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Filter Rows by Criteria",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
-    """Filter rows in a CSV based on criteria that require judgment.
+    """Filter rows in a CSV file based on any criteria.
+
+    Dispatches web agents to research the criteria to filter the entities in the
+    table. Conducts research, and can also apply judgment to the results if the
+    criteria are qualitative.
 
     Examples:
     - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
@@ -447,13 +489,24 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_dedupe", structured_output=False)
+@mcp.tool(
+    name="everyrow_dedupe",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Deduplicate Rows",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
-    """Remove duplicate rows from a CSV using semantic equivalence.
+    """Remove duplicate rows from a CSV file using semantic equivalence.
 
     Dedupe identifies rows that represent the same entity even when they
-    don't match exactly. Useful for fuzzy deduplication where string
-    matching fails.
+    don't match exactly. The duplicate criterion is semantic and LLM-powered:
+    agents reason over the data and, when needed, search the web for external
+    information to establish equivalence.
 
     Examples:
     - Dedupe contacts: "Same person even with name abbreviations or career changes"
@@ -510,12 +563,23 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_merge", structured_output=False)
+@mcp.tool(
+    name="everyrow_merge",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Merge Two Tables",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
-    Merge combines two tables even when keys don't match exactly. The LLM
-    performs research and reasoning to identify which rows should be joined.
+    Merge combines two tables even when keys don't match exactly. Uses LLM web
+    research and judgment to identify which rows from the first table should
+    join those in the second.
 
     Examples:
     - Match software products to parent companies (Photoshop -> Adobe)
@@ -578,7 +642,17 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_progress", structured_output=False)
+@mcp.tool(
+    name="everyrow_progress",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Check Task Progress",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
 async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
@@ -687,7 +761,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
     ]
 
 
-@mcp.tool(name="everyrow_results", structured_output=False)
+@mcp.tool(
+    name="everyrow_results",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Save Task Results",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     """Retrieve results from a completed everyrow task and save them to a CSV.
 
