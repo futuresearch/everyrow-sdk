@@ -265,9 +265,9 @@ class ResultsInput(BaseModel):
 async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     """Run web research agents on each row of a CSV file.
 
-    The dispatched agents will search the web, read pages, return the requested
-    research fields as they apply to every row. Agents run large parallel
-    batches, and are optimized to find accurate answers as minimum cost.
+    The dispatched agents will search the web, read pages, and return the
+    requested research fields for each row. Agents run in parallel to save
+    time and are optimized to find accurate answers at minimum cost.
 
     Examples:
     - "Find this company's latest funding round and lead investors"
@@ -325,8 +325,8 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     """Score and sort rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to rank the entities in the
-    table. Conducts research, and can also apply judgment to the results if
-    the criteria is qualitative.
+    table. Conducts research, and can also apply judgment to the results if the
+    criteria are qualitative.
 
     Examples:
     - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
@@ -396,8 +396,8 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     """Filter rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to filter the entities in the
-    table. Conducts research, and can also apply judgment to the results if
-    the criteria is qualitative.
+    table. Conducts research, and can also apply judgment to the results if the
+    criteria are qualitative.
 
     Examples:
     - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
