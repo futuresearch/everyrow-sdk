@@ -329,9 +329,9 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     the criteria is qualitative.
 
     Examples:
-    - "Score these leads by likelihood to need data integration solutions"
-    - "Rank these companies by number of executive turnovers in the last 5 years"
-    - "Sort these candidate by most activity on github"
+    - "Score this lead from 0 to 10 by likelihood to need data integration solutions"
+    - "Score this company out of 100 by AI/ML adoption maturity"
+    - "Score this candidate by fit for a senior engineering role, with 100 being the best"
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -400,9 +400,9 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     the criteria is qualitative.
 
     Examples:
-    - "Which of these job postings are remote-friendly and senior-level?"
-    - "Find the vendors that are financially stable given recent filings."
-    - "Qualify these companies based on whether they have >100 employees." 
+    - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
+    - "Is this vendor financially stable AND does it have good security practices?"
+    - "Is this lead likely to need our product based on company description?"
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -469,9 +469,9 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     information to establish equivalence.
 
     Examples:
-    - "Remove duplicate people across career changes"
-    - "Find and remove extra companies present in this list multiple times"
-    - "Deduplicate this list of papers, matching preprints and published versions"
+    - Dedupe contacts: "Same person even with name abbreviations or career changes"
+    - Dedupe companies: "Same company including subsidiaries and name variations"
+    - Dedupe research papers: "Same work including preprints and published versions"
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
