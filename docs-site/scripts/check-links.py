@@ -60,6 +60,9 @@ SKIPPED_URLS: set[str] = {
     "https://hugovk.github.io/top-pypi-packages/",
     "https://jqlang.org/",
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
+    "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
+    "https://clinicaltrials.gov/",
+    "https://clinicaltrials.gov/data-api/about-api",
 }
 
 
