@@ -172,7 +172,8 @@ class ScreenInput(BaseModel):
     input_csv: str = Field(..., description="Absolute path to the input CSV file.")
     response_schema: dict[str, Any] | None = Field(
         default=None,
-        description="Optional JSON schema for the response model.",
+        description="Optional JSON schema for the response model. "
+        "Must include at least one boolean property — screen uses the boolean field to filter rows into pass/fail.",
     )
 
     @field_validator("input_csv")
@@ -428,6 +429,11 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     Dispatches web agents to research the criteria to filter the entities in the
     table. Conducts research, and can also apply judgment to the results if the
     criteria are qualitative.
+
+    Screen produces a boolean pass/fail verdict per row. If you provide a custom
+    response_schema, it MUST include at least one boolean property (e.g.
+    ``{"passes": {"type": "boolean"}}``). If the screening criteria need more than
+    a yes/no answer (e.g. a three-way classification), use everyrow_agent instead.
 
     Examples:
     - "Is this job posting remote-friendly AND senior-level AND salary disclosed?"
