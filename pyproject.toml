@@ -3,7 +3,7 @@ members = ["everyrow-mcp"]
 
 [project]
 name = "everyrow"
-version = "0.3.2"
+version = "0.3.3"
 description = "An SDK for everyrow.io: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
