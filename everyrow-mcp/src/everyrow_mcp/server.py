@@ -667,7 +667,9 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         openWorldHint=False,
     ),
 )
-async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
+async def everyrow_progress(  # noqa: PLR0911, PLR0912
+    params: ProgressInput,
+) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
     After receiving a status update, immediately call everyrow_progress again
@@ -704,6 +706,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         TaskStatus.FAILED,
         TaskStatus.REVOKED,
     )
+    is_screen = status_response.task_type == PublicTaskType.SCREEN
     session_url = get_session_url(status_response.session_id)
 
     completed = progress.completed if progress else 0
@@ -749,11 +752,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         if error and not isinstance(error, Unset):
             return [TextContent(type="text", text=f"Task {status.value}: {error}")]
         if status == TaskStatus.COMPLETED:
+            if is_screen:
+                completed_msg = f"Screening complete ({elapsed_s}s)."
+            else:
+                completed_msg = (
+                    f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
+                )
             return [
                 TextContent(
                     type="text",
                     text=(
-                        f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s.\n"
+                        f"{completed_msg}\n"
                         f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
                     ),
                 )
@@ -761,6 +770,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         return [
             TextContent(
                 type="text", text=f"Task {status.value}. Report the error to the user."
+            )
+        ]
+
+    if is_screen:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Screen running ({elapsed_s}s elapsed).\n"
+                    f"Immediately call everyrow_progress(task_id='{task_id}')."
+                ),
             )
         ]
 
