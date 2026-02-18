@@ -103,20 +103,20 @@ Example: Dedupe contacts where "same person even with name abbreviations or care
 
 ### everyrow_merge
 
-Join two CSV files using intelligent entity matching.
+Join two CSV files using intelligent entity matching (LEFT JOIN semantics).
 
 ```
 Parameters:
 - task: Natural language description of how to match rows
-- left_csv: Absolute path to primary CSV
-- right_csv: Absolute path to secondary CSV
-- merge_on_left: (optional) Column name in left table
-- merge_on_right: (optional) Column name in right table
-- use_web_search: (optional) "auto", "yes", or "no"
-- relationship_type: (optional) "many_to_one" (default) if multiple left rows can match one right row, or "one_to_one" matches must be unique
+- left_csv: The table being enriched — all its rows are kept in the output
+- right_csv: The lookup/reference table — its columns are appended to matches; unmatched left rows get nulls
+- merge_on_left: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
+- merge_on_right: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
+- use_web_search: (optional) "auto" (default), "yes", or "no"
+- relationship_type: (optional) "many_to_one" (default) — multiple left rows can match one right row. "one_to_one" — only when both tables have unique entities of the same kind.
 ```
 
-Example: Match software products to parent companies (Photoshop -> Adobe)
+Example: Match software products (left, enriched) to parent companies (right, lookup): Photoshop -> Adobe
 
 ### everyrow_agent
 

@@ -582,17 +582,17 @@ async def merge(
     use_web_search: Literal["auto", "yes", "no"] | None = None,
     relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
 ) -> MergeResult:
-    """Merge two tables using AI.
+    """Merge two tables using AI (LEFT JOIN semantics).
 
     Args:
         task: The task description for the merge operation
         session: Optional session. If not provided, one will be created automatically.
-        left_table: The left table to merge (DataFrame, UUID, or TableResult)
-        right_table: The right table to merge (DataFrame, UUID, or TableResult)
-        merge_on_left: Optional column name in left table to merge on
-        merge_on_right: Optional column name in right table to merge on
-        use_web_search: Optional. Control web search behavior: "auto" tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row. Defaults to "auto" if not provided.
-        relationship_type: Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.
+        left_table: The table being enriched — all its rows are kept in the output (DataFrame, UUID, or TableResult)
+        right_table: The lookup/reference table — its columns are appended to matches; unmatched left rows get nulls (DataFrame, UUID, or TableResult)
+        merge_on_left: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
+        merge_on_right: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
+        use_web_search: Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row.
+        relationship_type: Defaults to "many_to_one", which is correct in most cases (multiple left rows can match one right row, e.g. products → companies). Only use "one_to_one" when both tables have unique entities of the same kind.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
