@@ -216,20 +216,28 @@ class MergeInput(BaseModel):
         description="Natural language description of how to match rows.",
         min_length=1,
     )
-    left_csv: str = Field(..., description="Absolute path to the left/primary CSV.")
-    right_csv: str = Field(..., description="Absolute path to the right/secondary CSV.")
+    left_csv: str = Field(
+        ...,
+        description="Absolute path to the left CSV. Works like a LEFT JOIN: ALL rows from this table are kept in the output. This should be the table being enriched.",
+    )
+    right_csv: str = Field(
+        ...,
+        description="Absolute path to the right CSV. This is the lookup/reference table. Its columns are added to matching left rows; unmatched left rows get nulls.",
+    )
     merge_on_left: str | None = Field(
-        default=None, description="Optional column name in left table for merge key."
+        default=None,
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
     merge_on_right: str | None = Field(
-        default=None, description="Optional column name in right table for merge key."
+        default=None,
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
     use_web_search: Literal["auto", "yes", "no"] | None = Field(
         default=None, description='Control web search: "auto", "yes", or "no".'
     )
     relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
         default=None,
-        description='Optional. Control merge relationship type: "many_to_one" (default) allows multiple left rows to match one right row, "one_to_one" enforces unique matching between left and right rows.',
+        description="Leave unset for the default many_to_one, which is correct in most cases. many_to_one: multiple left rows can match one right row (e.g. products → companies). one_to_one: each left row matches at most one right row AND vice versa. Only use one_to_one when both tables represent unique entities of the same kind.",
     )
 
     @field_validator("left_csv", "right_csv")
@@ -594,10 +602,22 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     research and judgment to identify which rows from the first table should
     join those in the second.
 
+    left_csv = the table being enriched (ALL its rows appear in the output).
+    right_csv = the lookup/reference table (its columns are appended to matches).
+
+    IMPORTANT defaults — omit parameters when unsure:
+    - merge_on_left/merge_on_right: only set if you expect exact string matches on
+      the chosen columns or want to draw agent attention to them. Fine to omit.
+    - relationship_type: defaults to many_to_one, which is correct in most cases.
+      Only set one_to_one when both tables have unique entities of the same kind.
+
     Examples:
-    - Match software products to parent companies (Photoshop -> Adobe)
-    - Match clinical trial sponsors to pharma companies (Genentech -> Roche)
-    - Join contact lists with different name formats
+    - Match software products (left, enriched) to parent companies (right, lookup):
+      Photoshop -> Adobe. relationship_type: many_to_one (many products per company).
+    - Match clinical trial sponsors (left) to pharma companies (right):
+      Genentech -> Roche. relationship_type: many_to_one.
+    - Join two contact lists with different name formats:
+      relationship_type: one_to_one (each person appears once in each list).
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.

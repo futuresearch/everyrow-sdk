@@ -51,15 +51,16 @@ Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
 ### everyrow_merge
 
-Join two CSVs using intelligent entity matching.
+Join two CSVs using intelligent entity matching (LEFT JOIN semantics).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `task` | string | Yes | How to match rows between tables. |
-| `left_csv` | string | Yes | Absolute path to primary CSV. |
-| `right_csv` | string | Yes | Absolute path to secondary CSV. |
-| `merge_on_left` | string | No | Column in left table to match on. |
-| `merge_on_right` | string | No | Column in right table to match on. |
+| `left_csv` | string | Yes | The table being enriched — all its rows are kept in the output. |
+| `right_csv` | string | Yes | The lookup/reference table — its columns are appended to matches; unmatched left rows get nulls. |
+| `merge_on_left` | string | No | Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit. |
+| `merge_on_right` | string | No | Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit. |
+| `relationship_type` | string | No | `many_to_one` (default) — multiple left rows can match one right row. `one_to_one` — only when both tables have unique entities of the same kind. |
 | `use_web_search` | string | No | `auto` (default), `yes`, or `no`. |
 
 Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
