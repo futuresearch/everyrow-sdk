@@ -21,6 +21,7 @@ from everyrow.generated.api.tasks import (
     get_task_status_tasks_task_id_status_get,
 )
 from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.types import Unset
 from everyrow.ops import (
@@ -78,6 +79,7 @@ def _clear_task_state() -> None:
 
 def _write_task_state(
     task_id: str,
+    task_type: PublicTaskType,
     session_url: str,
     total: int,
     completed: int,
@@ -95,6 +97,7 @@ def _write_task_state(
         TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         state = {
             "task_id": task_id,
+            "task_type": task_type.value,
             "session_url": session_url,
             "total": total,
             "completed": completed,
@@ -309,7 +312,8 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
-            session_url,
+            task_type=PublicTaskType.AGENT,
+            session_url=session_url,
             total=len(df),
             completed=0,
             failed=0,
@@ -390,7 +394,8 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
-            session_url,
+            task_type=PublicTaskType.RANK,
+            session_url=session_url,
             total=len(df),
             completed=0,
             failed=0,
@@ -473,7 +478,8 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
-            session_url,
+            task_type=PublicTaskType.SCREEN,
+            session_url=session_url,
             total=len(df),
             completed=0,
             failed=0,
@@ -547,7 +553,8 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
-            session_url,
+            task_type=PublicTaskType.DEDUPE,
+            session_url=session_url,
             total=len(df),
             completed=0,
             failed=0,
@@ -626,7 +633,8 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
-            session_url,
+            task_type=PublicTaskType.MERGE,
+            session_url=session_url,
             total=len(left_df),
             completed=0,
             failed=0,
@@ -659,7 +667,9 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         openWorldHint=False,
     ),
 )
-async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
+async def everyrow_progress(  # noqa: PLR0911, PLR0912
+    params: ProgressInput,
+) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
     After receiving a status update, immediately call everyrow_progress again
@@ -696,6 +706,7 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         TaskStatus.FAILED,
         TaskStatus.REVOKED,
     )
+    is_screen = status_response.task_type == PublicTaskType.SCREEN
     session_url = get_session_url(status_response.session_id)
 
     completed = progress.completed if progress else 0
@@ -726,13 +737,14 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
 
     _write_task_state(
         task_id,
-        session_url,
-        total,
-        completed,
-        failed,
-        running,
-        status,
-        started_at,
+        task_type=status_response.task_type,
+        session_url=session_url,
+        total=total,
+        completed=completed,
+        failed=failed,
+        running=running,
+        status=status,
+        started_at=started_at,
     )
 
     if is_terminal:
@@ -740,11 +752,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         if error and not isinstance(error, Unset):
             return [TextContent(type="text", text=f"Task {status.value}: {error}")]
         if status == TaskStatus.COMPLETED:
+            if is_screen:
+                completed_msg = f"Screening complete ({elapsed_s}s)."
+            else:
+                completed_msg = (
+                    f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
+                )
             return [
                 TextContent(
                     type="text",
                     text=(
-                        f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s.\n"
+                        f"{completed_msg}\n"
                         f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
                     ),
                 )
@@ -752,6 +770,17 @@ async def everyrow_progress(params: ProgressInput) -> list[TextContent]:
         return [
             TextContent(
                 type="text", text=f"Task {status.value}. Report the error to the user."
+            )
+        ]
+
+    if is_screen:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Screen running ({elapsed_s}s elapsed).\n"
+                    f"Immediately call everyrow_progress(task_id='{task_id}')."
+                ),
             )
         ]
 
