@@ -64,7 +64,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.auth import EveryRowAccessToken, EveryRowAuthProvider
+from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key, create_redis_client
+from everyrow_mcp.settings import HttpSettings, StdioSettings
+from everyrow_mcp.templates import (
+    PROGRESS_HTML,
+    RESULTS_HTML,
+    SESSION_HTML,
+    UI_CSP_META,
+)
 from everyrow_mcp.utils import (
     load_csv,
     save_result_to_csv,
@@ -93,6 +101,8 @@ RESULT_CACHE_TTL = 600  # 10 minutes
 PREVIEW_SIZE = 5
 # GCS result store (HTTP mode only), set in _configure_http_mode if GCS_RESULTS_BUCKET is set.
 _gcs_store: Any = None
+# Parsed settings (HttpSettings or StdioSettings), set in main()/_configure_http_mode.
+_settings: HttpSettings | StdioSettings | None = None
 
 
 def _get_client() -> AuthenticatedClient:
@@ -110,8 +120,10 @@ def _get_client() -> AuthenticatedClient:
     access_token = get_access_token()
     if not isinstance(access_token, EveryRowAccessToken):
         raise RuntimeError("Not authenticated")
+    if _settings is None:
+        raise RuntimeError("MCP server not initialized")
     return AuthenticatedClient(
-        base_url=os.environ.get("EVERYROW_API_URL", "https://everyrow.io/api/v0"),
+        base_url=_settings.everyrow_api_url,
         token=access_token.supabase_jwt,
         raise_on_unexpected_status=True,
         follow_redirects=True,
@@ -150,261 +162,32 @@ async def _http_lifespan(_server: FastMCP):
 
 mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)
 
-# ── MCP App UI templates ─────────────────────────────────────────────
-
-_APP_SCRIPT_SRC = "https://unpkg.com/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
-_UI_CSP_META = {"ui": {"csp": {"resourceDomains": ["https://unpkg.com"]}}}
-
-_PROGRESS_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
-<style>
-body{font-family:system-ui;margin:16px;color:#333}
-@media(prefers-color-scheme:dark){body{color:#ddd}}
-.bar-bg{width:100%;background:#e0e0e0;border-radius:6px;overflow:hidden;height:28px;margin:12px 0}
-.bar{height:100%;background:#4caf50;transition:width .3s;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:13px;white-space:nowrap}
-.stats{font-size:14px;margin:8px 0}
-.status{font-weight:600;font-size:16px;margin-bottom:8px}
-</style></head><body>
-<div id="c">Waiting for data...</div>
-<script type="module">
-import{App}from"SCRIPT_SRC";
-const app=new App({name:"EveryRow Progress",version:"1.0.0"});
-const el=document.getElementById("c");
-app.ontoolresult=({content})=>{
-  const t=content?.find(c=>c.type==="text");
-  if(!t)return;
-  try{const d=JSON.parse(t.text);render(d)}catch{el.textContent=t.text}
-};
-function render(d){
-  const pct=d.total>0?Math.round(d.completed/d.total*100):0;
-  el.innerHTML=`
-    <div class="status">${d.status}</div>
-    <div class="bar-bg"><div class="bar" style="width:${pct}%">${pct}%</div></div>
-    <div class="stats">
-      ${d.completed}/${d.total} complete${d.failed?`, ${d.failed} failed`:""}${d.running?`, ${d.running} running`:""}
-      &mdash; ${d.elapsed_s}s elapsed
-    </div>
-    ${d.session_url?`<a href="${d.session_url}" target="_blank">Open session</a>`:""}`;
-}
-await app.connect();
-</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
-
-_RESULTS_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
-<style>
-body{font-family:system-ui;margin:12px;color:#333;font-size:13px}
-@media(prefers-color-scheme:dark){body{color:#ddd;background:#1a1a1a}
-  th{background:#2d2d2d!important;border-color:#444!important}
-  td{border-color:#444!important}
-  tr:nth-child(even) td{background:#222!important}}
-#sum{font-weight:600;font-size:14px;margin-bottom:8px}
-.wrap{max-height:400px;overflow:auto;border:1px solid #ddd;border-radius:6px}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th{background:#f8f8f8;position:sticky;top:0;padding:8px 10px;text-align:left;border-bottom:2px solid #ddd;font-size:12px;white-space:nowrap}
-td{padding:6px 10px;border-bottom:1px solid #eee;max-width:300px;vertical-align:top}
-tr:nth-child(even) td{background:#fafafa}
-a{color:#1976d2;text-decoration:none;word-break:break-all}
-a:hover{text-decoration:underline}
-td:first-child{position:sticky;left:0;background:inherit;z-index:1;font-weight:500}
-th:first-child{position:sticky;left:0;z-index:2}
-</style></head><body>
-<div id="sum"></div>
-<div class="wrap"><table id="tbl"></table></div>
-<script type="module">
-import{App}from"SCRIPT_SRC";
-const app=new App({name:"EveryRow Results",version:"1.0.0"});
-const el=document.getElementById("tbl");
-const sum=document.getElementById("sum");
-
-app.ontoolresult=({content})=>{
-  const t=content?.find(c=>c.type==="text");
-  if(!t)return;
-  let meta;
-  try{meta=JSON.parse(t.text);}catch(e){sum.textContent=t.text;return;}
-  if(meta.results_url){
-    if(meta.preview)render(meta.preview);
-    sum.textContent="Loading full results...";
-    const opts=meta.download_token?{headers:{"Authorization":"Bearer "+meta.download_token}}:{};
-    fetch(meta.results_url,opts).then(r=>r.json()).then(data=>render(data)).catch(()=>{
-      if(!meta.preview)sum.textContent="Failed to load results";
-    });
-  }else if(Array.isArray(meta)){
-    render(meta);
-  }else{
-    sum.textContent=JSON.stringify(meta);
-  }
-};
-
-function flat(obj,pre=""){
-  const o={};
-  for(const[k,v]of Object.entries(obj)){
-    const key=pre?pre+"."+k:k;
-    if(v&&typeof v==="object"&&!Array.isArray(v))Object.assign(o,flat(v,key));
-    else o[key]=v;
-  }
-  return o;
-}
-
-function render(data){
-  if(!Array.isArray(data))data=[data];
-  if(!data.length){sum.textContent="No results";return;}
-  data=data.map(r=>flat(r));
-  const cols=Object.keys(data[0]);
-  sum.textContent=data.length+" rows, "+cols.length+" columns";
-  let h="<thead><tr>"+cols.map(k=>"<th>"+esc(k)+"</th>").join("")+"</tr></thead><tbody>";
-  for(let i=0;i<data.length;i++){
-    h+="<tr>";
-    for(let j=0;j<cols.length;j++){h+=td(data[i][cols[j]]);}
-    h+="</tr>";
-  }
-  el.innerHTML=h+"</tbody>";
-}
-
-function td(v){
-  if(v==null)return"<td></td>";
-  const s=String(v);
-  if(s.match(/^https?:\\/\\//))return'<td><a href="'+esc(s)+'" target="_blank">'+esc(s)+"</a></td>";
-  if(s.length>150)return"<td>"+esc(s.slice(0,150))+"...</td>";
-  return"<td>"+esc(s)+"</td>";
-}
-function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
-
-await app.connect();
-</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
-
-_SESSION_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
-<style>
-*{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:12px;color:#333;font-size:13px}
-@media(prefers-color-scheme:dark){body{color:#ddd;background:#1a1a1a}
-  .bar-bg{background:#333}.info{color:#aaa}.seg-legend{color:#aaa}}
-a{color:#1976d2;text-decoration:none;font-weight:500}
-a:hover{text-decoration:underline}
-.bar-bg{width:100%;background:#e8e8e8;border-radius:6px;overflow:hidden;height:22px;margin:8px 0;
-  display:flex}
-.seg{height:100%;transition:width .5s;display:flex;align-items:center;justify-content:center;
-  font-size:11px;color:#fff;overflow:hidden;white-space:nowrap}
-.seg-done{background:#4caf50}
-.seg-run{background:#2196f3}
-.seg-fail{background:#e53935}
-.seg-pend{background:transparent}
-.info{font-size:12px;color:#666;margin:4px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.seg-legend{display:flex;gap:10px;font-size:11px;color:#888}
-.seg-legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px}
-.l-done::before{background:#4caf50!important}.l-run::before{background:#2196f3!important}
-.l-fail::before{background:#e53935!important}
-.status-done{color:#4caf50;font-weight:600}
-.status-fail{color:#e53935;font-weight:600}
-.eta{color:#888;font-size:11px}
-@keyframes flash{0%,100%{background:transparent}50%{background:rgba(76,175,80,.15)}}
-.flash{animation:flash 1s ease 3}
-</style></head><body>
-<div id="c">Waiting...</div>
-<script type="module">
-import{App}from"SCRIPT_SRC";
-const app=new App({name:"EveryRow Session",version:"1.0.0"});
-const el=document.getElementById("c");
-let pollUrl=null,pollTimer=null,sessionUrl="",wasDone=false;
-
-app.ontoolresult=({content})=>{
-  const t=content?.find(c=>c.type==="text");if(!t)return;
-  try{
-    const d=JSON.parse(t.text);sessionUrl=d.session_url||"";render(d);
-    if(d.progress_url&&!pollTimer){pollUrl=d.progress_url;startPoll()}
-  }catch{el.textContent=t.text}
-};
-
-function render(d){
-  const comp=d.completed||0,tot=d.total||0,fail=d.failed||0,run=d.running||0;
-  const pend=Math.max(0,tot-comp-fail-run);
-  const done=["completed","failed","revoked"].includes(d.status);
-  const url=d.session_url||sessionUrl;
-  const elapsed=d.elapsed_s||0;
-
-  let h=url?`<a href="${url}" target="_blank">Open everyrow session &#x2197;</a>`:"";
-
-  if(tot>0){
-    const pDone=comp/tot*100,pRun=run/tot*100,pFail=fail/tot*100;
-    h+=`<div class="bar-bg">`;
-    if(pDone>0)h+=`<div class="seg seg-done" style="width:${pDone}%">${pDone>=10?Math.round(pDone)+"%":""}</div>`;
-    if(pRun>0)h+=`<div class="seg seg-run" style="width:${pRun}%"></div>`;
-    if(pFail>0)h+=`<div class="seg seg-fail" style="width:${pFail}%"></div>`;
-    h+=`</div>`;
-
-    h+=`<div class="info">`;
-    if(done){
-      const cls=d.status==="completed"?"status-done":"status-fail";
-      h+=`<span class="${cls}">${d.status}</span>`;
-      h+=`<span>${comp}/${tot}${fail?` (${fail} failed)`:""}</span>`;
-      if(elapsed)h+=`<span>${fmtTime(elapsed)}</span>`;
-    }else{
-      h+=`<span>${comp}/${tot}</span>`;
-      const eta=comp>0&&elapsed>0?Math.round((tot-comp)/(comp/elapsed)):0;
-      if(eta>0)h+=`<span class="eta">~${fmtTime(eta)} remaining</span>`;
-      if(elapsed)h+=`<span class="eta">${fmtTime(elapsed)} elapsed</span>`;
-    }
-    h+=`</div>`;
-
-    if(!done){
-      h+=`<div class="seg-legend">`;
-      if(comp)h+=`<span class="l-done">${comp} done</span>`;
-      if(run)h+=`<span class="l-run">${run} running</span>`;
-      if(fail)h+=`<span class="l-fail">${fail} failed</span>`;
-      if(pend)h+=`<span>${pend} pending</span>`;
-      h+=`</div>`;
-    }
-  }else if(d.status){
-    h+=`<div class="info">${d.status}${elapsed?` &mdash; ${fmtTime(elapsed)}`:""}</div>`;
-  }
-
-  el.innerHTML=h;
-
-  if(done&&!wasDone){wasDone=true;el.classList.add("flash")}
-  if(done&&pollTimer){clearInterval(pollTimer);pollTimer=null}
-}
-
-function fmtTime(s){
-  if(s<60)return s+"s";
-  const m=Math.floor(s/60),sec=s%60;
-  return m+"m"+((sec>0)?(" "+sec+"s"):"");
-}
-
-function startPoll(){
-  pollTimer=setInterval(async()=>{
-    try{const r=await fetch(pollUrl);if(r.ok)render(await r.json())}catch{}
-  },5000);
-}
-
-await app.connect();
-</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
-
 
 @mcp.resource(
     "ui://everyrow/progress.html",
     mime_type="text/html;profile=mcp-app",
-    meta=_UI_CSP_META,
+    meta=UI_CSP_META,
 )
 def _progress_ui() -> str:
-    return _PROGRESS_HTML
+    return PROGRESS_HTML
 
 
 @mcp.resource(
     "ui://everyrow/results.html",
     mime_type="text/html;profile=mcp-app",
-    meta=_UI_CSP_META,
+    meta=UI_CSP_META,
 )
 def _results_ui() -> str:
-    return _RESULTS_HTML
+    return RESULTS_HTML
 
 
 @mcp.resource(
     "ui://everyrow/session.html",
     mime_type="text/html;profile=mcp-app",
-    meta=_UI_CSP_META,
+    meta=UI_CSP_META,
 )
 def _session_ui() -> str:
-    return _SESSION_HTML
+    return SESSION_HTML
 
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
@@ -573,6 +356,11 @@ class RankInput(BaseModel):
         default=None,
         description="Raw CSV content as a string (alternative to input_csv for remote use).",
     )
+    input_json: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Data as a JSON array of objects. "
+        'Example: [{"company": "Acme", "url": "acme.com"}, {"company": "Beta", "url": "beta.io"}]',
+    )
     field_name: str = Field(..., description="Name of the field to sort by.")
     field_type: Literal["float", "int", "str", "bool"] = Field(
         default="float",
@@ -595,10 +383,15 @@ class RankInput(BaseModel):
 
     @model_validator(mode="after")
     def check_input_source(self) -> "RankInput":
-        if not self.input_csv and not self.input_data:
-            raise ValueError("Provide either input_csv or input_data.")
-        if self.input_csv and self.input_data:
-            raise ValueError("Provide either input_csv or input_data, not both.")
+        sources = sum(
+            1 for s in (self.input_csv, self.input_data, self.input_json) if s
+        )
+        if sources == 0:
+            raise ValueError("Provide one of input_csv, input_data, or input_json.")
+        if sources > 1:
+            raise ValueError(
+                "Provide only one of input_csv, input_data, or input_json."
+            )
         return self
 
 
@@ -617,6 +410,11 @@ class ScreenInput(BaseModel):
         default=None,
         description="Raw CSV content as a string (alternative to input_csv for remote use).",
     )
+    input_json: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Data as a JSON array of objects. "
+        'Example: [{"company": "Acme", "url": "acme.com"}, {"company": "Beta", "url": "beta.io"}]',
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the response model. "
@@ -632,10 +430,15 @@ class ScreenInput(BaseModel):
 
     @model_validator(mode="after")
     def check_input_source(self) -> "ScreenInput":
-        if not self.input_csv and not self.input_data:
-            raise ValueError("Provide either input_csv or input_data.")
-        if self.input_csv and self.input_data:
-            raise ValueError("Provide either input_csv or input_data, not both.")
+        sources = sum(
+            1 for s in (self.input_csv, self.input_data, self.input_json) if s
+        )
+        if sources == 0:
+            raise ValueError("Provide one of input_csv, input_data, or input_json.")
+        if sources > 1:
+            raise ValueError(
+                "Provide only one of input_csv, input_data, or input_json."
+            )
         return self
 
 
@@ -930,7 +733,11 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = load_csv(input_csv=params.input_csv, input_data=params.input_data)
+    df = load_csv(
+        input_csv=params.input_csv,
+        input_data=params.input_data,
+        input_json=params.input_json,
+    )
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -1017,7 +824,11 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = load_csv(input_csv=params.input_csv, input_data=params.input_data)
+    df = load_csv(
+        input_csv=params.input_csv,
+        input_data=params.input_data,
+        input_json=params.input_json,
+    )
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -1731,7 +1542,9 @@ async def _api_progress(request) -> Any:
 
     try:
         client = AuthenticatedClient(
-            base_url=os.environ.get("EVERYROW_API_URL", "https://everyrow.io/api/v0"),
+            base_url=_settings.everyrow_api_url
+            if _settings
+            else "https://everyrow.io/api/v0",
             token=api_key,
             raise_on_unexpected_status=True,
             follow_redirects=True,
@@ -1852,57 +1665,45 @@ async def _api_results(request) -> Any:
     return JSONResponse(records, headers={**cors, **security_headers})
 
 
-def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
+def _configure_http_mode(host: str, port: int) -> None:
     """Configure the MCP server for HTTP transport with OAuth."""
-    global _transport, _auth_provider, _mcp_server_url, _gcs_store  # noqa: PLW0603
+    global _transport, _auth_provider, _mcp_server_url, _gcs_store, _settings  # noqa: PLW0603
 
     _transport = "streamable-http"
 
-    # Validate required env vars for HTTP mode
-    mcp_server_url = os.environ.get("MCP_SERVER_URL")
-    supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_anon_key = os.environ.get("SUPABASE_ANON_KEY")
-
-    redis_encryption_key = os.environ.get("REDIS_ENCRYPTION_KEY")
-
-    missing = []
-    if not mcp_server_url:
-        missing.append("MCP_SERVER_URL")
-    if not supabase_url:
-        missing.append("SUPABASE_URL")
-    if not supabase_anon_key:
-        missing.append("SUPABASE_ANON_KEY")
-    if not redis_encryption_key:
-        missing.append("REDIS_ENCRYPTION_KEY")
-    if missing:
-        logging.error(f"Missing required env vars for HTTP mode: {', '.join(missing)}")
+    # Validate and parse env vars for HTTP mode
+    try:
+        settings = HttpSettings()  # pyright: ignore[reportCallIssue]
+    except Exception as e:
+        logging.error(f"HTTP mode configuration error: {e}")
         sys.exit(1)
+    _settings = settings
 
     # Create Redis client for auth state
     redis_client = create_redis_client(
-        host=os.environ.get("REDIS_HOST", "localhost"),
-        port=int(os.environ.get("REDIS_PORT", "6379")),
-        db=int(os.environ.get("REDIS_DB", "13")),
-        password=os.environ.get("REDIS_PASSWORD"),
-        sentinel_endpoints=os.environ.get("REDIS_SENTINEL_ENDPOINTS"),
-        sentinel_master_name=os.environ.get("REDIS_SENTINEL_MASTER_NAME"),
+        host=settings.redis_host,
+        port=settings.redis_port,
+        db=settings.redis_db,
+        password=settings.redis_password,
+        sentinel_endpoints=settings.redis_sentinel_endpoints,
+        sentinel_master_name=settings.redis_sentinel_master_name,
     )
 
     # Create auth provider
     _auth_provider = EveryRowAuthProvider(
-        supabase_url=supabase_url,
-        supabase_anon_key=supabase_anon_key,
-        mcp_server_url=mcp_server_url,
+        supabase_url=settings.supabase_url,
+        supabase_anon_key=settings.supabase_anon_key,
+        mcp_server_url=settings.mcp_server_url,
         redis=redis_client,
-        encryption_key=redis_encryption_key,
+        encryption_key=settings.redis_encryption_key,
     )
 
     # Configure auth on the existing FastMCP instance (tools already registered)
     mcp._auth_server_provider = _auth_provider
     mcp._token_verifier = ProviderTokenVerifier(_auth_provider)
     mcp.settings.auth = AuthSettings(
-        issuer_url=AnyHttpUrl(mcp_server_url),
-        resource_server_url=AnyHttpUrl(mcp_server_url),
+        issuer_url=AnyHttpUrl(settings.mcp_server_url),
+        resource_server_url=AnyHttpUrl(settings.mcp_server_url),
         client_registration_options=ClientRegistrationOptions(enabled=True),
         revocation_options=RevocationOptions(enabled=True),
     )
@@ -1914,19 +1715,14 @@ def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
     )
 
     # Store server URL for progress polling
-    _mcp_server_url = mcp_server_url
+    _mcp_server_url = settings.mcp_server_url
 
     # Initialize GCS result store if enabled via RESULT_STORAGE=gcs
-    result_storage = os.environ.get("RESULT_STORAGE", "memory").lower()
-    if result_storage == "gcs":
-        gcs_bucket = os.environ.get("GCS_RESULTS_BUCKET")
-        if not gcs_bucket:
-            logging.error("RESULT_STORAGE=gcs but GCS_RESULTS_BUCKET is not set")
-            sys.exit(1)
-        from everyrow_mcp.gcs_storage import GCSResultStore  # noqa: PLC0415
-
-        _gcs_store = GCSResultStore(gcs_bucket)
-        logging.getLogger(__name__).info("GCS result store enabled: %s", gcs_bucket)
+    if settings.result_storage == "gcs":
+        _gcs_store = GCSResultStore(settings.gcs_results_bucket)
+        logging.getLogger(__name__).info(
+            "GCS result store enabled: %s", settings.gcs_results_bucket
+        )
     else:
         logging.getLogger(__name__).info("Using in-memory result cache")
 
@@ -1938,16 +1734,16 @@ def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
             "ui": {
                 "csp": {
                     "resourceDomains": ["https://unpkg.com"],
-                    "connectDomains": [mcp_server_url],
+                    "connectDomains": [settings.mcp_server_url],
                 }
             }
         },
     )
     def _session_ui_http() -> str:
-        return _SESSION_HTML
+        return SESSION_HTML
 
     # Re-register results resource with CSP allowing results endpoint fetch
-    results_connect_domains = [mcp_server_url]
+    results_connect_domains = [settings.mcp_server_url]
     if _gcs_store:
         results_connect_domains.append("https://storage.googleapis.com")
 
@@ -1964,7 +1760,7 @@ def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
         },
     )
     def _results_ui_http() -> str:
-        return _RESULTS_HTML
+        return RESULTS_HTML
 
     # Mount custom routes
     mcp.custom_route("/auth/start/{state}", ["GET"])(_auth_provider.handle_start)
@@ -2012,7 +1808,7 @@ def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
 
 def main():
     """Run the MCP server."""
-    global _transport  # noqa: PLW0603
+    global _transport, _settings  # noqa: PLW0603
 
     parser = argparse.ArgumentParser(description="everyrow MCP server")
     parser.add_argument(
@@ -2050,9 +1846,11 @@ def main():
     else:
         _transport = "stdio"
 
-        # Check for API key before starting (stdio mode only)
-        if "EVERYROW_API_KEY" not in os.environ:
-            logging.error("EVERYROW_API_KEY environment variable is not set.")
+        # Validate required env vars for stdio mode
+        try:
+            _settings = StdioSettings()  # pyright: ignore[reportCallIssue]
+        except Exception as e:
+            logging.error(f"Configuration error: {e}")
             logging.error("Get an API key at https://everyrow.io/api-key")
             sys.exit(1)
 

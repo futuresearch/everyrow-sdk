@@ -11,14 +11,10 @@ from redis.backoff import ExponentialBackoff
 logger = logging.getLogger(__name__)
 
 REDIS_DB = 13
+HEALTH_CHECK_INTERVAL = 30
 
 
 def build_key(*parts: str) -> str:
-    """Build a namespaced Redis key.
-
-    >>> build_key("access", "abc123")
-    'mcp:access:abc123'
-    """
     return "mcp:" + ":".join(parts)
 
 
@@ -54,7 +50,7 @@ def create_redis_client(
             db=db,
             password=password,
             decode_responses=True,
-            health_check_interval=30,
+            health_check_interval=HEALTH_CHECK_INTERVAL,
             retry=retry,
         )
         logger.info("Redis: Sentinel mode, master=%s, db=%d", sentinel_master_name, db)
@@ -66,7 +62,7 @@ def create_redis_client(
         db=db,
         password=password,
         decode_responses=True,
-        health_check_interval=30,
+        health_check_interval=HEALTH_CHECK_INTERVAL,
         retry=retry,
     )
     logger.info("Redis: direct mode, host=%s:%d, db=%d", host, port, db)
