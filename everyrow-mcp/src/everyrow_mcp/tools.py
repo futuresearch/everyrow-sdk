@@ -496,34 +496,16 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     ),
 )
 async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
-    """Remove duplicate rows from a CSV file using semantic equivalence.
-
-    Dedupe identifies rows that represent the same entity even when they
-    don't match exactly. The duplicate criterion is semantic and LLM-powered:
-    agents reason over the data and, when needed, search the web for external
-    information to establish equivalence.
-
-    Examples:
-    - Dedupe contacts: "Same person even with name abbreviations or career changes"
-    - Dedupe companies: "Same company including subsidiaries and name variations"
-    - Dedupe research papers: "Same work including preprints and published versions"
-
-    This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
-    Args:
-        params: DedupeInput
-
-    Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
-    """
+    """Remove duplicate rows from a CSV file using semantic equivalence."""
     client = _get_client()
-
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+
+    # Consistent with agent/rank/screen
+    df = load_csv(
+        input_csv=params.input_csv,
+        input_data=params.input_data,
+        input_json=params.input_json,
+    )
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
@@ -533,6 +515,7 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             input=df,
         )
         task_id = str(cohort_task.task_id)
+
         _write_task_state(
             task_id,
             task_type=PublicTaskType.DEDUPE,
@@ -548,13 +531,21 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     return [
         TextContent(
             type="text",
-            text=(
-                f"Submitted: {len(df)} rows for deduplication.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            text=await _submission_ui_json(
+                session_url=session_url,
+                task_id=task_id,
+                total=len(df),
+                token=client.token,
             ),
-        )
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                f"Submitted: {len(df)} rows for deduplication.",
+                session_url,
+                task_id,
+            ),
+        ),
     ]
 
 
@@ -570,46 +561,22 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     ),
 )
 async def everyrow_merge(params: MergeInput) -> list[TextContent]:
-    """Join two CSV files using intelligent entity matching.
-
-    Merge combines two tables even when keys don't match exactly. Uses LLM web
-    research and judgment to identify which rows from the first table should
-    join those in the second.
-
-    left_csv = the table being enriched (ALL its rows appear in the output).
-    right_csv = the lookup/reference table (its columns are appended to matches).
-
-    IMPORTANT defaults — omit parameters when unsure:
-    - merge_on_left/merge_on_right: only set if you expect exact string matches on
-      the chosen columns or want to draw agent attention to them. Fine to omit.
-    - relationship_type: defaults to many_to_one, which is correct in most cases.
-      Only set one_to_one when both tables have unique entities of the same kind.
-
-    Examples:
-    - Match software products (left, enriched) to parent companies (right, lookup):
-      Photoshop -> Adobe. relationship_type: many_to_one (many products per company).
-    - Match clinical trial sponsors (left) to pharma companies (right):
-      Genentech -> Roche. relationship_type: many_to_one.
-    - Join two contact lists with different name formats:
-      relationship_type: one_to_one (each person appears once in each list).
-
-    This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-
-    Args:
-        params: MergeInput
-
-    Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
-    """
+    """Join two CSV files using intelligent entity matching."""
     client = _get_client()
-
     _clear_task_state()
-    left_df = pd.read_csv(params.left_csv)
-    right_df = pd.read_csv(params.right_csv)
+
+    # Use load_csv for validation + consistency
+    left_df = load_csv(
+        input_csv=params.left_csv,
+        input_data=params.left_input_data,
+        input_json=params.left_input_json,
+    )
+
+    right_df = load_csv(
+        input_csv=params.right_csv,
+        input_data=params.right_input_data,
+        input_json=params.right_input_json,
+    )
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
@@ -624,6 +591,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
+
         _write_task_state(
             task_id,
             task_type=PublicTaskType.MERGE,
@@ -639,13 +607,21 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     return [
         TextContent(
             type="text",
-            text=(
-                f"Submitted: {len(left_df)} left rows for merging.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            text=await _submission_ui_json(
+                session_url=session_url,
+                task_id=task_id,
+                total=len(left_df),
+                token=client.token,
             ),
-        )
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                f"Submitted: {len(left_df)} left rows for merging.",
+                session_url,
+                task_id,
+            ),
+        ),
     ]
 
 

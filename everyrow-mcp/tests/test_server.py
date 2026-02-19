@@ -467,7 +467,8 @@ class TestResults:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        num_rows = state.settings.preview_size + 3
+        page_size = 20  # default page_size on ResultsInput
+        num_rows = page_size + 3
         data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
@@ -490,22 +491,22 @@ class TestResults:
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
         records = json.loads(result[0].text)
-        assert len(records) == state.settings.preview_size
+        assert len(records) == page_size
         assert records[0]["id"] == 0
 
         summary = result[1].text
         assert f"{num_rows} rows" in summary
-        assert f"offset={state.settings.preview_size}" in summary
+        assert f"offset={page_size}" in summary
 
-        # Second page (offset=state.settings.preview_size) — hits cache
+        # Second page (offset=page_size) — hits cache
         with patch.object(state, "client", mock_client):
             result2 = await everyrow_results(
-                ResultsInput(task_id=task_id, offset=state.settings.preview_size)
+                ResultsInput(task_id=task_id, offset=page_size)
             )
 
         records2 = json.loads(result2[0].text)
         assert len(records2) == 3
-        assert records2[0]["id"] == state.settings.preview_size
+        assert records2[0]["id"] == page_size
 
         assert "final page" in result2[1].text
 
@@ -647,7 +648,8 @@ class TestResults:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        num_rows = state.settings.preview_size + 5
+        page_size = 20  # default page_size on ResultsInput
+        num_rows = page_size + 5
         data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
@@ -676,7 +678,7 @@ class TestResults:
         assert "results_url" in widget_data
         assert "https://mcp.example.com/api/results/" in widget_data["results_url"]
         assert widget_data["total"] == num_rows
-        assert len(widget_data["preview"]) == state.settings.preview_size
+        assert len(widget_data["preview"]) == page_size
 
         # TextContent 2: summary with download URL
         summary = result[1].text
@@ -775,12 +777,12 @@ class TestAgentInputValidation:
 
     def test_requires_one_input_source(self):
         """Test that no input source raises."""
-        with pytest.raises(ValidationError, match="Provide one of"):
+        with pytest.raises(ValidationError, match="Provide exactly one of"):
             AgentInput(task="test")
 
     def test_rejects_both_input_sources(self, companies_csv: str):
         """Test that providing both raises."""
-        with pytest.raises(ValidationError, match="only one"):
+        with pytest.raises(ValidationError, match="Provide exactly one of"):
             AgentInput(
                 task="test",
                 input_csv=companies_csv,
@@ -812,7 +814,7 @@ class TestAgentInputValidation:
 
     def test_rejects_input_json_with_csv(self, companies_csv: str):
         """Test that input_json + input_csv raises."""
-        with pytest.raises(ValidationError, match="only one"):
+        with pytest.raises(ValidationError, match="Provide exactly one of"):
             AgentInput(
                 task="test",
                 input_csv=companies_csv,
