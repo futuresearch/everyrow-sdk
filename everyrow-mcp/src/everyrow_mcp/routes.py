@@ -128,7 +128,7 @@ async def api_results(request: Request) -> Any:
     if not token:
         token = request.query_params.get("token", "")
 
-    cached = state.result_cache.get(task_id)
+    cached = await state.get_cached_result(task_id)
     if not cached:
         return JSONResponse(
             {"error": "Results not found or expired"},

@@ -972,7 +972,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     if params.output_path and state.is_stdio:
         output_file = Path(params.output_path)
         save_result_to_csv(df, output_file)
-        state.result_cache.pop(task_id, None)
+        await state.pop_cached_result(task_id)
         return [
             TextContent(
                 type="text",
@@ -1054,7 +1054,7 @@ def _build_inline_response(
     next_offset = offset + page_size if has_more else None
 
     # Widget JSON: HTTP mode includes results_url, stdio mode is plain records
-    if state.transport != "stdio" and state.mcp_server_url:
+    if state.is_http and state.mcp_server_url:
         results_url = f"{state.mcp_server_url}/api/results/{task_id}?format=json"
         widget_json = json.dumps(
             {
