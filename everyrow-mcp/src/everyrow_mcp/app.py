@@ -9,6 +9,8 @@ from everyrow.generated.api.billing.get_billing_balance_billing_get import (
 )
 from mcp.server.fastmcp import FastMCP
 
+from everyrow_mcp.auth import EveryRowAccessToken
+from everyrow_mcp.redis_utils import build_key
 from everyrow_mcp.state import TASK_STATE_FILE, state
 from everyrow_mcp.templates import (
     PROGRESS_HTML,
@@ -47,9 +49,24 @@ async def _stdio_lifespan(_server: FastMCP):
 
 @asynccontextmanager
 async def _http_lifespan(_server: FastMCP):
-    """HTTP mode lifespan — verify Redis connectivity on startup."""
+    """HTTP mode lifespan — verify Redis and encryption key on startup."""
+    log = logging.getLogger(__name__)
     await state.redis_ping()
-    logging.getLogger(__name__).info("Redis health check passed")
+    log.info("Redis health check passed")
+
+    # Verify the Fernet encryption key can round-trip through Redis
+    if state.auth_provider and state.auth_provider._fernet:
+        canary_key = build_key("canary")
+        canary = EveryRowAccessToken(
+            token="canary", client_id="canary", scopes=[], supabase_jwt="canary"
+        )
+        await state.auth_provider._redis_set(canary_key, canary, ttl=10)
+        loaded = await state.auth_provider._redis_get(canary_key, EveryRowAccessToken)
+        if loaded is None or loaded.supabase_jwt != "canary":
+            raise RuntimeError("Encryption key canary check failed — key may be wrong")
+        await state.auth_provider._redis.delete(canary_key)
+        log.info("Encryption key canary check passed")
+
     yield
 
 

@@ -151,18 +151,16 @@ def configure_http_mode(
 
         class RequestLoggingMiddleware(BaseHTTPMiddleware):
             async def dispatch(self, request, call_next):
-                auth_header = request.headers.get("authorization", "(none)")
-                if auth_header != "(none)":
-                    auth_header = auth_header[:30] + "..."
-                logging.warning(
+                has_auth = "authorization" in request.headers
+                logging.debug(
                     "INCOMING %s %s | Host: %s | Auth: %s",
                     request.method,
                     request.url.path,
                     request.headers.get("host", "?"),
-                    auth_header,
+                    "present" if has_auth else "none",
                 )
                 response = await call_next(request)
-                logging.warning(
+                logging.debug(
                     "RESPONSE %s %s -> %s",
                     request.method,
                     request.url.path,

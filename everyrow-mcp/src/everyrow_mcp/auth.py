@@ -44,6 +44,10 @@ REFRESH_TOKEN_TTL = 86400 * 30  # 30 days
 AUTH_CODE_TTL = 300  # 5 minutes
 PENDING_AUTH_TTL = 600  # 10 minutes
 
+# Rate limiting for auth endpoints
+AUTH_RATE_LIMIT = 10  # max requests per window
+AUTH_RATE_WINDOW = 60  # window in seconds
+
 
 class EveryRowAccessToken(AccessToken):
     """Extends AccessToken with the user's Supabase JWT."""
@@ -108,6 +112,17 @@ class EveryRowAuthProvider(
         self.mcp_server_url = mcp_server_url.rstrip("/")
         self._redis = redis
         self._fernet = Fernet(encryption_key.encode()) if encryption_key else None
+
+    # ── Rate limiting ─────────────────────────────────────────────────
+
+    async def _check_rate_limit(self, request: Request, action: str) -> bool:
+        """Return True if the request exceeds the rate limit."""
+        ip = request.client.host if request.client else "unknown"
+        key = build_key("ratelimit", action, ip)
+        count = await self._redis.incr(key)
+        if count == 1:
+            await self._redis.expire(key, AUTH_RATE_WINDOW)
+        return count > AUTH_RATE_LIMIT
 
     # ── Redis helpers ────────────────────────────────────────────────
 
@@ -199,6 +214,8 @@ class EveryRowAuthProvider(
 
     async def handle_start(self, request: Request) -> Response:
         """Set a cookie with the OAuth state and redirect to Supabase."""
+        if await self._check_rate_limit(request, "auth"):
+            return Response("Too many requests", status_code=429)
         state = request.path_params.get("state")
         if not state:
             return Response("Missing state", status_code=400)
@@ -222,17 +239,21 @@ class EveryRowAuthProvider(
 
     async def handle_callback(self, request: Request) -> Response:
         """Handle the Supabase OAuth callback."""
+        if await self._check_rate_limit(request, "auth"):
+            return Response("Too many requests", status_code=429)
         code = request.query_params.get("code")
         state = request.cookies.get("mcp_auth_state")
         if not code or not state:
             return Response("Missing code or state cookie", status_code=400)
 
-        pending = await self._redis_pop(build_key("pending", state), PendingAuth)
+        pending_key = build_key("pending", state)
+        pending = await self._redis_get(pending_key, PendingAuth)
 
         if pending is None:
             return Response("No pending authorization found", status_code=400)
 
         if time.time() - pending.created_at > PENDING_AUTH_TTL:
+            await self._redis.delete(pending_key)
             return Response("Authorization request expired", status_code=400)
 
         # Exchange Supabase code for user identity and JWT (with PKCE verifier)
@@ -268,6 +289,9 @@ class EveryRowAuthProvider(
         await self._redis_set(
             build_key("authcode", auth_code_str), auth_code_obj, ttl=AUTH_CODE_TTL
         )
+
+        # Only delete pending auth after auth code is persisted
+        await self._redis.delete(pending_key)
 
         # Redirect back to OAuth client
         redirect_params: dict[str, str] = {"code": auth_code_str}
