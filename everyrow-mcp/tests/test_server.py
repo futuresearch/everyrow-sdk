@@ -374,7 +374,7 @@ class TestResults:
             params = ResultsInput(task_id=task_id, output_path=str(output_file))
             result = await everyrow_results(params)
 
-        assert "Error checking task status" in result[0].text
+        assert "Error retrieving results" in result[0].text
 
     @pytest.mark.asyncio
     async def test_results_saves_csv(self, tmp_path: Path):

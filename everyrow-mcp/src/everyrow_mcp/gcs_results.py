@@ -15,8 +15,7 @@ import pandas as pd
 from mcp.types import TextContent
 
 from everyrow_mcp.models import PREVIEW_SIZE
-from everyrow_mcp.redis_utils import build_key
-from everyrow_mcp.state import RESULT_CACHE_TTL, state
+from everyrow_mcp.state import state
 
 if TYPE_CHECKING:
     from everyrow_mcp.gcs_storage import ResultURLs
@@ -93,10 +92,10 @@ async def try_cached_gcs_result(
 
     Returns None if GCS is not configured or no cached metadata exists.
     """
-    if state.gcs_store is None or state.auth_provider is None:
+    if state.gcs_store is None:
         return None
 
-    cached_meta_raw = await state.auth_provider._redis.get(build_key("result", task_id))
+    cached_meta_raw = await state.get_result_meta(task_id)
     if not cached_meta_raw:
         return None
 
@@ -125,7 +124,7 @@ async def try_upload_gcs_result(
     Returns None if GCS is not configured or the upload fails (caller should
     fall back to in-memory cache).
     """
-    if state.gcs_store is None or state.auth_provider is None:
+    if state.gcs_store is None:
         return None
 
     try:
@@ -140,11 +139,7 @@ async def try_upload_gcs_result(
 
         # Store metadata in Redis with TTL
         meta = {"total": total, "columns": columns, "preview": preview}
-        await state.auth_provider._redis.setex(
-            build_key("result", task_id),
-            RESULT_CACHE_TTL,
-            json.dumps(meta),
-        )
+        await state.store_result_meta(task_id, json.dumps(meta))
 
         return _build_gcs_response(
             task_id=task_id,

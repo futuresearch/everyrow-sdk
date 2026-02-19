@@ -6,8 +6,10 @@ Provides Redis-backed token storage methods for multi-pod deployments.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,7 @@ logger = logging.getLogger(__name__)
 PROGRESS_POLL_DELAY = 12
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 RESULT_CACHE_TTL = 600
+TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
 
 
 @dataclass
@@ -41,8 +44,51 @@ class ServerState:
     )
     gcs_store: GCSResultStore | None = None
     settings: HttpSettings | StdioSettings | None = None
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    # ── Redis-backed token storage (multi-pod safe) ──────────────
+    # ── Transport helpers ─────────────────────────────────────────
+
+    @property
+    def is_stdio(self) -> bool:
+        return self.transport == "stdio"
+
+    @property
+    def is_http(self) -> bool:
+        return self.transport != "stdio"
+
+    # ── In-memory cache (protected by lock in HTTP mode) ──────────
+
+    def evict_stale_results(self) -> None:
+        """Remove in-memory cache entries older than RESULT_CACHE_TTL."""
+        now = datetime.now(UTC).timestamp()
+        stale = [
+            k
+            for k, (_, ts, _tok) in self.result_cache.items()
+            if now - ts > RESULT_CACHE_TTL
+        ]
+        for k in stale:
+            self.result_cache.pop(k, None)
+
+    async def get_cached_result(
+        self, task_id: str
+    ) -> tuple[pd.DataFrame, float, str] | None:
+        """Get a cached result, using a lock in HTTP mode."""
+        async with self._lock:
+            return self.result_cache.get(task_id)
+
+    async def set_cached_result(
+        self, task_id: str, df: pd.DataFrame, timestamp: float, token: str
+    ) -> None:
+        """Store a result in the in-memory cache, using a lock in HTTP mode."""
+        async with self._lock:
+            self.result_cache[task_id] = (df, timestamp, token)
+
+    async def pop_cached_result(self, task_id: str) -> None:
+        """Remove a result from the in-memory cache, using a lock in HTTP mode."""
+        async with self._lock:
+            self.result_cache.pop(task_id, None)
+
+    # ── Redis access (sealed — no direct ._redis outside this class) ──
 
     @property
     def _redis(self) -> Any | None:
@@ -51,23 +97,58 @@ class ServerState:
             return self.auth_provider._redis
         return None
 
+    async def redis_ping(self) -> None:
+        """Ping Redis to verify connectivity. Raises if Redis is unavailable."""
+        redis = self._redis
+        if redis is not None:
+            await redis.ping()
+
+    async def get_result_meta(self, task_id: str) -> str | None:
+        """Get cached GCS result metadata from Redis."""
+        redis = self._redis
+        if redis is None:
+            return None
+        try:
+            return await redis.get(build_key("result", task_id))
+        except Exception:
+            logger.warning("Failed to get result metadata from Redis for %s", task_id)
+            return None
+
+    async def store_result_meta(self, task_id: str, meta_json: str) -> None:
+        """Store GCS result metadata in Redis with TTL."""
+        redis = self._redis
+        if redis is None:
+            return
+        try:
+            await redis.setex(
+                build_key("result", task_id),
+                RESULT_CACHE_TTL,
+                meta_json,
+            )
+        except Exception:
+            logger.warning("Failed to store result metadata in Redis for %s", task_id)
+
+    # ── Redis-backed token storage (multi-pod safe) ──────────────
+
     async def store_task_token(self, task_id: str, token: str) -> None:
         """Store an API token for a task (local dict + Redis if available)."""
-        self.task_tokens[task_id] = token
+        async with self._lock:
+            self.task_tokens[task_id] = token
         redis = self._redis
         if redis is not None:
             try:
                 await redis.setex(
                     build_key("task_token", task_id),
-                    RESULT_CACHE_TTL,
+                    TOKEN_TTL,
                     token,
                 )
             except Exception:
-                logger.debug("Failed to store task token in Redis for %s", task_id)
+                logger.warning("Failed to store task token in Redis for %s", task_id)
 
     async def get_task_token(self, task_id: str) -> str | None:
         """Get an API token for a task (local dict, fall back to Redis)."""
-        token = self.task_tokens.get(task_id)
+        async with self._lock:
+            token = self.task_tokens.get(task_id)
         if token is not None:
             return token
         redis = self._redis
@@ -75,29 +156,32 @@ class ServerState:
             try:
                 token = await redis.get(build_key("task_token", task_id))
                 if token is not None:
-                    self.task_tokens[task_id] = token
+                    async with self._lock:
+                        self.task_tokens[task_id] = token
                 return token
             except Exception:
-                logger.debug("Failed to get task token from Redis for %s", task_id)
+                logger.warning("Failed to get task token from Redis for %s", task_id)
         return None
 
     async def store_poll_token(self, task_id: str, poll_token: str) -> None:
         """Store a poll token for a task (local dict + Redis if available)."""
-        self.task_poll_tokens[task_id] = poll_token
+        async with self._lock:
+            self.task_poll_tokens[task_id] = poll_token
         redis = self._redis
         if redis is not None:
             try:
                 await redis.setex(
                     build_key("poll_token", task_id),
-                    RESULT_CACHE_TTL,
+                    TOKEN_TTL,
                     poll_token,
                 )
             except Exception:
-                logger.debug("Failed to store poll token in Redis for %s", task_id)
+                logger.warning("Failed to store poll token in Redis for %s", task_id)
 
     async def get_poll_token(self, task_id: str) -> str | None:
         """Get a poll token for a task (local dict, fall back to Redis)."""
-        token = self.task_poll_tokens.get(task_id)
+        async with self._lock:
+            token = self.task_poll_tokens.get(task_id)
         if token is not None:
             return token
         redis = self._redis
@@ -105,16 +189,18 @@ class ServerState:
             try:
                 token = await redis.get(build_key("poll_token", task_id))
                 if token is not None:
-                    self.task_poll_tokens[task_id] = token
+                    async with self._lock:
+                        self.task_poll_tokens[task_id] = token
                 return token
             except Exception:
-                logger.debug("Failed to get poll token from Redis for %s", task_id)
+                logger.warning("Failed to get poll token from Redis for %s", task_id)
         return None
 
     async def pop_task_token(self, task_id: str) -> None:
         """Remove tokens for a task from both local dict and Redis."""
-        self.task_tokens.pop(task_id, None)
-        self.task_poll_tokens.pop(task_id, None)
+        async with self._lock:
+            self.task_tokens.pop(task_id, None)
+            self.task_poll_tokens.pop(task_id, None)
         redis = self._redis
         if redis is not None:
             try:
@@ -123,7 +209,7 @@ class ServerState:
                     build_key("poll_token", task_id),
                 )
             except Exception:
-                logger.debug("Failed to delete tokens from Redis for %s", task_id)
+                logger.warning("Failed to delete tokens from Redis for %s", task_id)
 
 
 state = ServerState()

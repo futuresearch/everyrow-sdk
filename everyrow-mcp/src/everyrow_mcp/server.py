@@ -64,7 +64,6 @@ from everyrow_mcp.models import (
 from everyrow_mcp.settings import StdioSettings
 from everyrow_mcp.state import (
     PROGRESS_POLL_DELAY,
-    RESULT_CACHE_TTL,
     TASK_STATE_FILE,
     state,
 )
@@ -84,7 +83,7 @@ def _get_client():
     In HTTP mode, creates a per-request client using the authenticated
     user's API key from the OAuth access token.
     """
-    if state.transport == "stdio":
+    if state.is_stdio:
         if state.client is None:
             raise RuntimeError("MCP server not initialized")
         return state.client
@@ -125,9 +124,8 @@ async def _stdio_lifespan(_server: FastMCP):
 @asynccontextmanager
 async def _http_lifespan(_server: FastMCP):
     """HTTP mode lifespan — verify Redis connectivity on startup."""
-    if state.auth_provider is not None:
-        await state.auth_provider._redis.ping()
-        logging.getLogger(__name__).info("Redis health check passed")
+    await state.redis_ping()
+    logging.getLogger(__name__).info("Redis health check passed")
     yield
 
 
@@ -163,7 +161,7 @@ def _session_ui() -> str:
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
     """Build human-readable text for submission tool results."""
-    if state.transport == "stdio":
+    if state.is_stdio:
         return (
             f"{label}\n"
             f"Session: {session_url}\n"
@@ -201,7 +199,7 @@ async def _submission_ui_json(
 
 
 def _clear_task_state() -> None:
-    if state.transport != "stdio":
+    if state.is_http:
         return
     if TASK_STATE_FILE.exists():
         TASK_STATE_FILE.unlink()
@@ -223,7 +221,7 @@ def _write_task_state(
     Note: Only one task is tracked at a time. If multiple tasks run concurrently,
     only the most recent one's progress is shown.
     """
-    if state.transport != "stdio":
+    if state.is_http:
         return
     try:
         TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -935,14 +933,43 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     if gcs_cached is not None:
         return gcs_cached
 
-    # ── Get or fetch the DataFrame ──────────────────────────────────
-    df, download_token = await _get_result_dataframe(client, task_id, params)
-    if df is None:
-        # _get_result_dataframe returns error TextContent via download_token
-        return download_token  # type: ignore[return-value]
+    # ── In-memory cache hit ────────────────────────────────────────
+    state.evict_stale_results()
+    cached = await state.get_cached_result(task_id)
+    if cached is not None:
+        df, _, download_token = cached
+    else:
+        # ── Fetch from API ─────────────────────────────────────────
+        try:
+            df = await _fetch_task_result(client, task_id)
+        except TaskNotReady as e:
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Task status is {e.status}. Cannot fetch results yet.\n"
+                        f"Call everyrow_progress(task_id='{task_id}') to check again."
+                    ),
+                )
+            ]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
+
+        # ── Try GCS upload (returns None if not configured or fails) ──
+        gcs_response = await try_upload_gcs_result(
+            task_id, df, params.offset, params.page_size
+        )
+        if gcs_response is not None:
+            return gcs_response
+
+        # ── Fall back to in-memory cache ───────────────────────────
+        download_token = secrets.token_urlsafe(32)
+        await state.set_cached_result(
+            task_id, df, datetime.now(UTC).timestamp(), download_token
+        )
 
     # ── stdio mode: save to file (all rows, no pagination) ──────────
-    if params.output_path and state.transport == "stdio":
+    if params.output_path and state.is_stdio:
         output_file = Path(params.output_path)
         save_result_to_csv(df, output_file)
         state.result_cache.pop(task_id, None)
@@ -961,90 +988,50 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     return _build_inline_response(task_id, df, download_token, params)
 
 
-async def _get_result_dataframe(  # noqa: PLR0911
-    client: Any,
-    task_id: str,
-    params: ResultsInput,
-) -> tuple[pd.DataFrame | None, Any]:
-    """Fetch the result DataFrame, using cache or API.
+class TaskNotReady(Exception):
+    """Raised when a task is not in a terminal state."""
 
-    Returns (df, download_token) on success, or (None, error_text_content) on failure.
+    def __init__(self, status: str) -> None:
+        self.status = status
+        super().__init__(status)
+
+
+async def _fetch_task_result(client: Any, task_id: str) -> pd.DataFrame:
+    """Fetch a task's result DataFrame from the API.
+
+    Checks task status first, then retrieves and parses the result data.
+
+    Raises:
+        TaskNotReady: If the task is not in a terminal state.
+        ValueError: If the result has no table data.
+        Exception: On API errors.
     """
-    # Evict stale in-memory cache entries
-    now = datetime.now(UTC).timestamp()
-    stale = [
-        k
-        for k, (_, ts, _tok) in state.result_cache.items()
-        if now - ts > RESULT_CACHE_TTL
-    ]
-    for k in stale:
-        state.result_cache.pop(k, None)
-
-    # Return from cache if available
-    if task_id in state.result_cache:
-        df, _, download_token = state.result_cache[task_id]
-        return df, download_token
-
-    # Check task status first
-    try:
-        status_response = handle_response(
-            await get_task_status_tasks_task_id_status_get.asyncio(
-                task_id=UUID(task_id),
-                client=client,
-            )
+    status_response = handle_response(
+        await get_task_status_tasks_task_id_status_get.asyncio(
+            task_id=UUID(task_id),
+            client=client,
         )
-        if status_response.status not in (
-            TaskStatus.COMPLETED,
-            TaskStatus.FAILED,
-            TaskStatus.REVOKED,
-        ):
-            return None, [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"Task status is {status_response.status.value}. Cannot fetch results yet.\n"
-                        f"Call everyrow_progress(task_id='{task_id}') to check again."
-                    ),
-                )
-            ]
-    except Exception as e:
-        return None, [
-            TextContent(type="text", text=f"Error checking task status: {e!r}")
-        ]
+    )
+    if status_response.status not in (
+        TaskStatus.COMPLETED,
+        TaskStatus.FAILED,
+        TaskStatus.REVOKED,
+    ):
+        raise TaskNotReady(status_response.status.value)
 
-    # Fetch result data from API
-    try:
-        result_response = handle_response(
-            await get_task_result_tasks_task_id_result_get.asyncio(
-                task_id=UUID(task_id),
-                client=client,
-            )
+    result_response = handle_response(
+        await get_task_result_tasks_task_id_result_get.asyncio(
+            task_id=UUID(task_id),
+            client=client,
         )
+    )
 
-        if isinstance(result_response.data, list):
-            records = [item.additional_properties for item in result_response.data]
-            df = pd.DataFrame(records)
-        elif isinstance(result_response.data, TaskResultResponseDataType1):
-            df = pd.DataFrame([result_response.data.additional_properties])
-        else:
-            return None, [
-                TextContent(type="text", text="Error: Task result has no table data.")
-            ]
-
-        # Try GCS upload (returns None on failure or if not configured)
-        gcs_response = await try_upload_gcs_result(
-            task_id, df, params.offset, params.page_size
-        )
-        if gcs_response is not None:
-            return None, gcs_response
-
-        # Fall back to in-memory cache
-        now = datetime.now(UTC).timestamp()
-        download_token = secrets.token_urlsafe(32)
-        state.result_cache[task_id] = (df, now, download_token)
-        return df, download_token
-    except Exception as e:
-        return None, [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
+    if isinstance(result_response.data, list):
+        records = [item.additional_properties for item in result_response.data]
+        return pd.DataFrame(records)
+    if isinstance(result_response.data, TaskResultResponseDataType1):
+        return pd.DataFrame([result_response.data.additional_properties])
+    raise ValueError("Task result has no table data.")
 
 
 def _build_inline_response(
