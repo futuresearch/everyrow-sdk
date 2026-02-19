@@ -24,7 +24,7 @@ from everyrow_mcp.models import (
     ResultsInput,
     ScreenInput,
 )
-from everyrow_mcp.server import (
+from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_dedupe,
     everyrow_merge,

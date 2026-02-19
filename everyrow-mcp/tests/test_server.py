@@ -37,12 +37,12 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.server import (
+from everyrow_mcp.state import state
+from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
 )
-from everyrow_mcp.state import state
 
 # CSV fixtures are defined in conftest.py
 
@@ -217,11 +217,11 @@ class TestAgent:
 
         with (
             patch(
-                "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.create_session",
+                "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
             ),
         ):
@@ -258,11 +258,11 @@ class TestProgress:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("API error"),
             ),
-            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
@@ -288,12 +288,12 @@ class TestProgress:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.server._write_task_state"),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools._write_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
@@ -330,12 +330,12 @@ class TestProgress:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.server.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.server._write_task_state"),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools._write_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
@@ -365,7 +365,7 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("API error"),
             ),
@@ -393,12 +393,12 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -433,12 +433,12 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -476,12 +476,12 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -525,12 +525,12 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -579,11 +579,11 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 mock_status,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 mock_result,
             ),
         ):
@@ -619,12 +619,12 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -654,16 +654,16 @@ class TestResults:
 
         state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._get_client", return_value=mock_client),
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
             patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -697,16 +697,16 @@ class TestResults:
 
         state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._get_client", return_value=mock_client),
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
             patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
-                "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.server.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -739,11 +739,11 @@ class TestAgentInlineInput:
 
         with (
             patch(
-                "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.server.create_session",
+                "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
             ),
         ):

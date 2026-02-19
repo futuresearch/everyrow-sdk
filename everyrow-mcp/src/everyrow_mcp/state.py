@@ -37,8 +37,6 @@ class ServerState:
     transport: str = "stdio"
     auth_provider: EveryRowAuthProvider | None = None
     mcp_server_url: str = ""
-    task_tokens: dict[str, str] = field(default_factory=dict)
-    task_poll_tokens: dict[str, str] = field(default_factory=dict)
     result_cache: dict[str, tuple[pd.DataFrame, float, str]] = field(
         default_factory=dict
     )
@@ -155,85 +153,59 @@ class ServerState:
     # ── Redis-backed token storage (multi-pod safe) ──────────────
 
     async def store_task_token(self, task_id: str, token: str) -> None:
-        """Store an API token for a task (local dict + Redis if available)."""
-        async with self._lock:
-            self.task_tokens[task_id] = token
+        """Store an API token for a task in Redis."""
         redis = self.redis
-        if redis is not None:
-            try:
-                await redis.setex(
-                    build_key("task_token", task_id),
-                    TOKEN_TTL,
-                    token,
-                )
-            except Exception:
-                logger.warning("Failed to store task token in Redis for %s", task_id)
+        if redis is None:
+            return
+        try:
+            await redis.setex(build_key("task_token", task_id), TOKEN_TTL, token)
+        except Exception:
+            logger.warning("Failed to store task token in Redis for %s", task_id)
 
     async def get_task_token(self, task_id: str) -> str | None:
-        """Get an API token for a task (local dict, fall back to Redis)."""
-        async with self._lock:
-            token = self.task_tokens.get(task_id)
-        if token is not None:
-            return token
+        """Get an API token for a task from Redis."""
         redis = self.redis
-        if redis is not None:
-            try:
-                token = await redis.get(build_key("task_token", task_id))
-                if token is not None:
-                    async with self._lock:
-                        self.task_tokens[task_id] = token
-                return token
-            except Exception:
-                logger.warning("Failed to get task token from Redis for %s", task_id)
-        return None
+        if redis is None:
+            return None
+        try:
+            return await redis.get(build_key("task_token", task_id))
+        except Exception:
+            logger.warning("Failed to get task token from Redis for %s", task_id)
+            return None
 
     async def store_poll_token(self, task_id: str, poll_token: str) -> None:
-        """Store a poll token for a task (local dict + Redis if available)."""
-        async with self._lock:
-            self.task_poll_tokens[task_id] = poll_token
+        """Store a poll token for a task in Redis."""
         redis = self.redis
-        if redis is not None:
-            try:
-                await redis.setex(
-                    build_key("poll_token", task_id),
-                    TOKEN_TTL,
-                    poll_token,
-                )
-            except Exception:
-                logger.warning("Failed to store poll token in Redis for %s", task_id)
+        if redis is None:
+            return
+        try:
+            await redis.setex(build_key("poll_token", task_id), TOKEN_TTL, poll_token)
+        except Exception:
+            logger.warning("Failed to store poll token in Redis for %s", task_id)
 
     async def get_poll_token(self, task_id: str) -> str | None:
-        """Get a poll token for a task (local dict, fall back to Redis)."""
-        async with self._lock:
-            token = self.task_poll_tokens.get(task_id)
-        if token is not None:
-            return token
+        """Get a poll token for a task from Redis."""
         redis = self.redis
-        if redis is not None:
-            try:
-                token = await redis.get(build_key("poll_token", task_id))
-                if token is not None:
-                    async with self._lock:
-                        self.task_poll_tokens[task_id] = token
-                return token
-            except Exception:
-                logger.warning("Failed to get poll token from Redis for %s", task_id)
-        return None
+        if redis is None:
+            return None
+        try:
+            return await redis.get(build_key("poll_token", task_id))
+        except Exception:
+            logger.warning("Failed to get poll token from Redis for %s", task_id)
+            return None
 
     async def pop_task_token(self, task_id: str) -> None:
-        """Remove tokens for a task from both local dict and Redis."""
-        async with self._lock:
-            self.task_tokens.pop(task_id, None)
-            self.task_poll_tokens.pop(task_id, None)
+        """Remove tokens for a task from Redis."""
         redis = self.redis
-        if redis is not None:
-            try:
-                await redis.delete(
-                    build_key("task_token", task_id),
-                    build_key("poll_token", task_id),
-                )
-            except Exception:
-                logger.warning("Failed to delete tokens from Redis for %s", task_id)
+        if redis is None:
+            return
+        try:
+            await redis.delete(
+                build_key("task_token", task_id),
+                build_key("poll_token", task_id),
+            )
+        except Exception:
+            logger.warning("Failed to delete tokens from Redis for %s", task_id)
 
 
 state = ServerState()
