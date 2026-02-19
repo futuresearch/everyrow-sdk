@@ -49,17 +49,19 @@ def _build_gcs_response(
     columns: list[str],
     offset: int,
     page_size: int,
+    session_url: str = "",
 ) -> list[TextContent]:
     """Build MCP TextContent response for GCS-backed results."""
     col_names = _format_columns(columns)
 
-    widget_json = json.dumps(
-        {
-            "results_url": urls.json_url,
-            "preview": preview,
-            "total": total,
-        }
-    )
+    widget_data: dict = {
+        "results_url": urls.json_url,
+        "preview": preview,
+        "total": total,
+    }
+    if session_url:
+        widget_data["session_url"] = session_url
+    widget_json = json.dumps(widget_data)
 
     has_more = offset + page_size < total
     next_offset = offset + page_size if has_more else None
@@ -118,6 +120,7 @@ async def try_cached_gcs_result(
     meta = json.loads(cached_meta_raw)
     total: int = meta["total"]
     columns: list[str] = meta["columns"]
+    session_url: str = meta.get("session_url", "")
 
     # Check per-page cache
     cached_page = await state.get_result_page(task_id, offset, page_size)
@@ -147,6 +150,7 @@ async def try_cached_gcs_result(
         columns=columns,
         offset=min(offset, total),
         page_size=page_size,
+        session_url=session_url,
     )
 
 
@@ -155,6 +159,7 @@ async def try_upload_gcs_result(
     df: pd.DataFrame,
     offset: int,
     page_size: int,
+    session_url: str = "",
 ) -> list[TextContent] | None:
     """Upload a DataFrame to GCS, cache metadata in Redis, and return a response.
 
@@ -169,8 +174,10 @@ async def try_upload_gcs_result(
         total = len(df)
         columns = list(df.columns)
 
-        # Store base metadata (without preview)
-        meta = {"total": total, "columns": columns}
+        # Store base metadata (including session_url for cache hits)
+        meta: dict = {"total": total, "columns": columns}
+        if session_url:
+            meta["session_url"] = session_url
         await state.store_result_meta(task_id, json.dumps(meta))
 
         # Build and cache page preview
@@ -187,6 +194,7 @@ async def try_upload_gcs_result(
             columns=columns,
             offset=clamped_offset,
             page_size=page_size,
+            session_url=session_url,
         )
     except Exception:
         logger.exception(

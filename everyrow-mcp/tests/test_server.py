@@ -689,8 +689,8 @@ class TestResults:
         state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
-    async def test_results_http_mode_small_data_no_download_url(self):
-        """In HTTP mode, small results (all fit in preview) don't include download URL."""
+    async def test_results_http_mode_small_data_includes_csv_url(self):
+        """In HTTP mode, small results still include CSV download URL."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -722,10 +722,10 @@ class TestResults:
         assert "results_url" in widget_data
         assert widget_data["total"] == 2
 
-        # Summary says all rows shown, no download URL
+        # Summary says all rows shown, includes CSV download for HTTP mode
         summary = result[1].text
         assert "All rows shown" in summary
-        assert "download" not in summary.lower()
+        assert "download" in summary.lower()
 
         state.result_cache.pop(task_id, None)
 

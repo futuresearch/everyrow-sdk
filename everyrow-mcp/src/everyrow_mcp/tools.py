@@ -53,7 +53,7 @@ from everyrow_mcp.state import (
     TASK_STATE_FILE,
     state,
 )
-from everyrow_mcp.utils import load_csv, save_result_to_csv
+from everyrow_mcp.utils import load_input, save_result_to_csv
 
 
 def _get_client():
@@ -188,10 +188,11 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = load_csv(
+    df = await load_input(
         input_csv=params.input_csv,
         input_data=params.input_data,
         input_json=params.input_json,
+        input_url=params.input_url,
     )
 
     response_model: type[BaseModel] | None = None
@@ -347,10 +348,11 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = load_csv(
+    df = await load_input(
         input_csv=params.input_csv,
         input_data=params.input_data,
         input_json=params.input_json,
+        input_url=params.input_url,
     )
 
     response_model: type[BaseModel] | None = None
@@ -438,10 +440,11 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = load_csv(
+    df = await load_input(
         input_csv=params.input_csv,
         input_data=params.input_data,
         input_json=params.input_json,
+        input_url=params.input_url,
     )
 
     response_model: type[BaseModel] | None = None
@@ -500,10 +503,11 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     _clear_task_state()
 
     # Consistent with agent/rank/screen
-    df = load_csv(
+    df = await load_input(
         input_csv=params.input_csv,
         input_data=params.input_data,
         input_json=params.input_json,
+        input_url=params.input_url,
     )
 
     async with create_session(client=client) as session:
@@ -564,17 +568,19 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     client = _get_client()
     _clear_task_state()
 
-    # Use load_csv for validation + consistency
-    left_df = load_csv(
+    # Use load_input for validation + consistency
+    left_df = await load_input(
         input_csv=params.left_csv,
         input_data=params.left_input_data,
         input_json=params.left_input_json,
+        input_url=params.left_url,
     )
 
-    right_df = load_csv(
+    right_df = await load_input(
         input_csv=params.right_csv,
         input_data=params.right_input_data,
         input_json=params.right_input_json,
+        input_url=params.right_url,
     )
 
     async with create_session(client=client) as session:
@@ -824,6 +830,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         return gcs_cached
 
     # ── In-memory cache hit ────────────────────────────────────────
+    session_url = ""
     await state.evict_stale_results()
     cached = await state.get_cached_result(task_id)
     if cached is not None:
@@ -831,7 +838,8 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     else:
         # ── Fetch from API ─────────────────────────────────────────
         try:
-            df = await _fetch_task_result(client, task_id)
+            df, session_id = await _fetch_task_result(client, task_id)
+            session_url = get_session_url(session_id) if session_id else ""
         except TaskNotReady as e:
             return [
                 TextContent(
@@ -847,7 +855,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
 
         # ── Try GCS upload (returns None if not configured or fails) ──
         gcs_response = await try_upload_gcs_result(
-            task_id, df, params.offset, params.page_size
+            task_id, df, params.offset, params.page_size, session_url
         )
         if gcs_response is not None:
             return gcs_response
@@ -875,7 +883,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         ]
 
     # ── Build paginated inline response ─────────────────────────────
-    return _build_inline_response(task_id, df, download_token, params)
+    return _build_inline_response(task_id, df, download_token, params, session_url)
 
 
 class TaskNotReady(Exception):
@@ -886,10 +894,13 @@ class TaskNotReady(Exception):
         super().__init__(status)
 
 
-async def _fetch_task_result(client: Any, task_id: str) -> pd.DataFrame:
-    """Fetch a task's result DataFrame from the API.
+async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, str]:
+    """Fetch a task's result DataFrame and session ID from the API.
 
     Checks task status first, then retrieves and parses the result data.
+
+    Returns:
+        Tuple of (DataFrame, session_id).
 
     Raises:
         TaskNotReady: If the task is not in a terminal state.
@@ -909,6 +920,8 @@ async def _fetch_task_result(client: Any, task_id: str) -> pd.DataFrame:
     ):
         raise TaskNotReady(status_response.status.value)
 
+    session_id = str(status_response.session_id) if status_response.session_id else ""
+
     result_response = handle_response(
         await get_task_result_tasks_task_id_result_get.asyncio(
             task_id=UUID(task_id),
@@ -918,9 +931,9 @@ async def _fetch_task_result(client: Any, task_id: str) -> pd.DataFrame:
 
     if isinstance(result_response.data, list):
         records = [item.additional_properties for item in result_response.data]
-        return pd.DataFrame(records)
+        return pd.DataFrame(records), session_id
     if isinstance(result_response.data, TaskResultResponseDataType1):
-        return pd.DataFrame([result_response.data.additional_properties])
+        return pd.DataFrame([result_response.data.additional_properties]), session_id
     raise ValueError("Task result has no table data.")
 
 
@@ -956,6 +969,7 @@ def _build_inline_response(
     df: pd.DataFrame,
     download_token: str,
     params: ResultsInput,
+    session_url: str = "",
 ) -> list[TextContent]:
     """Build paginated inline response for in-memory results."""
     total = len(df)
@@ -973,14 +987,17 @@ def _build_inline_response(
     # Widget JSON: HTTP mode includes results_url, stdio mode is plain records
     if state.is_http and state.mcp_server_url:
         results_url = f"{state.mcp_server_url}/api/results/{task_id}?format=json"
-        widget_json = json.dumps(
-            {
-                "results_url": results_url,
-                "download_token": download_token,
-                "preview": page_records,
-                "total": total,
-            }
-        )
+        csv_download_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
+        widget_data: dict[str, Any] = {
+            "results_url": results_url,
+            "download_token": download_token,
+            "csv_url": csv_download_url,
+            "preview": page_records,
+            "total": total,
+        }
+        if session_url:
+            widget_data["session_url"] = session_url
+        widget_json = json.dumps(widget_data)
     else:
         widget_json = json.dumps(page_records)
 
@@ -1012,6 +1029,8 @@ def _build_inline_response(
             summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
     elif offset == 0:
         summary = f"Results: {total} rows, {len(df.columns)} columns ({col_names}). All rows shown."
+        if csv_url:
+            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
     else:
         summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
 

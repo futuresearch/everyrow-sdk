@@ -1,16 +1,22 @@
 """Tests for utility functions."""
 
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
+import httpx
 import pandas as pd
 import pytest
 
 from everyrow_mcp.utils import (
+    fetch_csv_from_url,
     load_csv,
+    load_input,
+    normalize_google_url,
     resolve_output_path,
     save_result_to_csv,
     validate_csv_path,
     validate_output_path,
+    validate_url,
 )
 
 
@@ -161,3 +167,174 @@ class TestSaveResultToCsv:
         loaded = pd.read_csv(output_path)
         assert list(loaded.columns) == ["a", "b"]
         assert len(loaded) == 3
+
+
+class TestValidateUrl:
+    """Tests for validate_url."""
+
+    def test_valid_https(self):
+        assert (
+            validate_url("https://example.com/data.csv")
+            == "https://example.com/data.csv"
+        )
+
+    def test_valid_http(self):
+        assert (
+            validate_url("http://example.com/data.csv") == "http://example.com/data.csv"
+        )
+
+    def test_ftp_rejected(self):
+        with pytest.raises(ValueError, match="http or https"):
+            validate_url("ftp://example.com/data.csv")
+
+    def test_file_rejected(self):
+        with pytest.raises(ValueError, match="http or https"):
+            validate_url("file:///tmp/data.csv")
+
+    def test_no_scheme_rejected(self):
+        with pytest.raises(ValueError, match="http or https"):
+            validate_url("example.com/data.csv")
+
+    def test_empty_rejected(self):
+        with pytest.raises(ValueError, match="http or https"):
+            validate_url("")
+
+
+class TestNormalizeGoogleUrl:
+    """Tests for normalize_google_url."""
+
+    def test_sheets_edit_with_gid(self):
+        url = "https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0"
+        assert (
+            normalize_google_url(url)
+            == "https://docs.google.com/spreadsheets/d/ABC123/export?format=csv&gid=0"
+        )
+
+    def test_sheets_edit_without_gid(self):
+        url = "https://docs.google.com/spreadsheets/d/ABC123/edit"
+        assert (
+            normalize_google_url(url)
+            == "https://docs.google.com/spreadsheets/d/ABC123/export?format=csv"
+        )
+
+    def test_sheets_edit_with_query_params(self):
+        url = "https://docs.google.com/spreadsheets/d/ABC123/edit?usp=sharing#gid=42"
+        assert (
+            normalize_google_url(url)
+            == "https://docs.google.com/spreadsheets/d/ABC123/export?format=csv&gid=42"
+        )
+
+    def test_drive_view(self):
+        url = "https://drive.google.com/file/d/XYZ789/view?usp=sharing"
+        assert (
+            normalize_google_url(url)
+            == "https://drive.google.com/uc?export=download&id=XYZ789"
+        )
+
+    def test_non_google_passthrough(self):
+        url = "https://example.com/data.csv"
+        assert normalize_google_url(url) == url
+
+    def test_already_export_url_passthrough(self):
+        url = "https://docs.google.com/spreadsheets/d/ABC123/export?format=csv"
+        assert normalize_google_url(url) == url
+
+
+class TestFetchCsvFromUrl:
+    """Tests for fetch_csv_from_url."""
+
+    @pytest.mark.asyncio
+    async def test_happy_path(self):
+        csv_text = "name,age\nAlice,30\nBob,25\n"
+        mock_response = httpx.Response(200, text=csv_text)
+
+        with patch("everyrow_mcp.utils.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            df = await fetch_csv_from_url("https://example.com/data.csv")
+
+        assert len(df) == 2
+        assert list(df.columns) == ["name", "age"]
+
+    @pytest.mark.asyncio
+    async def test_404_raises(self):
+        mock_response = httpx.Response(404, text="Not Found")
+
+        with patch("everyrow_mcp.utils.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ValueError, match="HTTP 404"):
+                await fetch_csv_from_url("https://example.com/missing.csv")
+
+    @pytest.mark.asyncio
+    async def test_empty_csv_raises(self):
+        mock_response = httpx.Response(200, text="name,age\n")
+
+        with patch("everyrow_mcp.utils.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            with pytest.raises(ValueError, match="empty CSV"):
+                await fetch_csv_from_url("https://example.com/empty.csv")
+
+    @pytest.mark.asyncio
+    async def test_google_url_normalized(self):
+        csv_text = "name,age\nAlice,30\n"
+        mock_response = httpx.Response(200, text=csv_text)
+
+        with patch("everyrow_mcp.utils.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            await fetch_csv_from_url(
+                "https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0"
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://docs.google.com/spreadsheets/d/ABC123/export?format=csv&gid=0"
+            )
+
+
+class TestLoadInput:
+    """Tests for load_input."""
+
+    @pytest.mark.asyncio
+    async def test_dispatches_to_fetch_csv_from_url(self):
+        expected_df = pd.DataFrame({"a": [1]})
+
+        with patch(
+            "everyrow_mcp.utils.fetch_csv_from_url", new_callable=AsyncMock
+        ) as mock_fetch:
+            mock_fetch.return_value = expected_df
+            df = await load_input(input_url="https://example.com/data.csv")
+
+        mock_fetch.assert_called_once_with("https://example.com/data.csv")
+        pd.testing.assert_frame_equal(df, expected_df)
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_load_csv(self):
+        csv_content = "name,age\nAlice,30\n"
+        df = await load_input(input_data=csv_content)
+        assert len(df) == 1
+        assert df["name"].tolist() == ["Alice"]
+
+    @pytest.mark.asyncio
+    async def test_json_input(self):
+        data = [{"x": 1}, {"x": 2}]
+        df = await load_input(input_json=data)
+        assert len(df) == 2
+        assert df["x"].tolist() == [1, 2]
