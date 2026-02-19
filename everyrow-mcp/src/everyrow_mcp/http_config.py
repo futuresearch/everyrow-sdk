@@ -61,8 +61,6 @@ def configure_http_mode(
         mcp_server_url=settings.mcp_server_url,
         redis=redis_client,
     )
-    state.auth_provider = auth_provider
-
     # Token verifier validates Supabase JWTs via JWKS (no Redis lookup needed)
     verifier = SupabaseTokenVerifier(settings.supabase_url)
 

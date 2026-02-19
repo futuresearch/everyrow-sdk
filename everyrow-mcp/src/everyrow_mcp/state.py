@@ -16,7 +16,6 @@ from typing import Any
 import pandas as pd
 from everyrow.generated.client import AuthenticatedClient
 
-from everyrow_mcp.auth import EveryRowAuthProvider
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
 from everyrow_mcp.settings import _BaseSettings
@@ -35,7 +34,6 @@ class ServerState:
 
     client: AuthenticatedClient | None = None
     transport: str = "stdio"
-    auth_provider: EveryRowAuthProvider | None = None
     mcp_server_url: str = ""
     result_cache: dict[str, tuple[pd.DataFrame, float, str]] = field(
         default_factory=dict
