@@ -18,6 +18,7 @@ from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.auth import EveryRowAuthProvider
 from everyrow_mcp.gcs_storage import GCSResultStore
+from everyrow_mcp.models import PREVIEW_SIZE
 from everyrow_mcp.redis_utils import build_key
 from everyrow_mcp.settings import HttpSettings, StdioSettings
 
@@ -44,6 +45,7 @@ class ServerState:
     )
     gcs_store: GCSResultStore | None = None
     settings: HttpSettings | StdioSettings | None = None
+    redis: Any | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # ── Transport helpers ─────────────────────────────────────────
@@ -56,18 +58,26 @@ class ServerState:
     def is_http(self) -> bool:
         return self.transport != "stdio"
 
+    @property
+    def preview_size(self) -> int:
+        """Runtime preview size from settings, falling back to default."""
+        if self.settings is not None:
+            return self.settings.preview_size
+        return PREVIEW_SIZE
+
     # ── In-memory cache (protected by lock in HTTP mode) ──────────
 
-    def evict_stale_results(self) -> None:
+    async def evict_stale_results(self) -> None:
         """Remove in-memory cache entries older than RESULT_CACHE_TTL."""
-        now = datetime.now(UTC).timestamp()
-        stale = [
-            k
-            for k, (_, ts, _tok) in self.result_cache.items()
-            if now - ts > RESULT_CACHE_TTL
-        ]
-        for k in stale:
-            self.result_cache.pop(k, None)
+        async with self._lock:
+            now = datetime.now(UTC).timestamp()
+            stale = [
+                k
+                for k, (_, ts, _tok) in self.result_cache.items()
+                if now - ts > RESULT_CACHE_TTL
+            ]
+            for k in stale:
+                self.result_cache.pop(k, None)
 
     async def get_cached_result(
         self, task_id: str
@@ -88,24 +98,16 @@ class ServerState:
         async with self._lock:
             self.result_cache.pop(task_id, None)
 
-    # ── Redis access (sealed — no direct ._redis outside this class) ──
-
-    @property
-    def _redis(self) -> Any | None:
-        """Return the Redis client if available (HTTP mode)."""
-        if self.auth_provider is not None:
-            return self.auth_provider._redis
-        return None
+    # ── Redis access (sealed — no direct .redis outside this class) ───
 
     async def redis_ping(self) -> None:
         """Ping Redis to verify connectivity. Raises if Redis is unavailable."""
-        redis = self._redis
-        if redis is not None:
-            await redis.ping()
+        if self.redis is not None:
+            await self.redis.ping()
 
     async def get_result_meta(self, task_id: str) -> str | None:
         """Get cached GCS result metadata from Redis."""
-        redis = self._redis
+        redis = self.redis
         if redis is None:
             return None
         try:
@@ -116,7 +118,7 @@ class ServerState:
 
     async def store_result_meta(self, task_id: str, meta_json: str) -> None:
         """Store GCS result metadata in Redis with TTL."""
-        redis = self._redis
+        redis = self.redis
         if redis is None:
             return
         try:
@@ -128,13 +130,43 @@ class ServerState:
         except Exception:
             logger.warning("Failed to store result metadata in Redis for %s", task_id)
 
+    async def get_result_page(
+        self, task_id: str, offset: int, page_size: int
+    ) -> str | None:
+        """Get a cached page preview from Redis."""
+        redis = self.redis
+        if redis is None:
+            return None
+        try:
+            return await redis.get(
+                build_key("result", task_id, "page", str(offset), str(page_size))
+            )
+        except Exception:
+            return None
+
+    async def store_result_page(
+        self, task_id: str, offset: int, page_size: int, preview_json: str
+    ) -> None:
+        """Cache a page preview in Redis with TTL."""
+        redis = self.redis
+        if redis is None:
+            return
+        try:
+            await redis.setex(
+                build_key("result", task_id, "page", str(offset), str(page_size)),
+                RESULT_CACHE_TTL,
+                preview_json,
+            )
+        except Exception:
+            pass
+
     # ── Redis-backed token storage (multi-pod safe) ──────────────
 
     async def store_task_token(self, task_id: str, token: str) -> None:
         """Store an API token for a task (local dict + Redis if available)."""
         async with self._lock:
             self.task_tokens[task_id] = token
-        redis = self._redis
+        redis = self.redis
         if redis is not None:
             try:
                 await redis.setex(
@@ -151,7 +183,7 @@ class ServerState:
             token = self.task_tokens.get(task_id)
         if token is not None:
             return token
-        redis = self._redis
+        redis = self.redis
         if redis is not None:
             try:
                 token = await redis.get(build_key("task_token", task_id))
@@ -167,7 +199,7 @@ class ServerState:
         """Store a poll token for a task (local dict + Redis if available)."""
         async with self._lock:
             self.task_poll_tokens[task_id] = poll_token
-        redis = self._redis
+        redis = self.redis
         if redis is not None:
             try:
                 await redis.setex(
@@ -184,7 +216,7 @@ class ServerState:
             token = self.task_poll_tokens.get(task_id)
         if token is not None:
             return token
-        redis = self._redis
+        redis = self.redis
         if redis is not None:
             try:
                 token = await redis.get(build_key("poll_token", task_id))
@@ -201,7 +233,7 @@ class ServerState:
         async with self._lock:
             self.task_tokens.pop(task_id, None)
             self.task_poll_tokens.pop(task_id, None)
-        redis = self._redis
+        redis = self.redis
         if redis is not None:
             try:
                 await redis.delete(

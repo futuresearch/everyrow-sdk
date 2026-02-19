@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
 from mcp.server.auth.provider import ProviderTokenVerifier
 from mcp.server.auth.settings import (
@@ -30,7 +31,7 @@ from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
 def configure_http_mode(
     mcp: FastMCP,
-    http_lifespan: object,
+    http_lifespan: Any,
     host: str,
     port: int,
 ) -> None:
@@ -55,6 +56,9 @@ def configure_http_mode(
         sentinel_master_name=settings.redis_sentinel_master_name,
     )
 
+    # Store Redis client directly on state (avoids reaching into auth_provider internals)
+    state.redis = redis_client
+
     # Create auth provider
     state.auth_provider = EveryRowAuthProvider(
         supabase_url=settings.supabase_url,
@@ -66,7 +70,7 @@ def configure_http_mode(
 
     # Configure auth on the existing FastMCP instance (tools already registered)
     mcp._auth_server_provider = state.auth_provider
-    mcp._token_verifier = ProviderTokenVerifier(state.auth_provider)
+    mcp._token_verifier = ProviderTokenVerifier(state.auth_provider)  # type: ignore[arg-type]
     mcp.settings.auth = AuthSettings(
         issuer_url=AnyHttpUrl(settings.mcp_server_url),
         resource_server_url=AnyHttpUrl(settings.mcp_server_url),
@@ -84,7 +88,7 @@ def configure_http_mode(
     state.mcp_server_url = settings.mcp_server_url
 
     # Initialize GCS result store if enabled via RESULT_STORAGE=gcs
-    if settings.result_storage == "gcs":
+    if settings.result_storage == "gcs" and settings.gcs_results_bucket:
         state.gcs_store = GCSResultStore(settings.gcs_results_bucket)
         logging.getLogger(__name__).info(
             "GCS result store enabled: %s", settings.gcs_results_bucket

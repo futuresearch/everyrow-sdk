@@ -50,7 +50,6 @@ from everyrow_mcp.http_config import configure_http_mode
 
 # Re-export models for backward compatibility (used by tests and integrations)
 from everyrow_mcp.models import (
-    PREVIEW_SIZE,
     AgentInput,
     DedupeInput,
     MergeInput,
@@ -355,9 +354,8 @@ async def everyrow_single_agent(params: SingleAgentInput) -> list[TextContent]:
     # Convert input_data dict to a BaseModel if provided
     input_model: BaseModel | None = None
     if params.input_data:
-        DynamicInput = create_model(
-            "DynamicInput", **{k: (type(v), v) for k, v in params.input_data.items()}
-        )
+        fields: dict[str, Any] = {k: (type(v), v) for k, v in params.input_data.items()}
+        DynamicInput = create_model("DynamicInput", **fields)  # pyright: ignore[reportArgumentType, reportCallIssue]
         input_model = DynamicInput()
 
     async with create_session(client=client) as session:
@@ -934,7 +932,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         return gcs_cached
 
     # ── In-memory cache hit ────────────────────────────────────────
-    state.evict_stale_results()
+    await state.evict_stale_results()
     cached = await state.get_cached_result(task_id)
     if cached is not None:
         df, _, download_token = cached
@@ -1073,7 +1071,9 @@ def _build_inline_response(
         csv_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
 
     if has_more:
-        page_size_arg = f", page_size={page_size}" if page_size != PREVIEW_SIZE else ""
+        page_size_arg = (
+            f", page_size={page_size}" if page_size != state.preview_size else ""
+        )
         summary = (
             f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "
             f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
