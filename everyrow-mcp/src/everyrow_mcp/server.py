@@ -235,9 +235,9 @@ class MergeInput(BaseModel):
     use_web_search: Literal["auto", "yes", "no"] | None = Field(
         default=None, description='Control web search: "auto", "yes", or "no".'
     )
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+    relationship_type: Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None = Field(
         default=None,
-        description="Leave unset for the default many_to_one, which is correct in most cases. many_to_one: multiple left rows can match one right row (e.g. products → companies). one_to_one: each left row matches at most one right row AND vice versa. Only use one_to_one when both tables represent unique entities of the same kind.",
+        description='Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.',
     )
 
     @field_validator("left_csv", "right_csv")
@@ -609,7 +609,6 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     - merge_on_left/merge_on_right: only set if you expect exact string matches on
       the chosen columns or want to draw agent attention to them. Fine to omit.
     - relationship_type: defaults to many_to_one, which is correct in most cases.
-      Only set one_to_one when both tables have unique entities of the same kind.
 
     Examples:
     - Match software products (left, enriched) to parent companies (right, lookup):
@@ -618,6 +617,10 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
       Genentech -> Roche. relationship_type: many_to_one.
     - Join two contact lists with different name formats:
       relationship_type: one_to_one (each person appears once in each list).
+    - Match a company (left) to its products (right):
+      relationship_type: one_to_many (one company has many products).
+    - Match companies (left) to investors (right):
+      relationship_type: many_to_many (companies share investors and vice versa).
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.

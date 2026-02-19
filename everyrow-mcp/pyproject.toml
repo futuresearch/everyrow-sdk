@@ -1,6 +1,6 @@
 [project]
 name = "everyrow-mcp"
-version = "0.3.3"
+version = "0.3.4"
 description = "MCP server for everyrow: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"

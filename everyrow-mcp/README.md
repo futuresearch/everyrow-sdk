@@ -113,7 +113,7 @@ Parameters:
 - merge_on_left: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
 - merge_on_right: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
 - use_web_search: (optional) "auto" (default), "yes", or "no"
-- relationship_type: (optional) "many_to_one" (default) — multiple left rows can match one right row. "one_to_one" — only when both tables have unique entities of the same kind.
+- relationship_type: (optional) "many_to_one" (default) if multiple left rows can match one right row, "one_to_one" matches must be unique, "one_to_many" one left row can match multiple right rows, "many_to_many" multiple left rows can match multiple right rows. For one_to_many and many_to_many, multiple matches are joined with " | " in each added column.
 ```
 
 Example: Match software products (left, enriched) to parent companies (right, lookup): Photoshop -> Adobe
