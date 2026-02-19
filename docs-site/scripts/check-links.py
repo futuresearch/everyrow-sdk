@@ -47,6 +47,8 @@ CHECKED_DOMAINS: set[str] = {
 # Each URL must be listed explicitly — new links to the same domain will
 # error until added here, so broken links don't slip through unnoticed.
 SKIPPED_URLS: set[str] = {
+    "https://clinicaltrials.gov/",
+    "https://clinicaltrials.gov/data-api/about-api",
     "https://code.claude.com/docs/en/discover-plugins",
     "https://code.claude.com/docs/en/mcp",
     "https://cursor.com/deeplink/mcp-install-dark.svg",
@@ -65,10 +67,9 @@ SKIPPED_URLS: set[str] = {
     "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
     "https://hugovk.github.io/top-pypi-packages/",
     "https://jqlang.org/",
+    "https://pip.pypa.io/en/stable/",
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
     "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
-    "https://clinicaltrials.gov/",
-    "https://clinicaltrials.gov/data-api/about-api",
 }
 
 
