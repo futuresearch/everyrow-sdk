@@ -97,7 +97,8 @@ function render(data){
   if(!Array.isArray(data))data=[data];
   if(!data.length){sum.textContent="No results";return;}
   data=data.map(r=>flat(r));
-  const cols=Object.keys(data[0]);
+  const allCols=Object.keys(data[0]);
+  const cols=[...allCols.filter(k=>!k.includes(".")),...allCols.filter(k=>k.includes("."))];
   sum.textContent=data.length+" rows, "+cols.length+" columns";
   let h="<thead><tr>"+cols.map(k=>"<th>"+esc(k)+"</th>").join("")+"</tr></thead><tbody>";
   for(let i=0;i<data.length;i++){
