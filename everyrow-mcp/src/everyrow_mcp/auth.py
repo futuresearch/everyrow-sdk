@@ -7,12 +7,13 @@ Hybrid model:
   as the MCP access token.
 
 No Fernet encryption — tokens stored in Redis as plain JSON.
-No refresh tokens — JWT expiry is handled by Supabase.
-No secondary indexes — token lookup done via JWKS, not Redis.
+Refresh tokens supported — opaque tokens in Redis mapped to Supabase refresh tokens.
+Token lookup done via JWKS, not Redis.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -48,6 +49,8 @@ logger = logging.getLogger(__name__)
 ACCESS_TOKEN_TTL = 3300  # 55 min (expire before Supabase JWT's 1h TTL)
 AUTH_CODE_TTL = 300  # 5 minutes
 PENDING_AUTH_TTL = 600  # 10 minutes
+CLIENT_REGISTRATION_TTL = 2_592_000  # 30 days
+REFRESH_TOKEN_TTL = 604_800  # 7 days
 
 
 # ── Token verifier (resource-server mode) ─────────────────────────────
@@ -64,8 +67,11 @@ class SupabaseTokenVerifier(TokenVerifier):
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
-            signing_key = self._jwks_client.get_signing_key_from_jwt(token)
-            algorithm = getattr(signing_key, "_algorithm", None) or "ES256"
+            signing_key = await asyncio.to_thread(
+                self._jwks_client.get_signing_key_from_jwt, token
+            )
+            header = pyjwt.get_unverified_header(token)
+            algorithm = header.get("alg", "RS256")
             payload: dict[str, Any] = pyjwt.decode(
                 token,
                 signing_key.key,
@@ -91,6 +97,14 @@ class EveryRowAuthorizationCode(AuthorizationCode):
     """Extends AuthorizationCode with the user's Supabase JWT."""
 
     supabase_jwt: str
+    supabase_jwt_exp: int = 0
+    supabase_refresh_token: str = ""
+
+
+class EveryRowRefreshToken(RefreshToken):
+    """Extends RefreshToken with the Supabase refresh token."""
+
+    supabase_refresh_token: str
 
 
 class PendingAuth(BaseModel):
@@ -107,7 +121,7 @@ class PendingAuth(BaseModel):
 
 class EveryRowAuthProvider(
     OAuthAuthorizationServerProvider[
-        EveryRowAuthorizationCode, RefreshToken, AccessToken
+        EveryRowAuthorizationCode, EveryRowRefreshToken, AccessToken
     ]
 ):
     """OAuth provider: handles registration + auth flow, delegates login to Supabase.
@@ -128,6 +142,7 @@ class EveryRowAuthProvider(
         self.supabase_anon_key = supabase_anon_key
         self.mcp_server_url = mcp_server_url.rstrip("/")
         self._redis = redis
+        self._http = httpx.AsyncClient()
 
     # ── Redis helpers (plain JSON, no encryption) ─────────────────
 
@@ -157,7 +172,9 @@ class EveryRowAuthProvider(
         cid = client_info.client_id
         if cid is None:
             raise ValueError("client_id is required")
-        await self._redis_set(build_key("client", cid), client_info)
+        await self._redis_set(
+            build_key("client", cid), client_info, ttl=CLIENT_REGISTRATION_TTL
+        )
 
     # ── Authorization ─────────────────────────────────────────────
 
@@ -236,13 +253,17 @@ class EveryRowAuthProvider(
                 _user_id,
                 _email,
                 supabase_jwt,
-                _refresh,
+                supabase_refresh,
             ) = await self._exchange_supabase_code(
                 code, code_verifier=pending.supabase_code_verifier
             )
         except Exception:
             logger.exception("Failed to exchange Supabase code")
             return Response("Failed to authenticate with Supabase", status_code=500)
+
+        # Extract exp from the Supabase JWT (unverified — it's trusted)
+        jwt_claims = pyjwt.decode(supabase_jwt, options={"verify_signature": False})
+        jwt_exp = jwt_claims.get("exp", 0)
 
         # Issue authorization code carrying the Supabase JWT
         auth_code_str = secrets.token_urlsafe(32)
@@ -256,6 +277,8 @@ class EveryRowAuthProvider(
             expires_at=time.time() + AUTH_CODE_TTL,
             resource=pending.params.resource,
             supabase_jwt=supabase_jwt,
+            supabase_jwt_exp=jwt_exp,
+            supabase_refresh_token=supabase_refresh,
         )
         await self._redis_set(
             build_key("authcode", auth_code_str), auth_code_obj, ttl=AUTH_CODE_TTL
@@ -291,11 +314,28 @@ class EveryRowAuthProvider(
     ) -> OAuthToken:
         await self._redis.delete(build_key("authcode", authorization_code.code))
 
-        # Return the Supabase JWT directly as the MCP access token
+        # Derive expires_in from the JWT's actual exp claim
+        expires_in = max(0, authorization_code.supabase_jwt_exp - int(time.time()))
+
+        # Store refresh token in Redis if available
+        refresh_token_str: str | None = None
+        if authorization_code.supabase_refresh_token:
+            refresh_token_str = secrets.token_urlsafe(32)
+            rt = EveryRowRefreshToken(
+                token=refresh_token_str,
+                client_id=client.client_id or "",
+                scopes=authorization_code.scopes,
+                supabase_refresh_token=authorization_code.supabase_refresh_token,
+            )
+            await self._redis_set(
+                build_key("refresh", refresh_token_str), rt, ttl=REFRESH_TOKEN_TTL
+            )
+
         return OAuthToken(
             access_token=authorization_code.supabase_jwt,
             token_type="Bearer",
-            expires_in=ACCESS_TOKEN_TTL,
+            expires_in=expires_in,
+            refresh_token=refresh_token_str,
         )
 
     # ── Token verification (handled by SupabaseTokenVerifier) ─────
@@ -304,25 +344,58 @@ class EveryRowAuthProvider(
         # Not used — SupabaseTokenVerifier handles verification via JWKS
         return None
 
-    # ── Refresh / revocation (not supported in JWT mode) ──────────
+    # ── Refresh / revocation ─────────────────────────────────────
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
-    ) -> RefreshToken | None:
-        return None
+    ) -> EveryRowRefreshToken | None:
+        rt = await self._redis_get(
+            build_key("refresh", refresh_token), EveryRowRefreshToken
+        )
+        if rt is None or rt.client_id != client.client_id:
+            return None
+        return rt
 
     async def exchange_refresh_token(
         self,
         client: OAuthClientInformationFull,
-        refresh_token: RefreshToken,
+        refresh_token: EveryRowRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        raise NotImplementedError(
-            "Refresh not supported — re-authenticate via Supabase"
+        # Delete old token (rotation)
+        await self._redis.delete(build_key("refresh", refresh_token.token))
+
+        # Call Supabase to refresh
+        new_jwt, new_supabase_refresh = await self._refresh_supabase_token(
+            refresh_token.supabase_refresh_token
         )
 
-    async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        pass  # JWTs can't be revoked without a blocklist
+        # Decode new JWT for exp
+        jwt_claims = pyjwt.decode(new_jwt, options={"verify_signature": False})
+        expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
+
+        # Issue new refresh token
+        new_rt_str = secrets.token_urlsafe(32)
+        new_rt = EveryRowRefreshToken(
+            token=new_rt_str,
+            client_id=client.client_id or "",
+            scopes=scopes or refresh_token.scopes,
+            supabase_refresh_token=new_supabase_refresh,
+        )
+        await self._redis_set(
+            build_key("refresh", new_rt_str), new_rt, ttl=REFRESH_TOKEN_TTL
+        )
+
+        return OAuthToken(
+            access_token=new_jwt,
+            token_type="Bearer",
+            expires_in=expires_in,
+            refresh_token=new_rt_str,
+        )
+
+    async def revoke_token(self, token: AccessToken | EveryRowRefreshToken) -> None:
+        if isinstance(token, EveryRowRefreshToken):
+            await self._redis.delete(build_key("refresh", token.token))
 
     # ── Supabase integration ──────────────────────────────────────
 
@@ -333,21 +406,36 @@ class EveryRowAuthProvider(
 
         Returns (user_id, email, access_token, refresh_token).
         """
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self.supabase_url}/auth/v1/token?grant_type=pkce",
-                json={"auth_code": code, "code_verifier": code_verifier},
-                headers={
-                    "apikey": self.supabase_anon_key,
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            user = data["user"]
-            return (
-                user["id"],
-                user.get("email", ""),
-                data["access_token"],
-                data["refresh_token"],
-            )
+        resp = await self._http.post(
+            f"{self.supabase_url}/auth/v1/token?grant_type=pkce",
+            json={"auth_code": code, "code_verifier": code_verifier},
+            headers={
+                "apikey": self.supabase_anon_key,
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        user = data["user"]
+        return (
+            user["id"],
+            user.get("email", ""),
+            data["access_token"],
+            data["refresh_token"],
+        )
+
+    async def _refresh_supabase_token(
+        self, supabase_refresh_token: str
+    ) -> tuple[str, str]:
+        """Refresh a Supabase session. Returns (new_access_token, new_refresh_token)."""
+        resp = await self._http.post(
+            f"{self.supabase_url}/auth/v1/token?grant_type=refresh_token",
+            json={"refresh_token": supabase_refresh_token},
+            headers={
+                "apikey": self.supabase_anon_key,
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["access_token"], data["refresh_token"]
