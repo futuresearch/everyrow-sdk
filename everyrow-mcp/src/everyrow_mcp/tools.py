@@ -925,6 +925,33 @@ async def _fetch_task_result(client: Any, task_id: str) -> pd.DataFrame:
     raise ValueError("Task result has no table data.")
 
 
+_TOKEN_BUDGET = 4000  # target tokens per page of inline results
+_CHARS_PER_TOKEN = 4  # conservative estimate for JSON-heavy text
+
+
+def _recommend_page_size(
+    page_json: str, rows_shown: int, total: int, current_page_size: int
+) -> int | None:
+    """Estimate an optimal page_size based on the current page's token cost.
+
+    Returns a recommended page_size, or None if the current one is fine.
+    """
+    if rows_shown == 0:
+        return None
+    avg_chars_per_row = len(page_json) / rows_shown
+    avg_tokens_per_row = avg_chars_per_row / _CHARS_PER_TOKEN
+    if avg_tokens_per_row <= 0:
+        return None
+    recommended = max(1, min(int(_TOKEN_BUDGET / avg_tokens_per_row), 100))
+    # Only recommend if meaningfully different (>25% change) and there are more rows
+    if (
+        recommended >= total
+        or abs(recommended - current_page_size) / current_page_size < 0.25
+    ):
+        return None
+    return recommended
+
+
 def _build_inline_response(
     task_id: str,
     df: pd.DataFrame,
@@ -958,22 +985,30 @@ def _build_inline_response(
     else:
         widget_json = json.dumps(page_records)
 
+    # Token-based page_size recommendation
+    recommended = _recommend_page_size(widget_json, len(page_df), total, page_size)
+
     # Summary text for the LLM
     csv_url = ""
     if state.mcp_server_url:
         csv_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
 
+    default_page_size = ResultsInput.model_fields["page_size"].default
     if has_more:
+        # Use recommendation in the call hint; fall back to current page_size
+        hint_page_size = recommended if recommended is not None else page_size
         page_size_arg = (
-            f", page_size={page_size}"
-            if page_size != (state.settings.preview_size if state.settings else 5)
+            f", page_size={hint_page_size}"
+            if hint_page_size != default_page_size
             else ""
         )
         summary = (
             f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "
             f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
-            f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
         )
+        if recommended is not None:
+            summary += f"Recommended page_size={recommended} for these results.\n"
+        summary += f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
         if csv_url and offset == 0:
             summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
     elif offset == 0:
