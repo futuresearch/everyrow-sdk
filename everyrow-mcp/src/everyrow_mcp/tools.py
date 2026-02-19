@@ -36,7 +36,6 @@ from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp.app import _clear_task_state, mcp
-from everyrow_mcp.auth import EveryRowAccessToken
 from everyrow_mcp.gcs_results import try_cached_gcs_result, try_upload_gcs_result
 from everyrow_mcp.models import (
     AgentInput,
@@ -70,13 +69,13 @@ def _get_client():
         return state.client
     # HTTP mode: get JWT from authenticated request
     access_token = get_access_token()
-    if not isinstance(access_token, EveryRowAccessToken):
+    if access_token is None:
         raise RuntimeError("Not authenticated")
     if state.settings is None:
         raise RuntimeError("MCP server not initialized")
     return AuthenticatedClient(
         base_url=state.settings.everyrow_api_url,
-        token=access_token.supabase_jwt,
+        token=access_token.token,
         raise_on_unexpected_status=True,
         follow_redirects=True,
     )

@@ -411,7 +411,6 @@ name = "everyrow-mcp"
 version = "0.3.3"
 source = { editable = "everyrow-mcp" }
 dependencies = [
-    { name = "cryptography" },
     { name = "everyrow" },
     { name = "google-cloud-storage" },
     { name = "httpx" },
@@ -419,6 +418,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "redis", extra = ["hiredis"] },
     { name = "tabulate" },
 ]
@@ -434,7 +434,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=42.0.0" },
     { name = "everyrow", editable = "." },
     { name = "google-cloud-storage", specifier = ">=2.14.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -442,6 +441,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
     { name = "redis", extras = ["hiredis"], specifier = ">=5.0.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
 ]

@@ -6,12 +6,7 @@ import logging
 import sys
 from typing import Any
 
-from mcp.server.auth.provider import ProviderTokenVerifier
-from mcp.server.auth.settings import (
-    AuthSettings,
-    ClientRegistrationOptions,
-    RevocationOptions,
-)
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import lifespan_wrapper
 from mcp.server.transport_security import TransportSecuritySettings
@@ -20,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from everyrow_mcp.auth import EveryRowAuthProvider
+from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_progress, api_results
@@ -46,7 +41,7 @@ def configure_http_mode(
         sys.exit(1)
     state.settings = settings
 
-    # Create Redis client for auth state
+    # Create Redis client for task/poll token storage
     redis_client = create_redis_client(
         host=settings.redis_host,
         port=settings.redis_port,
@@ -56,26 +51,28 @@ def configure_http_mode(
         sentinel_master_name=settings.redis_sentinel_master_name,
     )
 
-    # Store Redis client directly on state (avoids reaching into auth_provider internals)
+    # Store Redis client directly on state
     state.redis = redis_client
 
-    # Create auth provider
-    state.auth_provider = EveryRowAuthProvider(
+    # Create auth provider (handles registration + OAuth flow via Supabase)
+    auth_provider = EveryRowAuthProvider(
         supabase_url=settings.supabase_url,
         supabase_anon_key=settings.supabase_anon_key,
         mcp_server_url=settings.mcp_server_url,
         redis=redis_client,
-        encryption_key=settings.redis_encryption_key,
     )
+    state.auth_provider = auth_provider
+
+    # Token verifier validates Supabase JWTs via JWKS (no Redis lookup needed)
+    verifier = SupabaseTokenVerifier(settings.supabase_url)
 
     # Configure auth on the existing FastMCP instance (tools already registered)
-    mcp._auth_server_provider = state.auth_provider
-    mcp._token_verifier = ProviderTokenVerifier(state.auth_provider)  # type: ignore[arg-type]
+    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
+    mcp._token_verifier = verifier
     mcp.settings.auth = AuthSettings(
         issuer_url=AnyHttpUrl(settings.mcp_server_url),
         resource_server_url=AnyHttpUrl(settings.mcp_server_url),
         client_registration_options=ClientRegistrationOptions(enabled=True),
-        revocation_options=RevocationOptions(enabled=True),
     )
     mcp._mcp_server.lifespan = lifespan_wrapper(mcp, http_lifespan)
     mcp.settings.host = host
@@ -133,8 +130,8 @@ def configure_http_mode(
         return RESULTS_HTML
 
     # Mount custom routes
-    mcp.custom_route("/auth/start/{state}", ["GET"])(state.auth_provider.handle_start)
-    mcp.custom_route("/auth/callback", ["GET"])(state.auth_provider.handle_callback)
+    mcp.custom_route("/auth/start/{state}", ["GET"])(auth_provider.handle_start)
+    mcp.custom_route("/auth/callback", ["GET"])(auth_provider.handle_callback)
     mcp.custom_route("/api/progress/{task_id}", ["GET", "OPTIONS"])(api_progress)
     mcp.custom_route("/api/results/{task_id}", ["GET", "OPTIONS"])(api_results)
 
