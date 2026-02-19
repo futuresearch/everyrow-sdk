@@ -235,10 +235,21 @@ app.ontoolresult=({content})=>{
   }
 };
 
+function flat(obj,pre=""){
+  const o={};
+  for(const[k,v]of Object.entries(obj)){
+    const key=pre?pre+"."+k:k;
+    if(v&&typeof v==="object"&&!Array.isArray(v))Object.assign(o,flat(v,key));
+    else o[key]=v;
+  }
+  return o;
+}
+
 function render(data){
   if(!Array.isArray(data))data=[data];
   if(!data.length){sum.textContent="No results";return;}
-  const cols=Object.keys(data[0]).filter(k=>!data.some(r=>r[k]&&typeof r[k]==="object"));
+  data=data.map(r=>flat(r));
+  const cols=Object.keys(data[0]);
   sum.textContent=data.length+" rows, "+cols.length+" columns";
   let h="<thead><tr>"+cols.map(k=>"<th>"+esc(k)+"</th>").join("")+"</tr></thead><tbody>";
   for(let i=0;i<data.length;i++){
