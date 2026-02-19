@@ -5,15 +5,12 @@ description = "MCP server for everyrow: agent ops at spreadsheet scale"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "everyrow>=0.3.0",
+    "everyrow>=0.3.3",
     "jsonschema>=4.0.0",
     "mcp[cli]>=1.0.0",
     "pandas>=2.0.0",
     "pydantic>=2.0.0,<3.0.0",
 ]
-
-[tool.uv.sources]
-everyrow = { workspace = true }
 
 [project.scripts]
 everyrow-mcp = "everyrow_mcp.server:main"
