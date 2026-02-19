@@ -65,6 +65,7 @@ SKIPPED_URLS: set[str] = {
     "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
     "https://hugovk.github.io/top-pypi-packages/",
     "https://jqlang.org/",
+    "https://pip.pypa.io/en/stable/",
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
     "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
     "https://clinicaltrials.gov/",
