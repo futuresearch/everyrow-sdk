@@ -16,6 +16,7 @@
   "homepage": "https://everyrow.io",
   "documentation": "https://everyrow.io/docs",
   "support": "https://github.com/futuresearch/everyrow-sdk/issues",
+  "icon": "images/future-search-logo-128.png",
   "server": {
     "type": "uv",
     "entry_point": "src/everyrow_mcp/server.py",
