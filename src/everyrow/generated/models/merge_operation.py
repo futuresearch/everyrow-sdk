@@ -37,7 +37,10 @@ class MergeOperation:
             without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
         relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control merge relationship behavior:
             'many_to_one' (default) allows multiple left rows to match the same right row, 'one_to_one' enforces unique
-            matches and resolves clashes Default: MergeOperationRelationshipTypeType0.MANY_TO_ONE.
+            matches and resolves clashes, 'one_to_many' allows one left row to match multiple right rows,
+            'many_to_many' allows multiple left rows to match multiple right rows. For one_to_many and many_to_many,
+            multiple matches are joined with " | " in each added column. Default:
+            MergeOperationRelationshipTypeType0.MANY_TO_ONE.
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
     """
 

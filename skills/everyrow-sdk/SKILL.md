@@ -125,7 +125,7 @@ Parameters:
 - output_path: Directory or full .csv path for output
 - merge_on_left: (optional) Only set if you expect exact string matches on the chosen column or want to draw agent attention to it. Fine to omit.
 - merge_on_right: (optional) Only set if you expect exact string matches on the chosen column or want to draw agent attention to it. Fine to omit.
-- relationship_type: (optional) Defaults to "many_to_one", which is correct in most cases (e.g. products → companies). Only set "one_to_one" when both tables have unique entities of the same kind.
+- relationship_type: (optional) Defaults to "many_to_one", which is correct in most cases (e.g. products → companies). "one_to_one" when both tables have unique entities of the same kind. "one_to_many" when one left row can match multiple right rows (e.g. company → products). "many_to_many" when multiple left rows can match multiple right rows (e.g. companies → investors). For one_to_many and many_to_many, multiple matches are joined with " | " in each added column.
 - use_web_search: (optional) "auto" (default), "yes", or "no"
 ```
 

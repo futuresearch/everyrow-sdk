@@ -580,7 +580,7 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None = None,
 ) -> MergeResult:
     """Merge two tables using AI (LEFT JOIN semantics).
 
@@ -592,7 +592,7 @@ async def merge(
         merge_on_left: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
         merge_on_right: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
         use_web_search: Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row.
-        relationship_type: Defaults to "many_to_one", which is correct in most cases (multiple left rows can match one right row, e.g. products → companies). Only use "one_to_one" when both tables have unique entities of the same kind.
+        relationship_type: Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -639,7 +639,7 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
+    relationship_type: Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 

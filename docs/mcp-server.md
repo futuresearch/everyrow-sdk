@@ -60,7 +60,7 @@ Join two CSVs using intelligent entity matching (LEFT JOIN semantics).
 | `right_csv` | string | Yes | The lookup/reference table — its columns are appended to matches; unmatched left rows get nulls. |
 | `merge_on_left` | string | No | Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit. |
 | `merge_on_right` | string | No | Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit. |
-| `relationship_type` | string | No | `many_to_one` (default) — multiple left rows can match one right row. `one_to_one` — only when both tables have unique entities of the same kind. |
+| `relationship_type` | string | No | `many_to_one` (default) — multiple left rows can match one right row. `one_to_one` — unique matching between left and right rows. `one_to_many` — one left row can match multiple right rows. `many_to_many` — multiple left rows can match multiple right rows. For `one_to_many` and `many_to_many`, multiple matches are joined with `" \| "` in each added column. |
 | `use_web_search` | string | No | `auto` (default), `yes`, or `no`. |
 
 Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
