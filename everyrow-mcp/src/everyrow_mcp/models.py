@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from everyrow_mcp.utils import validate_csv_output_path, validate_csv_path
+from everyrow_mcp.utils import validate_csv_path
 
 JSON_TYPE_MAP = {
     "string": str,
@@ -316,6 +316,6 @@ class ResultsInput(BaseModel):
     @field_validator("output_path")
     @classmethod
     def validate_output(cls, v: str | None) -> str | None:
-        if v is not None:
-            validate_csv_output_path(v)
+        if v is not None and v.lower().endswith(".csv") is False:
+            raise ValueError("output_path must end in .csv")
         return v
