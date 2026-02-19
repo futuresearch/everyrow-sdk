@@ -49,7 +49,7 @@ body{font-family:system-ui;margin:12px;color:#333;font-size:13px}
 .wrap{max-height:400px;overflow:auto;border:1px solid #ddd;border-radius:6px}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th{background:#f8f8f8;position:sticky;top:0;padding:8px 10px;text-align:left;border-bottom:2px solid #ddd;font-size:12px;white-space:nowrap}
-td{padding:6px 10px;border-bottom:1px solid #eee;max-width:300px;vertical-align:top}
+td{padding:6px 10px;border-bottom:1px solid #eee;max-width:400px;vertical-align:top;word-wrap:break-word;white-space:pre-wrap}
 tr:nth-child(even) td{background:#fafafa}
 a{color:#1976d2;text-decoration:none;word-break:break-all}
 a:hover{text-decoration:underline}
@@ -112,7 +112,6 @@ function td(v){
   if(v==null)return"<td></td>";
   const s=String(v);
   if(s.match(/^https?:\\/\\//))return'<td><a href="'+esc(s)+'" target="_blank">'+esc(s)+"</a></td>";
-  if(s.length>150)return"<td>"+esc(s.slice(0,150))+"...</td>";
   return"<td>"+esc(s)+"</td>";
 }
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}

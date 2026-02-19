@@ -6,22 +6,22 @@ import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
 
-from everyrow_mcp import server
+from everyrow_mcp.state import state
 
 
 @pytest.fixture
 async def everyrow_client():
     """Initialize the everyrow client.
 
-    This fixture sets up the global _client in the server module,
+    This fixture sets up the global client in the server state,
     which is normally initialized by the MCP server's lifespan context.
     """
     try:
         with create_client() as client:
-            server._client = client
+            state.client = client
             yield client
     finally:
-        server._client = None
+        state.client = None
 
 
 @pytest.fixture

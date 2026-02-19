@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 from everyrow.generated.client import AuthenticatedClient
 
-from everyrow_mcp.server import (
+from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
     MergeInput,
@@ -23,6 +23,8 @@ from everyrow_mcp.server import (
     RankInput,
     ResultsInput,
     ScreenInput,
+)
+from everyrow_mcp.server import (
     everyrow_agent,
     everyrow_dedupe,
     everyrow_merge,

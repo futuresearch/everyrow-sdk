@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6399:6379"
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -18,13 +18,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      MCP_SERVER_URL: "${MCP_SERVER_URL:?Set MCP_SERVER_URL to your tunnel URL}"
-      SUPABASE_URL: "https://fake.supabase.co"
-      SUPABASE_ANON_KEY: "fake-anon-key"
-      REDIS_ENCRYPTION_KEY: "b7mS-s52O7hVPEUsDblbEDvGC8Zyel3eq4TPvZerWdM="
-      REDIS_HOST: "redis"
+      MCP_SERVER_URL: "${MCP_SERVER_URL:?Set MCP_SERVER_URL to your cloudflare tunnel URL}"
+      REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_DB: "13"
-      RESULT_STORAGE: "memory"
+      RESULT_STORAGE: memory
       EVERYROW_API_URL: "https://everyrow.io/api/v0"

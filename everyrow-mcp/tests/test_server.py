@@ -26,7 +26,7 @@ from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 from pydantic import ValidationError
 
-from everyrow_mcp.server import (
+from everyrow_mcp.models import (
     PREVIEW_SIZE,
     AgentInput,
     DedupeInput,
@@ -36,12 +36,14 @@ from everyrow_mcp.server import (
     ResultsInput,
     ScreenInput,
     SingleAgentInput,
-    _result_cache,
     _schema_to_model,
+)
+from everyrow_mcp.server import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
 )
+from everyrow_mcp.state import state
 
 # CSV fixtures are defined in conftest.py
 
@@ -218,7 +220,7 @@ class TestAgent:
             patch(
                 "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -255,7 +257,7 @@ class TestProgress:
         task_id = str(uuid4())
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -285,7 +287,7 @@ class TestProgress:
         )
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -327,7 +329,7 @@ class TestProgress:
         )
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -362,7 +364,7 @@ class TestResults:
         output_file = tmp_path / "output.csv"
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -390,7 +392,7 @@ class TestResults:
         )
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -428,9 +430,9 @@ class TestResults:
             ]
         )
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -458,7 +460,7 @@ class TestResults:
         assert "All rows shown" in result[1].text
 
         # Clean up cache
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_pagination_with_offset(self):
@@ -471,9 +473,9 @@ class TestResults:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -497,7 +499,7 @@ class TestResults:
         assert f"offset={PREVIEW_SIZE}" in summary
 
         # Second page (offset=PREVIEW_SIZE) — hits cache
-        with patch("everyrow_mcp.server._client", mock_client):
+        with patch.object(state, "client", mock_client):
             result2 = await everyrow_results(
                 ResultsInput(task_id=task_id, offset=PREVIEW_SIZE)
             )
@@ -508,7 +510,7 @@ class TestResults:
 
         assert "final page" in result2[1].text
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_custom_page_size(self):
@@ -520,9 +522,9 @@ class TestResults:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -548,7 +550,7 @@ class TestResults:
         assert "page_size=10" in summary  # non-default page_size appears in hint
 
         # Second page
-        with patch("everyrow_mcp.server._client", mock_client):
+        with patch.object(state, "client", mock_client):
             result2 = await everyrow_results(
                 ResultsInput(task_id=task_id, offset=10, page_size=10)
             )
@@ -558,7 +560,7 @@ class TestResults:
         assert records2[0]["id"] == 10
         assert "final page" in result2[1].text
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_cache_reuse(self):
@@ -571,12 +573,12 @@ class TestResults:
             [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
         )
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         mock_status = AsyncMock(return_value=status_response)
         mock_result = AsyncMock(return_value=result_response)
 
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 mock_status,
@@ -596,7 +598,7 @@ class TestResults:
             assert mock_status.call_count == 1
             assert mock_result.call_count == 1
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_scalar_single_agent(self):
@@ -614,9 +616,9 @@ class TestResults:
             data=scalar_data,
         )
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -638,7 +640,7 @@ class TestResults:
 
         assert "1 rows" in result[1].text
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_http_mode_returns_download_url(self):
@@ -651,11 +653,11 @@ class TestResults:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
             patch("everyrow_mcp.server._get_client", return_value=mock_client),
-            patch("everyrow_mcp.server._transport", "streamable-http"),
-            patch("everyrow_mcp.server._mcp_server_url", "https://mcp.example.com"),
+            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -682,7 +684,7 @@ class TestResults:
         assert f"{num_rows} rows" in summary
         assert "download" in summary.lower()
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
     @pytest.mark.asyncio
     async def test_results_http_mode_small_data_no_download_url(self):
@@ -694,11 +696,11 @@ class TestResults:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
         with (
             patch("everyrow_mcp.server._get_client", return_value=mock_client),
-            patch("everyrow_mcp.server._transport", "streamable-http"),
-            patch("everyrow_mcp.server._mcp_server_url", "https://mcp.example.com"),
+            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
                 "everyrow_mcp.server.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -723,7 +725,7 @@ class TestResults:
         assert "All rows shown" in summary
         assert "download" not in summary.lower()
 
-        _result_cache.pop(task_id, None)
+        state.result_cache.pop(task_id, None)
 
 
 class TestAgentInlineInput:
@@ -740,7 +742,7 @@ class TestAgentInlineInput:
             patch(
                 "everyrow_mcp.server.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.server._client", mock_client),
+            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.server.create_session",
                 return_value=_make_async_context_manager(mock_session),
