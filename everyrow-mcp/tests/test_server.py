@@ -82,6 +82,16 @@ class TestSchemaToModel:
         model = _schema_to_model("AllTypes", schema)
         assert len(model.model_fields) == 4
 
+    def test_rejects_non_object_property_schema(self):
+        """Property definitions must be JSON Schema objects."""
+        schema = {
+            "type": "object",
+            "properties": {"score": "number"},
+        }
+
+        with pytest.raises(ValueError, match="Invalid property schema"):
+            _schema_to_model("BadSchema", schema)
+
 
 class TestInputValidation:
     """Tests for input validation."""
@@ -118,6 +128,104 @@ class TestInputValidation:
                 left_csv=str(csv_file),
                 right_csv=str(tmp_path / "nonexistent.csv"),
             )
+
+    def test_agent_input_rejects_empty_response_schema(self, tmp_path: Path):
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+
+        with pytest.raises(
+            ValidationError, match="must include a non-empty top-level 'properties'"
+        ):
+            AgentInput(
+                task="test",
+                input_csv=str(csv_file),
+                response_schema={},
+            )
+
+    def test_agent_input_rejects_shorthand_response_schema(self, tmp_path: Path):
+        """response_schema must be JSON Schema, not a field map."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+
+        with pytest.raises(
+            ValidationError, match="must include a non-empty top-level 'properties'"
+        ):
+            AgentInput(
+                task="test",
+                input_csv=str(csv_file),
+                response_schema={"population": "string", "year": "string"},
+            )
+
+    def test_tool_inputs_accept_example_schemas(self, tmp_path: Path):
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+
+        ScreenInput(
+            task="test",
+            input_csv=str(csv_file),
+            response_schema={
+                "type": "object",
+                "properties": {
+                    "passes": {
+                        "type": "boolean",
+                    },
+                },
+            },
+        )
+        AgentInput(
+            task="test",
+            input_csv=str(csv_file),
+            response_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                    },
+                },
+            },
+        )
+        AgentInput(
+            task="test",
+            input_csv=str(csv_file),
+            response_schema={
+                "type": "object",
+                "properties": {
+                    "annual_revenue": {
+                        "type": "integer",
+                        "description": "Annual revenue in USD",
+                    },
+                    "employee_count": {
+                        "type": "integer",
+                        "description": "Number of employees",
+                    },
+                },
+                "required": ["annual_revenue"],
+            },
+        )
+
+    def test_screen_input_requires_boolean_property(self, tmp_path: Path):
+        """Screen schemas must include at least one boolean property."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+
+        with pytest.raises(ValidationError, match="must include at least one boolean"):
+            ScreenInput(
+                task="test",
+                input_csv=str(csv_file),
+                response_schema={
+                    "type": "object",
+                    "properties": {"reason": {"type": "string"}},
+                },
+            )
+
+        ScreenInput(
+            task="test",
+            input_csv=str(csv_file),
+            response_schema={
+                "type": "object",
+                "properties": {"pass": {"type": "boolean"}},
+            },
+        )
 
 
 def _make_mock_task(task_id=None):

@@ -32,6 +32,8 @@ from everyrow.ops import (
     screen_async,
 )
 from everyrow.session import create_session, get_session_url
+from jsonschema import SchemaError
+from jsonschema.validators import validator_for
 from mcp.server.fastmcp import FastMCP
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
@@ -132,6 +134,13 @@ class AgentInput(BaseModel):
         validate_csv_path(v)
         return v
 
+    @field_validator("response_schema")
+    @classmethod
+    def validate_response_schema(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return _validate_response_schema(v)
+
 
 class RankInput(BaseModel):
     """Input for the rank operation."""
@@ -163,6 +172,13 @@ class RankInput(BaseModel):
         validate_csv_path(v)
         return v
 
+    @field_validator("response_schema")
+    @classmethod
+    def validate_response_schema(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return _validate_response_schema(v)
+
 
 class ScreenInput(BaseModel):
     """Input for the screen operation."""
@@ -184,6 +200,13 @@ class ScreenInput(BaseModel):
     def validate_input_csv(cls, v: str) -> str:
         validate_csv_path(v)
         return v
+
+    @field_validator("response_schema")
+    @classmethod
+    def validate_response_schema(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return _validate_screen_response_schema(v)
 
 
 class DedupeInput(BaseModel):
@@ -894,6 +917,65 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
 
 
+def _validate_response_schema(schema: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Validate response_schema is a JSON Schema object schema.
+
+    If it's valid, return it. Otherwise, raise an exception.
+    """
+    if schema is None:
+        return None
+
+    validator_cls = validator_for(schema)
+    try:
+        validator_cls.check_schema(schema)
+    except SchemaError as exc:
+        raise ValueError(
+            f"Invalid JSON Schema in response_schema: {exc.message}"
+        ) from exc
+
+    schema_type = schema.get("type")
+    if schema_type not in (None, "object"):
+        raise ValueError(
+            "response_schema must describe an object response (top-level 'type' must be 'object')"
+        )
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict) or not properties:
+        raise ValueError(
+            "response_schema must include a non-empty top-level 'properties' object"
+        )
+
+    for field_name, field_def in properties.items():
+        if not isinstance(field_def, dict):
+            raise ValueError(
+                f"Invalid property schema for '{field_name}': expected an object."
+            )
+
+    return schema
+
+
+def _validate_screen_response_schema(
+    schema: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Validate screen response_schema includes at least one boolean property.
+
+    If it's valid, return it. Otherwise, raise an exception.
+    """
+    validated_schema = _validate_response_schema(schema)
+    if validated_schema is None:
+        return None
+
+    properties = validated_schema["properties"]
+    has_boolean_property = any(
+        isinstance(field_def, dict) and field_def.get("type") == "boolean"
+        for field_def in properties.values()
+    )
+    if not has_boolean_property:
+        raise ValueError("response_schema must include at least one boolean property")
+
+    return validated_schema
+
+
 JSON_TYPE_MAP = {
     "string": str,
     "integer": int,
@@ -910,13 +992,15 @@ def _schema_to_model(name: str, schema: dict[str, Any]) -> type[BaseModel]:
     This allows the MCP client to pass arbitrary response schemas without
     needing to define Python classes.
     """
-    properties = schema.get("properties", schema)
+    properties = schema["properties"]
     required = set(schema.get("required", []))
 
     fields: dict[str, Any] = {}
     for field_name, field_def in properties.items():
-        if field_name.startswith("_") or not isinstance(field_def, dict):
-            continue
+        if not isinstance(field_def, dict):
+            raise ValueError(
+                f"Invalid property schema for '{field_name}': expected an object."
+            )
 
         field_type_str = field_def.get("type", "string")
         python_type = JSON_TYPE_MAP.get(field_type_str, str)
