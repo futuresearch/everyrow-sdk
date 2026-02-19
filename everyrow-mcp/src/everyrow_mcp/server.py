@@ -1,9 +1,11 @@
 """MCP server for everyrow SDK operations."""
 
+import argparse
 import asyncio
 import json
 import logging
 import os
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -12,7 +14,8 @@ from typing import Any, Literal
 from uuid import UUID
 
 import pandas as pd
-from everyrow.api_utils import create_client, handle_response
+from everyrow.api_utils import create_client as _create_sdk_client
+from everyrow.api_utils import handle_response
 from everyrow.generated.api.billing.get_billing_balance_billing_get import (
     asyncio as get_billing,
 )
@@ -22,6 +25,9 @@ from everyrow.generated.api.tasks import (
 )
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.public_task_type import PublicTaskType
+from everyrow.generated.models.task_result_response_data_type_1 import (
+    TaskResultResponseDataType1,
+)
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.types import Unset
 from everyrow.ops import (
@@ -30,13 +36,37 @@ from everyrow.ops import (
     merge_async,
     rank_async,
     screen_async,
+    single_agent_async,
 )
 from everyrow.session import create_session, get_session_url
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.provider import ProviderTokenVerifier
+from mcp.server.auth.settings import (
+    AuthSettings,
+    ClientRegistrationOptions,
+    RevocationOptions,
+)
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import lifespan_wrapper
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import TextContent, ToolAnnotations
-from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    create_model,
+    field_validator,
+    model_validator,
+)
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
+from everyrow_mcp.auth import EveryRowAccessToken, EveryRowAuthProvider
+from everyrow_mcp.redis_utils import build_key, create_redis_client
 from everyrow_mcp.utils import (
+    load_csv,
     save_result_to_csv,
     validate_csv_output_path,
     validate_csv_path,
@@ -44,19 +74,59 @@ from everyrow_mcp.utils import (
 
 PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
-# Singleton client, initialized in lifespan
+
+# Singleton client, initialized in lifespan (stdio mode only)
 _client: AuthenticatedClient | None = None
+# Transport mode: "stdio" or "streamable-http". Set in main().
+_transport: str = "stdio"
+# Auth provider (HTTP mode only), set in main().
+_auth_provider: EveryRowAuthProvider | None = None
+# Public URL of this server (HTTP mode only), set in main().
+_mcp_server_url: str = ""
+# Maps task_id -> JWT so the progress REST endpoint can call the EveryRow API.
+_task_tokens: dict[str, str] = {}
+# Maps task_id -> poll_token for authenticating progress/results endpoint callers.
+_task_poll_tokens: dict[str, str] = {}
+# Cached results for pagination: task_id -> (DataFrame, timestamp, download_token).
+_result_cache: dict[str, tuple[pd.DataFrame, float, str]] = {}
+RESULT_CACHE_TTL = 600  # 10 minutes
+PREVIEW_SIZE = 5
+# GCS result store (HTTP mode only), set in _configure_http_mode if GCS_RESULTS_BUCKET is set.
+_gcs_store: Any = None
+
+
+def _get_client() -> AuthenticatedClient:
+    """Get an EveryRow API client for the current request.
+
+    In stdio mode, returns the singleton client initialized at startup.
+    In HTTP mode, creates a per-request client using the authenticated
+    user's API key from the OAuth access token.
+    """
+    if _transport == "stdio":
+        if _client is None:
+            raise RuntimeError("MCP server not initialized")
+        return _client
+    # HTTP mode: get JWT from authenticated request
+    access_token = get_access_token()
+    if not isinstance(access_token, EveryRowAccessToken):
+        raise RuntimeError("Not authenticated")
+    return AuthenticatedClient(
+        base_url=os.environ.get("EVERYROW_API_URL", "https://everyrow.io/api/v0"),
+        token=access_token.supabase_jwt,
+        raise_on_unexpected_status=True,
+        follow_redirects=True,
+    )
 
 
 @asynccontextmanager
-async def lifespan(_server: FastMCP):
-    """Initialize singleton client and validate credentials on startup."""
+async def _stdio_lifespan(_server: FastMCP):
+    """Initialize singleton client and validate credentials on startup (stdio mode)."""
     global _client  # noqa: PLW0603
 
     _clear_task_state()
 
     try:
-        with create_client() as _client:
+        with _create_sdk_client() as _client:
             response = await get_billing(client=_client)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
@@ -69,10 +139,305 @@ async def lifespan(_server: FastMCP):
         _clear_task_state()
 
 
-mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
+@asynccontextmanager
+async def _http_lifespan(_server: FastMCP):
+    """HTTP mode lifespan — verify Redis connectivity on startup."""
+    if _auth_provider is not None:
+        await _auth_provider._redis.ping()
+        logging.getLogger(__name__).info("Redis health check passed")
+    yield
+
+
+mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)
+
+# ── MCP App UI templates ─────────────────────────────────────────────
+
+_APP_SCRIPT_SRC = "https://unpkg.com/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
+_UI_CSP_META = {"ui": {"csp": {"resourceDomains": ["https://unpkg.com"]}}}
+
+_PROGRESS_HTML = """<!DOCTYPE html>
+<html><head><meta name="color-scheme" content="light dark">
+<style>
+body{font-family:system-ui;margin:16px;color:#333}
+@media(prefers-color-scheme:dark){body{color:#ddd}}
+.bar-bg{width:100%;background:#e0e0e0;border-radius:6px;overflow:hidden;height:28px;margin:12px 0}
+.bar{height:100%;background:#4caf50;transition:width .3s;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:13px;white-space:nowrap}
+.stats{font-size:14px;margin:8px 0}
+.status{font-weight:600;font-size:16px;margin-bottom:8px}
+</style></head><body>
+<div id="c">Waiting for data...</div>
+<script type="module">
+import{App}from"SCRIPT_SRC";
+const app=new App({name:"EveryRow Progress",version:"1.0.0"});
+const el=document.getElementById("c");
+app.ontoolresult=({content})=>{
+  const t=content?.find(c=>c.type==="text");
+  if(!t)return;
+  try{const d=JSON.parse(t.text);render(d)}catch{el.textContent=t.text}
+};
+function render(d){
+  const pct=d.total>0?Math.round(d.completed/d.total*100):0;
+  el.innerHTML=`
+    <div class="status">${d.status}</div>
+    <div class="bar-bg"><div class="bar" style="width:${pct}%">${pct}%</div></div>
+    <div class="stats">
+      ${d.completed}/${d.total} complete${d.failed?`, ${d.failed} failed`:""}${d.running?`, ${d.running} running`:""}
+      &mdash; ${d.elapsed_s}s elapsed
+    </div>
+    ${d.session_url?`<a href="${d.session_url}" target="_blank">Open session</a>`:""}`;
+}
+await app.connect();
+</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
+
+_RESULTS_HTML = """<!DOCTYPE html>
+<html><head><meta name="color-scheme" content="light dark">
+<style>
+body{font-family:system-ui;margin:12px;color:#333;font-size:13px}
+@media(prefers-color-scheme:dark){body{color:#ddd;background:#1a1a1a}
+  th{background:#2d2d2d!important;border-color:#444!important}
+  td{border-color:#444!important}
+  tr:nth-child(even) td{background:#222!important}}
+#sum{font-weight:600;font-size:14px;margin-bottom:8px}
+.wrap{max-height:400px;overflow:auto;border:1px solid #ddd;border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:#f8f8f8;position:sticky;top:0;padding:8px 10px;text-align:left;border-bottom:2px solid #ddd;font-size:12px;white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid #eee;max-width:300px;vertical-align:top}
+tr:nth-child(even) td{background:#fafafa}
+a{color:#1976d2;text-decoration:none;word-break:break-all}
+a:hover{text-decoration:underline}
+td:first-child{position:sticky;left:0;background:inherit;z-index:1;font-weight:500}
+th:first-child{position:sticky;left:0;z-index:2}
+</style></head><body>
+<div id="sum"></div>
+<div class="wrap"><table id="tbl"></table></div>
+<script type="module">
+import{App}from"SCRIPT_SRC";
+const app=new App({name:"EveryRow Results",version:"1.0.0"});
+const el=document.getElementById("tbl");
+const sum=document.getElementById("sum");
+
+app.ontoolresult=({content})=>{
+  const t=content?.find(c=>c.type==="text");
+  if(!t)return;
+  let meta;
+  try{meta=JSON.parse(t.text);}catch(e){sum.textContent=t.text;return;}
+  if(meta.results_url){
+    if(meta.preview)render(meta.preview);
+    sum.textContent="Loading full results...";
+    const opts=meta.download_token?{headers:{"Authorization":"Bearer "+meta.download_token}}:{};
+    fetch(meta.results_url,opts).then(r=>r.json()).then(data=>render(data)).catch(()=>{
+      if(!meta.preview)sum.textContent="Failed to load results";
+    });
+  }else if(Array.isArray(meta)){
+    render(meta);
+  }else{
+    sum.textContent=JSON.stringify(meta);
+  }
+};
+
+function render(data){
+  if(!Array.isArray(data))data=[data];
+  if(!data.length){sum.textContent="No results";return;}
+  const cols=Object.keys(data[0]).filter(k=>!data.some(r=>r[k]&&typeof r[k]==="object"));
+  sum.textContent=data.length+" rows, "+cols.length+" columns";
+  let h="<thead><tr>"+cols.map(k=>"<th>"+esc(k)+"</th>").join("")+"</tr></thead><tbody>";
+  for(let i=0;i<data.length;i++){
+    h+="<tr>";
+    for(let j=0;j<cols.length;j++){h+=td(data[i][cols[j]]);}
+    h+="</tr>";
+  }
+  el.innerHTML=h+"</tbody>";
+}
+
+function td(v){
+  if(v==null)return"<td></td>";
+  const s=String(v);
+  if(s.match(/^https?:\\/\\//))return'<td><a href="'+esc(s)+'" target="_blank">'+esc(s)+"</a></td>";
+  if(s.length>150)return"<td>"+esc(s.slice(0,150))+"...</td>";
+  return"<td>"+esc(s)+"</td>";
+}
+function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
+
+await app.connect();
+</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
+
+_SESSION_HTML = """<!DOCTYPE html>
+<html><head><meta name="color-scheme" content="light dark">
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:12px;color:#333;font-size:13px}
+@media(prefers-color-scheme:dark){body{color:#ddd;background:#1a1a1a}
+  .bar-bg{background:#333}.info{color:#aaa}.seg-legend{color:#aaa}}
+a{color:#1976d2;text-decoration:none;font-weight:500}
+a:hover{text-decoration:underline}
+.bar-bg{width:100%;background:#e8e8e8;border-radius:6px;overflow:hidden;height:22px;margin:8px 0;
+  display:flex}
+.seg{height:100%;transition:width .5s;display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#fff;overflow:hidden;white-space:nowrap}
+.seg-done{background:#4caf50}
+.seg-run{background:#2196f3}
+.seg-fail{background:#e53935}
+.seg-pend{background:transparent}
+.info{font-size:12px;color:#666;margin:4px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.seg-legend{display:flex;gap:10px;font-size:11px;color:#888}
+.seg-legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px}
+.l-done::before{background:#4caf50!important}.l-run::before{background:#2196f3!important}
+.l-fail::before{background:#e53935!important}
+.status-done{color:#4caf50;font-weight:600}
+.status-fail{color:#e53935;font-weight:600}
+.eta{color:#888;font-size:11px}
+@keyframes flash{0%,100%{background:transparent}50%{background:rgba(76,175,80,.15)}}
+.flash{animation:flash 1s ease 3}
+</style></head><body>
+<div id="c">Waiting...</div>
+<script type="module">
+import{App}from"SCRIPT_SRC";
+const app=new App({name:"EveryRow Session",version:"1.0.0"});
+const el=document.getElementById("c");
+let pollUrl=null,pollTimer=null,sessionUrl="",wasDone=false;
+
+app.ontoolresult=({content})=>{
+  const t=content?.find(c=>c.type==="text");if(!t)return;
+  try{
+    const d=JSON.parse(t.text);sessionUrl=d.session_url||"";render(d);
+    if(d.progress_url&&!pollTimer){pollUrl=d.progress_url;startPoll()}
+  }catch{el.textContent=t.text}
+};
+
+function render(d){
+  const comp=d.completed||0,tot=d.total||0,fail=d.failed||0,run=d.running||0;
+  const pend=Math.max(0,tot-comp-fail-run);
+  const done=["completed","failed","revoked"].includes(d.status);
+  const url=d.session_url||sessionUrl;
+  const elapsed=d.elapsed_s||0;
+
+  let h=url?`<a href="${url}" target="_blank">Open everyrow session &#x2197;</a>`:"";
+
+  if(tot>0){
+    const pDone=comp/tot*100,pRun=run/tot*100,pFail=fail/tot*100;
+    h+=`<div class="bar-bg">`;
+    if(pDone>0)h+=`<div class="seg seg-done" style="width:${pDone}%">${pDone>=10?Math.round(pDone)+"%":""}</div>`;
+    if(pRun>0)h+=`<div class="seg seg-run" style="width:${pRun}%"></div>`;
+    if(pFail>0)h+=`<div class="seg seg-fail" style="width:${pFail}%"></div>`;
+    h+=`</div>`;
+
+    h+=`<div class="info">`;
+    if(done){
+      const cls=d.status==="completed"?"status-done":"status-fail";
+      h+=`<span class="${cls}">${d.status}</span>`;
+      h+=`<span>${comp}/${tot}${fail?` (${fail} failed)`:""}</span>`;
+      if(elapsed)h+=`<span>${fmtTime(elapsed)}</span>`;
+    }else{
+      h+=`<span>${comp}/${tot}</span>`;
+      const eta=comp>0&&elapsed>0?Math.round((tot-comp)/(comp/elapsed)):0;
+      if(eta>0)h+=`<span class="eta">~${fmtTime(eta)} remaining</span>`;
+      if(elapsed)h+=`<span class="eta">${fmtTime(elapsed)} elapsed</span>`;
+    }
+    h+=`</div>`;
+
+    if(!done){
+      h+=`<div class="seg-legend">`;
+      if(comp)h+=`<span class="l-done">${comp} done</span>`;
+      if(run)h+=`<span class="l-run">${run} running</span>`;
+      if(fail)h+=`<span class="l-fail">${fail} failed</span>`;
+      if(pend)h+=`<span>${pend} pending</span>`;
+      h+=`</div>`;
+    }
+  }else if(d.status){
+    h+=`<div class="info">${d.status}${elapsed?` &mdash; ${fmtTime(elapsed)}`:""}</div>`;
+  }
+
+  el.innerHTML=h;
+
+  if(done&&!wasDone){wasDone=true;el.classList.add("flash")}
+  if(done&&pollTimer){clearInterval(pollTimer);pollTimer=null}
+}
+
+function fmtTime(s){
+  if(s<60)return s+"s";
+  const m=Math.floor(s/60),sec=s%60;
+  return m+"m"+((sec>0)?(" "+sec+"s"):"");
+}
+
+function startPoll(){
+  pollTimer=setInterval(async()=>{
+    try{const r=await fetch(pollUrl);if(r.ok)render(await r.json())}catch{}
+  },5000);
+}
+
+await app.connect();
+</script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
+
+
+@mcp.resource(
+    "ui://everyrow/progress.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=_UI_CSP_META,
+)
+def _progress_ui() -> str:
+    return _PROGRESS_HTML
+
+
+@mcp.resource(
+    "ui://everyrow/results.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=_UI_CSP_META,
+)
+def _results_ui() -> str:
+    return _RESULTS_HTML
+
+
+@mcp.resource(
+    "ui://everyrow/session.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=_UI_CSP_META,
+)
+def _session_ui() -> str:
+    return _SESSION_HTML
+
+
+def _submission_text(label: str, session_url: str, task_id: str) -> str:
+    """Build human-readable text for submission tool results."""
+    if _transport == "stdio":
+        return (
+            f"{label}\n"
+            f"Session: {session_url}\n"
+            f"Task ID: {task_id}\n\n"
+            f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+        )
+    return (
+        f"{label}\n"
+        f"Task ID: {task_id}\n\n"
+        f"Immediately call everyrow_progress(task_id='{task_id}')."
+    )
+
+
+def _submission_ui_json(
+    session_url: str,
+    task_id: str,
+    total: int,
+    token: str,
+) -> str:
+    """Build JSON for the session MCP App widget, and store the token for polling."""
+    _task_tokens[task_id] = token
+    poll_token = secrets.token_urlsafe(32)
+    _task_poll_tokens[task_id] = poll_token
+    data: dict[str, Any] = {
+        "session_url": session_url,
+        "task_id": task_id,
+        "total": total,
+        "status": "submitted",
+    }
+    if _mcp_server_url:
+        data["progress_url"] = (
+            f"{_mcp_server_url}/api/progress/{task_id}?token={poll_token}"
+        )
+    return json.dumps(data)
 
 
 def _clear_task_state() -> None:
+    if _transport != "stdio":
+        return
     if TASK_STATE_FILE.exists():
         TASK_STATE_FILE.unlink()
 
@@ -93,6 +458,8 @@ def _write_task_state(
     Note: Only one task is tracked at a time. If multiple tasks run concurrently,
     only the most recent one's progress is shown.
     """
+    if _transport != "stdio":
+        return
     try:
         TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         state = {
@@ -120,7 +487,18 @@ class AgentInput(BaseModel):
     task: str = Field(
         ..., description="Natural language task to perform on each row.", min_length=1
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    input_data: str | None = Field(
+        default=None,
+        description="Raw CSV content as a string (alternative to input_csv for remote use).",
+    )
+    input_json: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Data as a JSON array of objects. "
+        'Example: [{"company": "Acme", "url": "acme.com"}, {"company": "Beta", "url": "beta.io"}]',
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the agent's response per row.",
@@ -128,9 +506,43 @@ class AgentInput(BaseModel):
 
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
+
+    @model_validator(mode="after")
+    def check_input_source(self) -> "AgentInput":
+        sources = sum(
+            1 for s in (self.input_csv, self.input_data, self.input_json) if s
+        )
+        if sources == 0:
+            raise ValueError("Provide one of input_csv, input_data, or input_json.")
+        if sources > 1:
+            raise ValueError(
+                "Provide only one of input_csv, input_data, or input_json."
+            )
+        return self
+
+
+class SingleAgentInput(BaseModel):
+    """Input for the single agent operation."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(
+        ...,
+        description="Natural language task for the agent to perform.",
+        min_length=1,
+    )
+    input_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional context as key-value pairs (e.g. {'company': 'Acme', 'url': 'acme.com'}).",
+    )
+    response_schema: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional JSON schema for the agent's response.",
+    )
 
 
 class RankInput(BaseModel):
@@ -143,7 +555,13 @@ class RankInput(BaseModel):
         description="Natural language instructions for scoring a single row.",
         min_length=1,
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    input_data: str | None = Field(
+        default=None,
+        description="Raw CSV content as a string (alternative to input_csv for remote use).",
+    )
     field_name: str = Field(..., description="Name of the field to sort by.")
     field_type: Literal["float", "int", "str", "bool"] = Field(
         default="float",
@@ -159,9 +577,18 @@ class RankInput(BaseModel):
 
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
+
+    @model_validator(mode="after")
+    def check_input_source(self) -> "RankInput":
+        if not self.input_csv and not self.input_data:
+            raise ValueError("Provide either input_csv or input_data.")
+        if self.input_csv and self.input_data:
+            raise ValueError("Provide either input_csv or input_data, not both.")
+        return self
 
 
 class ScreenInput(BaseModel):
@@ -172,7 +599,13 @@ class ScreenInput(BaseModel):
     task: str = Field(
         ..., description="Natural language screening criteria.", min_length=1
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    input_data: str | None = Field(
+        default=None,
+        description="Raw CSV content as a string (alternative to input_csv for remote use).",
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the response model. "
@@ -181,9 +614,18 @@ class ScreenInput(BaseModel):
 
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
+
+    @model_validator(mode="after")
+    def check_input_source(self) -> "ScreenInput":
+        if not self.input_csv and not self.input_data:
+            raise ValueError("Provide either input_csv or input_data.")
+        if self.input_csv and self.input_data:
+            raise ValueError("Provide either input_csv or input_data, not both.")
+        return self
 
 
 class DedupeInput(BaseModel):
@@ -261,15 +703,28 @@ class ResultsInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     task_id: str = Field(..., description="The task ID of the completed task.")
-    output_path: str = Field(
-        ...,
-        description="Full absolute path to the output CSV file (must end in .csv).",
+    output_path: str | None = Field(
+        default=None,
+        description="Full absolute path to the output CSV file (must end in .csv). "
+        "If omitted, results are returned inline.",
+    )
+    offset: int = Field(
+        default=0,
+        description="Row offset for pagination. Default 0 returns the first page.",
+        ge=0,
+    )
+    page_size: int = Field(
+        default=PREVIEW_SIZE,
+        description="Number of rows per page. Default 5. Max 50.",
+        ge=1,
+        le=50,
     )
 
     @field_validator("output_path")
     @classmethod
-    def validate_output(cls, v: str) -> str:
-        validate_csv_output_path(v)
+    def validate_output(cls, v: str | None) -> str | None:
+        if v is not None and _transport == "stdio":
+            validate_csv_output_path(v)
         return v
 
 
@@ -301,17 +756,20 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    df = load_csv(
+        input_csv=params.input_csv,
+        input_data=params.input_data,
+        input_json=params.input_json,
+    )
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("AgentResult", params.response_schema)
 
-    async with create_session(client=_client) as session:
+    async with create_session(client=client) as session:
         session_url = session.get_url()
         kwargs: dict[str, Any] = {"task": params.task, "session": session, "input": df}
         if response_model:
@@ -333,13 +791,93 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     return [
         TextContent(
             type="text",
-            text=(
-                f"Submitted: {len(df)} agents starting.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            text=_submission_ui_json(session_url, task_id, len(df), client.token),
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                f"Submitted: {len(df)} agents starting.", session_url, task_id
             ),
+        ),
+    ]
+
+
+@mcp.tool(
+    name="everyrow_single_agent",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Run a Single Research Agent",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+async def everyrow_single_agent(params: SingleAgentInput) -> list[TextContent]:
+    """Run a single web research agent on a task, optionally with context data.
+
+    Unlike everyrow_agent (which processes many rows), this dispatches ONE agent
+    to research a single question. The agent can search the web, read pages, and
+    return structured results.
+
+    Examples:
+    - "Find the current CEO of Apple and their background"
+    - "Research the latest funding round for this company" (with input_data: {"company": "Stripe"})
+    - "What are the pricing tiers for this product?" (with input_data: {"product": "Snowflake"})
+
+    This function submits the task and returns immediately with a task_id and session_url.
+    After receiving a result from this tool, share the session_url with the user.
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+    """
+    client = _get_client()
+
+    _clear_task_state()
+
+    response_model: type[BaseModel] | None = None
+    if params.response_schema:
+        response_model = _schema_to_model("SingleAgentResult", params.response_schema)
+
+    # Convert input_data dict to a BaseModel if provided
+    input_model: BaseModel | None = None
+    if params.input_data:
+        DynamicInput = create_model(
+            "DynamicInput", **{k: (type(v), v) for k, v in params.input_data.items()}
         )
+        input_model = DynamicInput()
+
+    async with create_session(client=client) as session:
+        session_url = session.get_url()
+        kwargs: dict[str, Any] = {"task": params.task, "session": session}
+        if input_model is not None:
+            kwargs["input"] = input_model
+        if response_model is not None:
+            kwargs["response_model"] = response_model
+        cohort_task = await single_agent_async(**kwargs)
+        task_id = str(cohort_task.task_id)
+        _write_task_state(
+            task_id,
+            task_type=PublicTaskType.AGENT,
+            session_url=session_url,
+            total=1,
+            completed=0,
+            failed=0,
+            running=0,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
+
+    return [
+        TextContent(
+            type="text",
+            text=_submission_ui_json(session_url, task_id, 1, client.token),
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                "Submitted: single agent starting.", session_url, task_id
+            ),
+        ),
     ]
 
 
@@ -378,17 +916,16 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    df = load_csv(input_csv=params.input_csv, input_data=params.input_data)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("RankResult", params.response_schema)
 
-    async with create_session(client=_client) as session:
+    async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await rank_async(
             task=params.task,
@@ -415,13 +952,14 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     return [
         TextContent(
             type="text",
-            text=(
-                f"Submitted: {len(df)} rows for ranking.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            text=_submission_ui_json(session_url, task_id, len(df), client.token),
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                f"Submitted: {len(df)} rows for ranking.", session_url, task_id
             ),
-        )
+        ),
     ]
 
 
@@ -465,17 +1003,16 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    df = load_csv(input_csv=params.input_csv, input_data=params.input_data)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("ScreenResult", params.response_schema)
 
-    async with create_session(client=_client) as session:
+    async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await screen_async(
             task=params.task,
@@ -499,13 +1036,14 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     return [
         TextContent(
             type="text",
-            text=(
-                f"Submitted: {len(df)} rows for screening.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
+            text=_submission_ui_json(session_url, task_id, len(df), client.token),
+        ),
+        TextContent(
+            type="text",
+            text=_submission_text(
+                f"Submitted: {len(df)} rows for screening.", session_url, task_id
             ),
-        )
+        ),
     ]
 
 
@@ -545,13 +1083,12 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     _clear_task_state()
     df = pd.read_csv(params.input_csv)
 
-    async with create_session(client=_client) as session:
+    async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await dedupe_async(
             equivalence_relation=params.equivalence_relation,
@@ -631,14 +1168,13 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     _clear_task_state()
     left_df = pd.read_csv(params.left_csv)
     right_df = pd.read_csv(params.right_csv)
 
-    async with create_session(client=_client) as session:
+    async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await merge_async(
             task=params.task,
@@ -687,7 +1223,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         openWorldHint=False,
     ),
 )
-async def everyrow_progress(  # noqa: PLR0911, PLR0912
+async def everyrow_progress(  # noqa: PLR0912
     params: ProgressInput,
 ) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
@@ -696,8 +1232,7 @@ async def everyrow_progress(  # noqa: PLR0911, PLR0912
     unless the task is completed or failed. The tool handles pacing internally.
     Do not add commentary between progress calls, just call again immediately.
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _get_client()
 
     task_id = params.task_id
 
@@ -708,15 +1243,16 @@ async def everyrow_progress(  # noqa: PLR0911, PLR0912
         status_response = handle_response(
             await get_task_status_tasks_task_id_status_get.asyncio(
                 task_id=UUID(task_id),
-                client=_client,
+                client=client,
             )
         )
     except Exception as e:
         return [
+            TextContent(type="text", text=json.dumps({"status": "error"})),
             TextContent(
                 type="text",
                 text=f"Error polling task: {e!r}\nRetry: call everyrow_progress(task_id='{task_id}').",
-            )
+            ),
         ]
 
     status = status_response.status
@@ -767,10 +1303,29 @@ async def everyrow_progress(  # noqa: PLR0911, PLR0912
         started_at=started_at,
     )
 
+    # JSON for MCP App progress UI (first TextContent, parsed by progress.html)
+    ui_json = TextContent(
+        type="text",
+        text=json.dumps(
+            {
+                "status": status.value,
+                "completed": completed,
+                "total": total,
+                "failed": failed,
+                "running": running,
+                "elapsed_s": elapsed_s,
+                "session_url": session_url,
+            }
+        ),
+    )
+
     if is_terminal:
         error = status_response.error
         if error and not isinstance(error, Unset):
-            return [TextContent(type="text", text=f"Task {status.value}: {error}")]
+            return [
+                ui_json,
+                TextContent(type="text", text=f"Task {status.value}: {error}"),
+            ]
         if status == TaskStatus.COMPLETED:
             if is_screen:
                 completed_msg = f"Screening complete ({elapsed_s}s)."
@@ -779,40 +1334,44 @@ async def everyrow_progress(  # noqa: PLR0911, PLR0912
                     f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
                 )
             return [
+                ui_json,
                 TextContent(
                     type="text",
                     text=(
                         f"{completed_msg}\n"
                         f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
                     ),
-                )
+                ),
             ]
         return [
+            ui_json,
             TextContent(
                 type="text", text=f"Task {status.value}. Report the error to the user."
-            )
+            ),
         ]
 
     if is_screen:
         return [
+            ui_json,
             TextContent(
                 type="text",
                 text=(
                     f"Screen running ({elapsed_s}s elapsed).\n"
                     f"Immediately call everyrow_progress(task_id='{task_id}')."
                 ),
-            )
+            ),
         ]
 
     fail_part = f", {failed} failed" if failed else ""
     return [
+        ui_json,
         TextContent(
             type="text",
             text=(
                 f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
                 f"Immediately call everyrow_progress(task_id='{task_id}')."
             ),
-        )
+        ),
     ]
 
 
@@ -826,59 +1385,214 @@ async def everyrow_progress(  # noqa: PLR0911, PLR0912
         idempotentHint=False,
         openWorldHint=False,
     ),
+    meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
-async def everyrow_results(params: ResultsInput) -> list[TextContent]:
-    """Retrieve results from a completed everyrow task and save them to a CSV.
+async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911, PLR0912, PLR0915
+    """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    The output_path must be a full file path ending in .csv.
+    If output_path is provided (stdio mode), saves all results to a CSV file.
+    If output_path is omitted, returns a page of results inline.
+
+    Pagination example (100-row result set):
+      everyrow_results(task_id='abc')                        → rows 1-5, next offset=5
+      everyrow_results(task_id='abc', offset=5)              → rows 6-10, next offset=10
+      everyrow_results(task_id='abc', offset=0, page_size=50) → rows 1-50, next offset=50
+      everyrow_results(task_id='abc', offset=50, page_size=50) → rows 51-100, final page
+
+    For large result sets a CSV download link is also provided on the first page.
+    Share the download link with the user so they can get the full data.
     """
-    if _client is None:
-        return [TextContent(type="text", text="Error: MCP server not initialized.")]
-
+    client = _get_client()
     task_id = params.task_id
-    output_file = Path(params.output_path)
 
-    try:
-        status_response = handle_response(
-            await get_task_status_tasks_task_id_status_get.asyncio(
-                task_id=UUID(task_id),
-                client=_client,
+    # ── GCS mode: check Redis for cached metadata ──────────────────
+    if _gcs_store and _auth_provider is not None:
+        cached_meta_raw = await _auth_provider._redis.get(build_key("result", task_id))
+        if cached_meta_raw:
+            meta = json.loads(cached_meta_raw)
+            # Re-generate signed URLs (they expire after 15 min)
+            urls = await asyncio.to_thread(_gcs_store.generate_signed_urls, task_id)
+            total = meta["total"]
+            columns = meta["columns"]
+            col_names = ", ".join(columns[:10])
+            if len(columns) > 10:
+                col_names += f", ... (+{len(columns) - 10} more)"
+
+            # Build page from preview stored in metadata
+            page_records = meta.get("preview", [])
+            offset = params.offset
+            page_size = params.page_size
+
+            widget_json = json.dumps(
+                {
+                    "results_url": urls.json_url,
+                    "preview": page_records,
+                    "total": total,
+                }
             )
-        )
-        status = status_response.status
-        if status not in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"Task status is {status.value}. Cannot fetch results yet.\n"
-                        f"Call everyrow_progress(task_id='{task_id}') to check again."
-                    ),
+
+            has_more = offset + page_size < total
+            next_offset = offset + page_size if has_more else None
+
+            if has_more:
+                page_size_arg = (
+                    f", page_size={page_size}" if page_size != PREVIEW_SIZE else ""
                 )
-            ]
-    except Exception as e:
-        return [TextContent(type="text", text=f"Error checking task status: {e!r}")]
+                summary = (
+                    f"Results: {total} rows, {len(columns)} columns ({col_names}). "
+                    f"Showing rows {offset + 1}-{min(offset + page_size, total)} of {total}.\n"
+                    f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
+                )
+                if offset == 0:
+                    summary += f"\nFull CSV download: {urls.csv_url}\nShare this download link with the user."
+            elif offset == 0:
+                summary = f"Results: {total} rows, {len(columns)} columns ({col_names}). All rows shown."
+            else:
+                summary = f"Results: showing rows {offset + 1}-{min(offset + page_size, total)} of {total} (final page)."
 
-    try:
-        result_response = handle_response(
-            await get_task_result_tasks_task_id_result_get.asyncio(
-                task_id=UUID(task_id),
-                client=_client,
-            )
-        )
-
-        if isinstance(result_response.data, list):
-            records = [item.additional_properties for item in result_response.data]
-            df = pd.DataFrame(records)
-        else:
             return [
-                TextContent(type="text", text="Error: Task result has no table data.")
+                TextContent(type="text", text=widget_json),
+                TextContent(type="text", text=summary),
             ]
 
-        save_result_to_csv(df, output_file)
-        # Task state file deleted by PostToolUse hook (everyrow-track-results.sh)
+    # ── Evict stale in-memory cache entries ─────────────────────────
+    now = datetime.now(UTC).timestamp()
+    stale = [
+        k for k, (_, ts, _tok) in _result_cache.items() if now - ts > RESULT_CACHE_TTL
+    ]
+    for k in stale:
+        _result_cache.pop(k, None)
 
+    # ── Get or fetch the DataFrame ──────────────────────────────────
+    if task_id in _result_cache:
+        df, _, download_token = _result_cache[task_id]
+    else:
+        try:
+            status_response = handle_response(
+                await get_task_status_tasks_task_id_status_get.asyncio(
+                    task_id=UUID(task_id),
+                    client=client,
+                )
+            )
+            if status_response.status not in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.REVOKED,
+            ):
+                return [
+                    TextContent(
+                        type="text",
+                        text=(
+                            f"Task status is {status_response.status.value}. Cannot fetch results yet.\n"
+                            f"Call everyrow_progress(task_id='{task_id}') to check again."
+                        ),
+                    )
+                ]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error checking task status: {e!r}")]
+
+        try:
+            result_response = handle_response(
+                await get_task_result_tasks_task_id_result_get.asyncio(
+                    task_id=UUID(task_id),
+                    client=client,
+                )
+            )
+
+            if isinstance(result_response.data, list):
+                records = [item.additional_properties for item in result_response.data]
+                df = pd.DataFrame(records)
+            elif isinstance(result_response.data, TaskResultResponseDataType1):
+                df = pd.DataFrame([result_response.data.additional_properties])
+            else:
+                return [
+                    TextContent(
+                        type="text", text="Error: Task result has no table data."
+                    )
+                ]
+
+            # ── GCS mode: upload to GCS + store metadata in Redis ───
+            if _gcs_store and _auth_provider is not None:
+                try:
+                    urls = await asyncio.to_thread(
+                        _gcs_store.upload_result, task_id, df
+                    )
+                    total = len(df)
+                    columns = list(df.columns)
+                    col_names = ", ".join(columns[:10])
+                    if len(columns) > 10:
+                        col_names += f", ... (+{len(columns) - 10} more)"
+
+                    # Build preview page
+                    offset = min(params.offset, total)
+                    page_size = params.page_size
+                    page_df = df.iloc[offset : offset + page_size]
+                    page_records = page_df.where(page_df.notna(), None).to_dict(
+                        orient="records"
+                    )
+
+                    # Store metadata in Redis with TTL
+                    meta = {
+                        "total": total,
+                        "columns": columns,
+                        "preview": page_records,
+                    }
+                    await _auth_provider._redis.setex(
+                        build_key("result", task_id),
+                        RESULT_CACHE_TTL,
+                        json.dumps(meta),
+                    )
+
+                    widget_json = json.dumps(
+                        {
+                            "results_url": urls.json_url,
+                            "preview": page_records,
+                            "total": total,
+                        }
+                    )
+
+                    has_more = offset + page_size < total
+                    next_offset = offset + page_size if has_more else None
+
+                    if has_more:
+                        page_size_arg = (
+                            f", page_size={page_size}"
+                            if page_size != PREVIEW_SIZE
+                            else ""
+                        )
+                        summary = (
+                            f"Results: {total} rows, {len(columns)} columns ({col_names}). "
+                            f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
+                            f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
+                        )
+                        if offset == 0:
+                            summary += f"\nFull CSV download: {urls.csv_url}\nShare this download link with the user."
+                    elif offset == 0:
+                        summary = f"Results: {total} rows, {len(columns)} columns ({col_names}). All rows shown."
+                    else:
+                        summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
+
+                    return [
+                        TextContent(type="text", text=widget_json),
+                        TextContent(type="text", text=summary),
+                    ]
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "GCS upload failed for task %s, falling back to in-memory cache",
+                        task_id,
+                    )
+
+            download_token = secrets.token_urlsafe(32)
+            _result_cache[task_id] = (df, now, download_token)
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
+
+    # ── stdio mode: save to file (all rows, no pagination) ──────────
+    if params.output_path and _transport == "stdio":
+        output_file = Path(params.output_path)
+        save_result_to_csv(df, output_file)
+        _result_cache.pop(task_id, None)
         return [
             TextContent(
                 type="text",
@@ -890,8 +1604,60 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
             )
         ]
 
-    except Exception as e:
-        return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
+    total = len(df)
+    col_names = ", ".join(df.columns[:10])
+    if len(df.columns) > 10:
+        col_names += f", ... (+{len(df.columns) - 10} more)"
+
+    # ── Build page of results ────────────────────────────────────────
+    offset = min(params.offset, total)
+    page_size = params.page_size
+    page_df = df.iloc[offset : offset + page_size]
+    page_records = page_df.where(page_df.notna(), None).to_dict(orient="records")
+    has_more = offset + page_size < total
+    next_offset = offset + page_size if has_more else None
+
+    # TextContent 1: data for the widget.
+    # HTTP mode: widget always fetches full data from API.
+    # stdio mode: widget reads the page JSON directly.
+    if _transport != "stdio" and _mcp_server_url:
+        results_url = f"{_mcp_server_url}/api/results/{task_id}?format=json"
+        widget_json = json.dumps(
+            {
+                "results_url": results_url,
+                "download_token": download_token,
+                "preview": page_records,
+                "total": total,
+            }
+        )
+    else:
+        widget_json = json.dumps(page_records)
+
+    # TextContent 2: summary for the LLM.
+    csv_url = ""
+    if _mcp_server_url:
+        csv_url = (
+            f"{_mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
+        )
+
+    if has_more:
+        page_size_arg = f", page_size={page_size}" if page_size != PREVIEW_SIZE else ""
+        summary = (
+            f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "
+            f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
+            f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
+        )
+        if csv_url and offset == 0:
+            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
+    elif offset == 0:
+        summary = f"Results: {total} rows, {len(df.columns)} columns ({col_names}). All rows shown."
+    else:
+        summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
+
+    return [
+        TextContent(type="text", text=widget_json),
+        TextContent(type="text", text=summary),
+    ]
 
 
 JSON_TYPE_MAP = {
@@ -933,8 +1699,329 @@ def _schema_to_model(name: str, schema: dict[str, Any]) -> type[BaseModel]:
     return create_model(name, **fields)
 
 
+async def _api_progress(request) -> Any:
+    """REST endpoint for the session widget to poll task progress."""
+    cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET"}
+
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=cors)
+
+    task_id = request.path_params["task_id"]
+
+    # Validate poll token
+    expected_poll = _task_poll_tokens.get(task_id, "")
+    request_poll = request.query_params.get("token", "")
+    if not expected_poll or not secrets.compare_digest(request_poll, expected_poll):
+        return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
+
+    api_key = _task_tokens.get(task_id)
+    if not api_key:
+        return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
+
+    try:
+        client = AuthenticatedClient(
+            base_url=os.environ.get("EVERYROW_API_URL", "https://everyrow.io/api/v0"),
+            token=api_key,
+            raise_on_unexpected_status=True,
+            follow_redirects=True,
+        )
+        status_response = handle_response(
+            await get_task_status_tasks_task_id_status_get.asyncio(
+                task_id=UUID(task_id),
+                client=client,
+            )
+        )
+
+        status = status_response.status
+        progress = status_response.progress
+        session_url = get_session_url(status_response.session_id)
+
+        completed = progress.completed if progress else 0
+        failed = progress.failed if progress else 0
+        running = progress.running if progress else 0
+        total = progress.total if progress else 0
+
+        elapsed_s = 0
+        if status_response.created_at:
+            created_at = status_response.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            if (
+                status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED)
+                and status_response.updated_at
+            ):
+                updated_at = status_response.updated_at
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=UTC)
+                elapsed_s = round((updated_at - created_at).total_seconds())
+            else:
+                elapsed_s = round((datetime.now(UTC) - created_at).total_seconds())
+
+        data = {
+            "status": status.value,
+            "completed": completed,
+            "total": total,
+            "failed": failed,
+            "running": running,
+            "elapsed_s": elapsed_s,
+            "session_url": session_url,
+        }
+
+        if status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
+            _task_tokens.pop(task_id, None)
+            _task_poll_tokens.pop(task_id, None)
+
+        return JSONResponse(data, headers=cors)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500, headers=cors)
+
+
+async def _api_results(request) -> Any:
+    """REST endpoint for results widget and CSV download.
+
+    Auth: Bearer token in Authorization header, OR ?token= query param (for direct downloads).
+    Query params:
+        format: "json" (default) or "csv"
+    """
+    cors = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET",
+        "Access-Control-Allow-Headers": "Authorization",
+    }
+    # Prevent token leakage via Referrer and caching
+    security_headers = {
+        "Referrer-Policy": "no-referrer",
+        "Cache-Control": "no-store, private",
+    }
+
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=cors)
+
+    task_id = request.path_params["task_id"]
+    fmt = request.query_params.get("format", "json")
+
+    # Accept token from Authorization header (widget) or query param (direct download)
+    token = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    if not token:
+        token = request.query_params.get("token", "")
+
+    cached = _result_cache.get(task_id)
+    if not cached:
+        return JSONResponse(
+            {"error": "Results not found or expired"},
+            status_code=404,
+            headers={**cors, **security_headers},
+        )
+
+    df, _ts, expected_token = cached
+    if not token or not secrets.compare_digest(token, expected_token):
+        return JSONResponse(
+            {"error": "Invalid token"},
+            status_code=403,
+            headers={**cors, **security_headers},
+        )
+
+    if fmt == "csv":
+        csv_data = df.to_csv(index=False)
+        return Response(
+            content=csv_data,
+            media_type="text/csv",
+            headers={
+                **cors,
+                **security_headers,
+                "Content-Disposition": f'attachment; filename="results_{task_id[:8]}.csv"',
+            },
+        )
+
+    # JSON format
+    records = df.where(df.notna(), None).to_dict(orient="records")
+    return JSONResponse(records, headers={**cors, **security_headers})
+
+
+def _configure_http_mode(host: str, port: int) -> None:  # noqa: PLR0915
+    """Configure the MCP server for HTTP transport with OAuth."""
+    global _transport, _auth_provider, _mcp_server_url, _gcs_store  # noqa: PLW0603
+
+    _transport = "streamable-http"
+
+    # Validate required env vars for HTTP mode
+    mcp_server_url = os.environ.get("MCP_SERVER_URL")
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_anon_key = os.environ.get("SUPABASE_ANON_KEY")
+
+    redis_encryption_key = os.environ.get("REDIS_ENCRYPTION_KEY")
+
+    missing = []
+    if not mcp_server_url:
+        missing.append("MCP_SERVER_URL")
+    if not supabase_url:
+        missing.append("SUPABASE_URL")
+    if not supabase_anon_key:
+        missing.append("SUPABASE_ANON_KEY")
+    if not redis_encryption_key:
+        missing.append("REDIS_ENCRYPTION_KEY")
+    if missing:
+        logging.error(f"Missing required env vars for HTTP mode: {', '.join(missing)}")
+        sys.exit(1)
+
+    # Create Redis client for auth state
+    redis_client = create_redis_client(
+        host=os.environ.get("REDIS_HOST", "localhost"),
+        port=int(os.environ.get("REDIS_PORT", "6379")),
+        db=int(os.environ.get("REDIS_DB", "13")),
+        password=os.environ.get("REDIS_PASSWORD"),
+        sentinel_endpoints=os.environ.get("REDIS_SENTINEL_ENDPOINTS"),
+        sentinel_master_name=os.environ.get("REDIS_SENTINEL_MASTER_NAME"),
+    )
+
+    # Create auth provider
+    _auth_provider = EveryRowAuthProvider(
+        supabase_url=supabase_url,
+        supabase_anon_key=supabase_anon_key,
+        mcp_server_url=mcp_server_url,
+        redis=redis_client,
+        encryption_key=redis_encryption_key,
+    )
+
+    # Configure auth on the existing FastMCP instance (tools already registered)
+    mcp._auth_server_provider = _auth_provider
+    mcp._token_verifier = ProviderTokenVerifier(_auth_provider)
+    mcp.settings.auth = AuthSettings(
+        issuer_url=AnyHttpUrl(mcp_server_url),
+        resource_server_url=AnyHttpUrl(mcp_server_url),
+        client_registration_options=ClientRegistrationOptions(enabled=True),
+        revocation_options=RevocationOptions(enabled=True),
+    )
+    mcp._mcp_server.lifespan = lifespan_wrapper(mcp, _http_lifespan)
+    mcp.settings.host = host
+    mcp.settings.port = port
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+
+    # Store server URL for progress polling
+    _mcp_server_url = mcp_server_url
+
+    # Initialize GCS result store if enabled via RESULT_STORAGE=gcs
+    result_storage = os.environ.get("RESULT_STORAGE", "memory").lower()
+    if result_storage == "gcs":
+        gcs_bucket = os.environ.get("GCS_RESULTS_BUCKET")
+        if not gcs_bucket:
+            logging.error("RESULT_STORAGE=gcs but GCS_RESULTS_BUCKET is not set")
+            sys.exit(1)
+        from everyrow_mcp.gcs_storage import GCSResultStore  # noqa: PLC0415
+
+        _gcs_store = GCSResultStore(gcs_bucket)
+        logging.getLogger(__name__).info("GCS result store enabled: %s", gcs_bucket)
+    else:
+        logging.getLogger(__name__).info("Using in-memory result cache")
+
+    # Re-register session resource with CSP allowing progress endpoint fetch
+    @mcp.resource(
+        "ui://everyrow/session.html",
+        mime_type="text/html;profile=mcp-app",
+        meta={
+            "ui": {
+                "csp": {
+                    "resourceDomains": ["https://unpkg.com"],
+                    "connectDomains": [mcp_server_url],
+                }
+            }
+        },
+    )
+    def _session_ui_http() -> str:
+        return _SESSION_HTML
+
+    # Re-register results resource with CSP allowing results endpoint fetch
+    results_connect_domains = [mcp_server_url]
+    if _gcs_store:
+        results_connect_domains.append("https://storage.googleapis.com")
+
+    @mcp.resource(
+        "ui://everyrow/results.html",
+        mime_type="text/html;profile=mcp-app",
+        meta={
+            "ui": {
+                "csp": {
+                    "resourceDomains": ["https://unpkg.com"],
+                    "connectDomains": results_connect_domains,
+                }
+            }
+        },
+    )
+    def _results_ui_http() -> str:
+        return _RESULTS_HTML
+
+    # Mount custom routes
+    mcp.custom_route("/auth/start/{state}", ["GET"])(_auth_provider.handle_start)
+    mcp.custom_route("/auth/callback", ["GET"])(_auth_provider.handle_callback)
+    mcp.custom_route("/api/progress/{task_id}", ["GET", "OPTIONS"])(_api_progress)
+    mcp.custom_route("/api/results/{task_id}", ["GET", "OPTIONS"])(_api_results)
+
+    async def _health(_request: Request) -> Response:
+        return JSONResponse({"status": "ok"})
+
+    mcp.custom_route("/health", ["GET"])(_health)
+
+    # Wrap the Starlette app with request logging middleware
+    _original_streamable_http_app = mcp.streamable_http_app
+
+    def _logging_streamable_http_app():
+        app = _original_streamable_http_app()
+
+        class RequestLoggingMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):
+                auth_header = request.headers.get("authorization", "(none)")
+                if auth_header != "(none)":
+                    auth_header = auth_header[:30] + "..."
+                logging.warning(
+                    "INCOMING %s %s | Host: %s | Auth: %s",
+                    request.method,
+                    request.url.path,
+                    request.headers.get("host", "?"),
+                    auth_header,
+                )
+                response = await call_next(request)
+                logging.warning(
+                    "RESPONSE %s %s -> %s",
+                    request.method,
+                    request.url.path,
+                    response.status_code,
+                )
+                return response
+
+        app.add_middleware(RequestLoggingMiddleware)
+        return app
+
+    mcp.streamable_http_app = _logging_streamable_http_app
+
+
 def main():
     """Run the MCP server."""
+    global _transport  # noqa: PLW0603
+
+    parser = argparse.ArgumentParser(description="everyrow MCP server")
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Use Streamable HTTP transport instead of stdio.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for HTTP transport (default: 8000).",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host for HTTP transport (default: 0.0.0.0).",
+    )
+    args = parser.parse_args()
+
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
 
@@ -946,13 +2033,19 @@ def main():
         force=True,
     )
 
-    # Check for API key before starting
-    if "EVERYROW_API_KEY" not in os.environ:
-        logging.error("EVERYROW_API_KEY environment variable is not set.")
-        logging.error("Get an API key at https://everyrow.io/api-key")
-        sys.exit(1)
+    if args.http:
+        _configure_http_mode(host=args.host, port=args.port)
+        mcp.run(transport="streamable-http")
+    else:
+        _transport = "stdio"
 
-    mcp.run(transport="stdio")
+        # Check for API key before starting (stdio mode only)
+        if "EVERYROW_API_KEY" not in os.environ:
+            logging.error("EVERYROW_API_KEY environment variable is not set.")
+            logging.error("Get an API key at https://everyrow.io/api-key")
+            sys.exit(1)
+
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

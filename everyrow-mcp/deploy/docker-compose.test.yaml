@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6399:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  mcp-server:
+    build:
+      context: ../..
+      dockerfile: everyrow-mcp/deploy/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      MCP_SERVER_URL: "http://localhost:8000"
+      SUPABASE_URL: "https://fake.supabase.co"
+      SUPABASE_ANON_KEY: "fake-anon-key"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "13"

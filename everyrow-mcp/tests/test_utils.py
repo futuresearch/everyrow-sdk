@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from everyrow_mcp.utils import (
+    load_csv,
     resolve_output_path,
     save_result_to_csv,
     validate_csv_path,
@@ -95,6 +96,54 @@ class TestResolveOutputPath:
         for prefix in ["screened", "ranked", "deduped", "merged", "agent"]:
             result = resolve_output_path(str(tmp_path), "/data/test.csv", prefix)
             assert result == tmp_path / f"{prefix}_test.csv"
+
+
+class TestLoadCsv:
+    """Tests for load_csv."""
+
+    def test_load_from_file(self, tmp_path: Path):
+        """Test loading CSV from a file path."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("name,age\nAlice,30\nBob,25\n")
+
+        df = load_csv(input_csv=str(csv_file))
+        assert len(df) == 2
+        assert list(df.columns) == ["name", "age"]
+
+    def test_load_from_inline_data(self):
+        """Test loading CSV from inline string content."""
+        csv_content = "name,age\nAlice,30\nBob,25\n"
+
+        df = load_csv(input_data=csv_content)
+        assert len(df) == 2
+        assert list(df.columns) == ["name", "age"]
+        assert df["name"].tolist() == ["Alice", "Bob"]
+
+    def test_load_from_json_records(self):
+        """Test loading from a list of dicts."""
+        data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+        df = load_csv(input_json=data)
+        assert len(df) == 2
+        assert list(df.columns) == ["name", "age"]
+        assert df["name"].tolist() == ["Alice", "Bob"]
+
+    def test_neither_provided_raises(self):
+        """Test error when no input source is provided."""
+        with pytest.raises(ValueError, match="exactly one"):
+            load_csv()
+
+    def test_both_provided_raises(self, tmp_path: Path):
+        """Test error when both input_csv and input_data are provided."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+
+        with pytest.raises(ValueError, match="exactly one"):
+            load_csv(input_csv=str(csv_file), input_data="a,b\n1,2\n")
+
+    def test_empty_inline_data_raises(self):
+        """Test error when inline data produces an empty DataFrame."""
+        with pytest.raises(ValueError, match="empty DataFrame"):
+            load_csv(input_data="name,age\n")
 
 
 class TestSaveResultToCsv:
