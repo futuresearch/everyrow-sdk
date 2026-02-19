@@ -19,7 +19,7 @@ from everyrow.generated.client import AuthenticatedClient
 from everyrow_mcp.auth import EveryRowAuthProvider
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
-from everyrow_mcp.settings import HttpSettings, StdioSettings
+from everyrow_mcp.settings import _BaseSettings
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class ServerState:
         default_factory=dict
     )
     gcs_store: GCSResultStore | None = None
-    settings: HttpSettings | StdioSettings | None = None
+    settings: _BaseSettings | None = None
     redis: Any | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 

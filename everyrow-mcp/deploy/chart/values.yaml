@@ -26,6 +26,7 @@ resources:
 env:
   MCP_SERVER_URL: "https://mcp.everyrow.io"
   SUPABASE_URL: "https://iliivszxpymuffgrwsws.supabase.co"
+  EVERYROW_API_URL: "https://everyrow.io/api/v0"
   REDIS_SENTINEL_ENDPOINTS: "redis.utils.svc.cluster.local:26379"
   REDIS_SENTINEL_MASTER_NAME: "mymaster"
   REDIS_DB: "13"
