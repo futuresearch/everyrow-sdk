@@ -27,7 +27,6 @@ from everyrow.generated.models.task_status_response import TaskStatusResponse
 from pydantic import ValidationError
 
 from everyrow_mcp.models import (
-    PREVIEW_SIZE,
     AgentInput,
     DedupeInput,
     MergeInput,
@@ -468,7 +467,7 @@ class TestResults:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        num_rows = PREVIEW_SIZE + 3
+        num_rows = state.settings.preview_size + 3
         data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
@@ -491,22 +490,22 @@ class TestResults:
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
         records = json.loads(result[0].text)
-        assert len(records) == PREVIEW_SIZE
+        assert len(records) == state.settings.preview_size
         assert records[0]["id"] == 0
 
         summary = result[1].text
         assert f"{num_rows} rows" in summary
-        assert f"offset={PREVIEW_SIZE}" in summary
+        assert f"offset={state.settings.preview_size}" in summary
 
-        # Second page (offset=PREVIEW_SIZE) — hits cache
+        # Second page (offset=state.settings.preview_size) — hits cache
         with patch.object(state, "client", mock_client):
             result2 = await everyrow_results(
-                ResultsInput(task_id=task_id, offset=PREVIEW_SIZE)
+                ResultsInput(task_id=task_id, offset=state.settings.preview_size)
             )
 
         records2 = json.loads(result2[0].text)
         assert len(records2) == 3
-        assert records2[0]["id"] == PREVIEW_SIZE
+        assert records2[0]["id"] == state.settings.preview_size
 
         assert "final page" in result2[1].text
 
@@ -648,7 +647,7 @@ class TestResults:
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        num_rows = PREVIEW_SIZE + 5
+        num_rows = state.settings.preview_size + 5
         data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(data)
@@ -677,7 +676,7 @@ class TestResults:
         assert "results_url" in widget_data
         assert "https://mcp.example.com/api/results/" in widget_data["results_url"]
         assert widget_data["total"] == num_rows
-        assert len(widget_data["preview"]) == PREVIEW_SIZE
+        assert len(widget_data["preview"]) == state.settings.preview_size
 
         # TextContent 2: summary with download URL
         summary = result[1].text

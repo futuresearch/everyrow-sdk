@@ -18,7 +18,6 @@ from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.auth import EveryRowAuthProvider
 from everyrow_mcp.gcs_storage import GCSResultStore
-from everyrow_mcp.models import PREVIEW_SIZE
 from everyrow_mcp.redis_utils import build_key
 from everyrow_mcp.settings import HttpSettings, StdioSettings
 
@@ -57,13 +56,6 @@ class ServerState:
     @property
     def is_http(self) -> bool:
         return self.transport != "stdio"
-
-    @property
-    def preview_size(self) -> int:
-        """Runtime preview size from settings, falling back to default."""
-        if self.settings is not None:
-            return self.settings.preview_size
-        return PREVIEW_SIZE
 
     # ── In-memory cache (protected by lock in HTTP mode) ──────────
 

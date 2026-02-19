@@ -14,6 +14,7 @@ import hashlib
 import logging
 import secrets
 import time
+from typing import TypeVar
 from urllib.parse import urlencode
 
 import httpx
@@ -32,6 +33,8 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
 from everyrow_mcp.redis_utils import build_key
+
+_M = TypeVar("_M", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,14 @@ def _jwt_hash(jwt: str) -> str:
     return hashlib.sha256(jwt.encode()).hexdigest()[:16]
 
 
+def _client_id(client: OAuthClientInformationFull) -> str:
+    """Extract client_id, narrowing from str | None to str."""
+    cid = client.client_id
+    if cid is None:
+        raise ValueError("client_id is required")
+    return cid
+
+
 class EveryRowAuthProvider(
     OAuthAuthorizationServerProvider[
         EveryRowAuthorizationCode, EveryRowRefreshToken, EveryRowAccessToken
@@ -112,37 +123,33 @@ class EveryRowAuthProvider(
         else:
             await self._redis.set(key, data)
 
-    async def _redis_get(
-        self, key: str, model_class: type[BaseModel]
-    ) -> BaseModel | None:
+    async def _redis_get(self, key: str, model_class: type[_M]) -> _M | None:
         """Fetch and deserialize a Pydantic model from Redis (decrypting if needed)."""
         data = await self._redis.get(key)
         if data is None:
             return None
         if self._fernet:
             data = self._fernet.decrypt(data.encode()).decode()
-        return model_class.model_validate_json(data)
+        return model_class.model_validate_json(data)  # type: ignore[return-value]
 
-    async def _redis_pop(
-        self, key: str, model_class: type[BaseModel]
-    ) -> BaseModel | None:
+    async def _redis_pop(self, key: str, model_class: type[_M]) -> _M | None:
         """Atomically GET + DEL a key, returning the deserialized model."""
         data = await self._redis.getdel(key)
         if data is None:
             return None
         if self._fernet:
             data = self._fernet.decrypt(data.encode()).decode()
-        return model_class.model_validate_json(data)
+        return model_class.model_validate_json(data)  # type: ignore[return-value]
 
     # ── OAuth client management ─────────────────────────────────────
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return await self._redis_get(
             build_key("client", client_id), OAuthClientInformationFull
-        )  # type: ignore[return-value]
+        )
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        await self._redis_set(build_key("client", client_info.client_id), client_info)
+        await self._redis_set(build_key("client", _client_id(client_info)), client_info)
 
     # ── Authorization ───────────────────────────────────────────────
 
@@ -174,7 +181,7 @@ class EveryRowAuthProvider(
         )
 
         pending = PendingAuth(
-            client_id=client.client_id,
+            client_id=_client_id(client),
             params=params,
             supabase_code_verifier=supabase_verifier,
             supabase_redirect_url=supabase_redirect_url,
@@ -284,13 +291,14 @@ class EveryRowAuthProvider(
             return None
         if code_obj.client_id != client.client_id:
             return None
-        return code_obj  # type: ignore[return-value]
+        return code_obj
 
     async def exchange_authorization_code(
         self,
         client: OAuthClientInformationFull,
         authorization_code: EveryRowAuthorizationCode,
     ) -> OAuthToken:
+        cid = _client_id(client)
         # Remove used code (one-time use)
         await self._redis.delete(build_key("authcode", authorization_code.code))
 
@@ -299,7 +307,7 @@ class EveryRowAuthProvider(
         now = int(time.time())
         access_token_obj = EveryRowAccessToken(
             token=access_token_str,
-            client_id=client.client_id,
+            client_id=cid,
             scopes=authorization_code.scopes,
             expires_at=now + ACCESS_TOKEN_TTL,
             resource=authorization_code.resource,
@@ -315,7 +323,7 @@ class EveryRowAuthProvider(
         refresh_token_str = secrets.token_urlsafe(32)
         refresh_token_obj = EveryRowRefreshToken(
             token=refresh_token_str,
-            client_id=client.client_id,
+            client_id=cid,
             scopes=authorization_code.scopes,
             expires_at=now + REFRESH_TOKEN_TTL,
             supabase_jwt=authorization_code.supabase_jwt,
@@ -331,11 +339,11 @@ class EveryRowAuthProvider(
         idx_key = build_key(
             "idx",
             "access_by_cj",
-            client.client_id,
+            cid,
             _jwt_hash(authorization_code.supabase_jwt),
         )
-        await self._redis.sadd(idx_key, access_token_str)
-        await self._redis.expire(idx_key, ACCESS_TOKEN_TTL)
+        await self._redis.sadd(idx_key, access_token_str)  # type: ignore[misc]
+        await self._redis.expire(idx_key, ACCESS_TOKEN_TTL)  # type: ignore[misc]
 
         return OAuthToken(
             access_token=access_token_str,
@@ -361,7 +369,7 @@ class EveryRowAuthProvider(
             return None
         if token_obj.client_id != client.client_id:
             return None
-        return token_obj  # type: ignore[return-value]
+        return token_obj
 
     async def exchange_refresh_token(
         self,
@@ -369,6 +377,7 @@ class EveryRowAuthProvider(
         refresh_token: EveryRowRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
+        cid = _client_id(client)
         # Refresh the Supabase JWT (propagates on failure — client must re-auth)
         new_jwt, new_supabase_refresh = await self._refresh_supabase_token(
             refresh_token.supabase_refresh_token
@@ -381,10 +390,10 @@ class EveryRowAuthProvider(
         idx_key = build_key(
             "idx",
             "access_by_cj",
-            client.client_id,
+            cid,
             _jwt_hash(refresh_token.supabase_jwt),
         )
-        old_access_tokens = await self._redis.smembers(idx_key)
+        old_access_tokens = await self._redis.smembers(idx_key)  # type: ignore[misc]
         if old_access_tokens:
             access_keys = [build_key("access", t) for t in old_access_tokens]
             await self._redis.delete(*access_keys)
@@ -396,7 +405,7 @@ class EveryRowAuthProvider(
         access_token_str = secrets.token_urlsafe(32)
         access_token_obj = EveryRowAccessToken(
             token=access_token_str,
-            client_id=client.client_id,
+            client_id=cid,
             scopes=new_scopes,
             expires_at=now + ACCESS_TOKEN_TTL,
             supabase_jwt=new_jwt,
@@ -411,7 +420,7 @@ class EveryRowAuthProvider(
         new_refresh_token_str = secrets.token_urlsafe(32)
         new_refresh_token_obj = EveryRowRefreshToken(
             token=new_refresh_token_str,
-            client_id=client.client_id,
+            client_id=cid,
             scopes=new_scopes,
             expires_at=now + REFRESH_TOKEN_TTL,
             supabase_jwt=new_jwt,
@@ -424,11 +433,9 @@ class EveryRowAuthProvider(
         )
 
         # Update secondary index for new access token
-        new_idx_key = build_key(
-            "idx", "access_by_cj", client.client_id, _jwt_hash(new_jwt)
-        )
-        await self._redis.sadd(new_idx_key, access_token_str)
-        await self._redis.expire(new_idx_key, ACCESS_TOKEN_TTL)
+        new_idx_key = build_key("idx", "access_by_cj", cid, _jwt_hash(new_jwt))
+        await self._redis.sadd(new_idx_key, access_token_str)  # type: ignore[misc]
+        await self._redis.expire(new_idx_key, ACCESS_TOKEN_TTL)  # type: ignore[misc]
 
         return OAuthToken(
             access_token=access_token_str,
@@ -441,7 +448,7 @@ class EveryRowAuthProvider(
     # ── Access token verification ───────────────────────────────────
 
     async def load_access_token(self, token: str) -> EveryRowAccessToken | None:
-        return await self._redis_get(build_key("access", token), EveryRowAccessToken)  # type: ignore[return-value]
+        return await self._redis_get(build_key("access", token), EveryRowAccessToken)
 
     # ── Token revocation ────────────────────────────────────────────
 

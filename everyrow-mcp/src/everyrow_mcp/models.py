@@ -13,8 +13,6 @@ from pydantic import (
 
 from everyrow_mcp.utils import validate_csv_output_path, validate_csv_path
 
-PREVIEW_SIZE = 5
-
 JSON_TYPE_MAP = {
     "string": str,
     "integer": int,
@@ -309,7 +307,7 @@ class ResultsInput(BaseModel):
         ge=0,
     )
     page_size: int = Field(
-        default=PREVIEW_SIZE,
+        default=5,
         description="Number of rows per page. Default 5. Max 50.",
         ge=1,
         le=50,

@@ -6,7 +6,14 @@ import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
 
+from everyrow_mcp.settings import StdioSettings
 from everyrow_mcp.state import state
+
+# Ensure state.settings is always available in tests
+state.settings = StdioSettings(
+    everyrow_api_key="test-key",
+    everyrow_api_url="https://everyrow.io/api/v0",
+)
 
 
 @pytest.fixture

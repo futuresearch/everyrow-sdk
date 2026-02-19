@@ -1072,7 +1072,9 @@ def _build_inline_response(
 
     if has_more:
         page_size_arg = (
-            f", page_size={page_size}" if page_size != state.preview_size else ""
+            f", page_size={page_size}"
+            if page_size != state.settings.preview_size
+            else ""
         )
         summary = (
             f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "

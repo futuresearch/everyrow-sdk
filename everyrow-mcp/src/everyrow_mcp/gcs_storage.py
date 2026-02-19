@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import timedelta
 
@@ -52,6 +53,11 @@ class GCSResultStore:
                 response_disposition=f'attachment; filename="results_{task_id[:8]}.csv"',
             ),
         )
+
+    def download_json(self, task_id: str) -> list[dict]:
+        """Download the JSON result data from GCS."""
+        blob = self._bucket.blob(f"results/{task_id}/data.json")
+        return json.loads(blob.download_as_text())
 
     def generate_signed_urls(self, task_id: str) -> ResultURLs:
         """Re-generate signed URLs for an existing upload."""

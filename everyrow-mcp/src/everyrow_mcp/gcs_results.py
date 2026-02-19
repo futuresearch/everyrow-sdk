@@ -2,6 +2,11 @@
 
 Handles checking Redis for cached GCS metadata, uploading new results to GCS,
 and building the MCP TextContent responses for both paths.
+
+Caching strategy:
+  - Base metadata (total, columns) cached at  result:{task_id}
+  - Per-page previews cached at               result:{task_id}:page:{offset}:{page_size}
+  - On a page cache miss, the JSON is fetched from GCS and the page is sliced.
 """
 
 from __future__ import annotations
@@ -14,7 +19,6 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from mcp.types import TextContent
 
-from everyrow_mcp.models import PREVIEW_SIZE
 from everyrow_mcp.state import state
 
 if TYPE_CHECKING:
@@ -29,6 +33,12 @@ def _format_columns(columns: list[str]) -> str:
     if len(columns) > 10:
         col_names += f", ... (+{len(columns) - 10} more)"
     return col_names
+
+
+def _slice_preview(records: list[dict], offset: int, page_size: int) -> list[dict]:
+    """Slice a page from a list of record dicts."""
+    clamped = min(offset, len(records))
+    return records[clamped : clamped + page_size]
 
 
 def _build_gcs_response(
@@ -55,7 +65,11 @@ def _build_gcs_response(
     next_offset = offset + page_size if has_more else None
 
     if has_more:
-        page_size_arg = f", page_size={page_size}" if page_size != PREVIEW_SIZE else ""
+        page_size_arg = (
+            f", page_size={page_size}"
+            if page_size != state.settings.preview_size
+            else ""
+        )
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
             f"Showing rows {offset + 1}-{min(offset + page_size, total)} of {total}.\n"
@@ -88,27 +102,50 @@ async def try_cached_gcs_result(
     offset: int,
     page_size: int,
 ) -> list[TextContent] | None:
-    """Check Redis for cached GCS metadata and return a response if found.
+    """Return a GCS-backed result page, using per-page Redis cache.
 
-    Returns None if GCS is not configured or no cached metadata exists.
+    Returns None if GCS is not configured or no cached metadata exists
+    (i.e. the task was never uploaded to GCS).
     """
     if state.gcs_store is None:
         return None
 
+    # Check base metadata — if absent, this task isn't in GCS
     cached_meta_raw = await state.get_result_meta(task_id)
     if not cached_meta_raw:
         return None
 
     meta = json.loads(cached_meta_raw)
+    total: int = meta["total"]
+    columns: list[str] = meta["columns"]
+
+    # Check per-page cache
+    cached_page = await state.get_result_page(task_id, offset, page_size)
+    if cached_page is not None:
+        preview = json.loads(cached_page)
+    else:
+        # Page cache miss — fetch from GCS and slice
+        try:
+            all_records = await asyncio.to_thread(
+                state.gcs_store.download_json, task_id
+            )
+            preview = _slice_preview(all_records, offset, page_size)
+            await state.store_result_page(
+                task_id, offset, page_size, json.dumps(preview)
+            )
+        except Exception:
+            logger.warning("Failed to fetch page from GCS for task %s", task_id)
+            preview = []
+
     urls = await asyncio.to_thread(state.gcs_store.generate_signed_urls, task_id)
 
     return _build_gcs_response(
         task_id=task_id,
         urls=urls,
-        preview=meta.get("preview", []),
-        total=meta["total"],
-        columns=meta["columns"],
-        offset=offset,
+        preview=preview,
+        total=total,
+        columns=columns,
+        offset=min(offset, total),
         page_size=page_size,
     )
 
@@ -132,14 +169,15 @@ async def try_upload_gcs_result(
         total = len(df)
         columns = list(df.columns)
 
-        # Build preview page
+        # Store base metadata (without preview)
+        meta = {"total": total, "columns": columns}
+        await state.store_result_meta(task_id, json.dumps(meta))
+
+        # Build and cache page preview
         clamped_offset = min(offset, total)
         page_df = df.iloc[clamped_offset : clamped_offset + page_size]
         preview = page_df.where(page_df.notna(), None).to_dict(orient="records")
-
-        # Store metadata in Redis with TTL
-        meta = {"total": total, "columns": columns, "preview": preview}
-        await state.store_result_meta(task_id, json.dumps(meta))
+        await state.store_result_page(task_id, offset, page_size, json.dumps(preview))
 
         return _build_gcs_response(
             task_id=task_id,

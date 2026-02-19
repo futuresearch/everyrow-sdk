@@ -4,7 +4,15 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class HttpSettings(BaseSettings):
+class _BaseSettings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    preview_size: int = Field(
+        default=5, description="Number of rows in the initial results preview"
+    )
+
+
+class HttpSettings(_BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     mcp_server_url: str
@@ -33,7 +41,7 @@ class HttpSettings(BaseSettings):
         return self
 
 
-class StdioSettings(BaseSettings):
+class StdioSettings(_BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     everyrow_api_key: str
