@@ -50,7 +50,7 @@ class JobClassification(BaseModel):
 
 
 async def main():
-    jobs = pd.read_csv("hn_jobs.csv")
+    jobs = pd.read_csv("hn_jobs_classify.csv")
 
     result = await agent_map(
         task="""Classify this job posting by primary role:

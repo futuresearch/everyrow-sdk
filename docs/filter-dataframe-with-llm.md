@@ -47,7 +47,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 from everyrow.ops import screen
 
-jobs = pd.read_csv("hn_jobs.csv")  # 3,616 job postings
+jobs = pd.read_csv("hn_jobs_screen.csv")  # 3,616 job postings
 
 class JobScreenResult(BaseModel):
     qualifies: bool = Field(description="True if meets ALL criteria")
