@@ -46,14 +46,18 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Read version from manifest
+        id: version
+        run: echo "version=$(jq -r .version everyrow-mcp/manifest.json)" >> "$GITHUB_OUTPUT"
+
       - name: Build MCPB bundle
         working-directory: everyrow-mcp
-        run: npx -y @anthropic-ai/mcpb pack
+        run: npx -y @anthropic-ai/mcpb pack . everyrow-mcp-${{ steps.version.outputs.version }}.mcpb
 
       - name: Upload MCPB to release
         uses: softprops/action-gh-release@v2
         with:
-          files: everyrow-mcp/everyrow-mcp.mcpb
+          files: everyrow-mcp/everyrow-mcp-${{ steps.version.outputs.version }}.mcpb
 
   publish-mcp-registry:
     name: Publish to MCP Registry
