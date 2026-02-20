@@ -2,45 +2,64 @@
 
 from __future__ import annotations
 
+import socket
+import subprocess
+import time
 from pathlib import Path
 
 import pandas as pd
 import pytest
+import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
 from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.state import state
 
+_REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
 
-class MockRedis:
-    """Minimal async Redis mock backed by a dict. Replaces fakeredis in tests."""
 
-    def __init__(self) -> None:
-        self._data: dict[str, str] = {}
+@pytest.fixture(scope="session")
+def _redis_server():
+    """Start a local redis-server process for the test session."""
+    proc = subprocess.Popen(
+        [
+            "redis-server",
+            "--port",
+            str(_REDIS_PORT),
+            "--save",
+            "",
+            "--appendonly",
+            "no",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    # Wait for Redis to accept connections
+    for _ in range(30):
+        try:
+            s = socket.create_connection(("localhost", _REDIS_PORT), timeout=0.1)
+            s.close()
+            break
+        except OSError:
+            time.sleep(0.1)
+    else:
+        proc.kill()
+        raise RuntimeError("Test redis-server did not start in time")
 
-    async def get(self, key: str) -> str | None:
-        return self._data.get(key)
+    yield
 
-    async def set(self, key: str, value: str) -> None:
-        self._data[key] = value
-
-    async def setex(self, key: str, ttl: int, value: str) -> None:
-        self._data[key] = value  # TTL ignored in tests
-
-    async def delete(self, *keys: str) -> int:
-        count = 0
-        for k in keys:
-            if self._data.pop(k, None) is not None:
-                count += 1
-        return count
-
-    async def ping(self) -> bool:
-        return True
+    proc.terminate()
+    proc.wait(timeout=5)
 
 
 @pytest.fixture
-def fake_redis() -> MockRedis:
-    return MockRedis()
+async def fake_redis(_redis_server) -> aioredis.Redis:
+    """A real Redis client, flushed after each test."""
+    r = aioredis.Redis(host="localhost", port=_REDIS_PORT, decode_responses=True)
+    await r.flushdb()
+    yield r
+    await r.flushdb()
+    await r.aclose()
 
 
 # Ensure state.settings is always available in tests
