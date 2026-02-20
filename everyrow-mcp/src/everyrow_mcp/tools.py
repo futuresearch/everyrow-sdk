@@ -595,14 +595,17 @@ async def everyrow_progress(  # noqa: PLR0912
                 completed_msg = (
                     f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
                 )
+            if state.is_http:
+                next_call = (
+                    f"Call everyrow_results(task_id='{task_id}') to view the output."
+                )
+            else:
+                next_call = f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
             return _with_ui(
                 ui_json_str,
                 TextContent(
                     type="text",
-                    text=(
-                        f"{completed_msg}\n"
-                        f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
-                    ),
+                    text=f"{completed_msg}\n{next_call}",
                 ),
             )
         return _with_ui(
@@ -650,10 +653,13 @@ async def everyrow_progress(  # noqa: PLR0912
     meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
-    """Retrieve results from a completed everyrow task and save them to a CSV.
+    """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    The output_path must be a full file path ending in .csv.
+
+    In stdio mode, pass output_path (ending in .csv) to save the CSV locally.
+    In HTTP mode, results are returned as a preview table with a download URL.
+    Do NOT pass output_path in HTTP mode — no local file is created.
     """
     client = _get_client()
     task_id = params.task_id

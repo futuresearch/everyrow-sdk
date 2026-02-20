@@ -143,8 +143,8 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 <div id="toolbar">
   <span id="sum">Loading...</span>
   <button id="selAllBtn">Select all</button>
-  <button id="copyBtn" disabled>Copy TSV (0)</button>
-  <span class="export-btns"><button id="exportCsv" title="Copy CSV download link to clipboard">Copy CSV</button><button id="exportJson" title="Copy all data as JSON to clipboard">Copy JSON</button></span>
+  <button id="copyBtn" disabled>Copy (0)</button>
+  <span class="export-btns"><button id="exportLink" title="Copy CSV download link to clipboard">Copy link</button></span>
   <span class="settings-wrap"><button id="settingsBtn" title="Settings">Settings</button><div id="settingsDrop" class="settings-drop"><div class="drop-hdr">Copy format</div><label><input type="radio" name="cfmt" value="tsv" checked> TSV (tabs)</label><label><input type="radio" name="cfmt" value="csv"> CSV</label><label><input type="radio" name="cfmt" value="json"> JSON</label><div class="drop-sep"></div><div class="drop-hdr">Table height</div><label><input type="radio" name="tsize" value="250"> Small</label><label><input type="radio" name="tsize" value="420" checked> Medium</label><label><input type="radio" name="tsize" value="700"> Large</label></div></span>
   <button id="expandBtn" title="Toggle fullscreen">&#x2922;</button>
 </div>
@@ -377,7 +377,7 @@ function updateSelection(){
     const idx=parseInt(tr.dataset.idx,10);tr.classList.toggle("selected",S.selected.has(idx));
   });
 }
-function updateCopyBtn(){const n=S.selected.size;const fl=copyFmt.toUpperCase();copyBtn.textContent=n>0?"Copy "+fl+" ("+n+")":"Copy "+fl;copyBtn.disabled=n===0;}
+function updateCopyBtn(){const n=S.selected.size;const fl=copyFmt.toUpperCase();copyBtn.textContent=n>0?"Copy ("+n+")":"Copy";copyBtn.title="Copy selected rows as "+fl;copyBtn.disabled=n===0;}
 
 /* --- select all --- */
 selAllBtn.addEventListener("click",()=>{
@@ -613,24 +613,17 @@ function onColDragUp(e){
   colDragging=false;dragCol=null;
 }
 
-/* --- export CSV / JSON (clipboard-only, widget runs in sandboxed iframe) --- */
+/* --- export CSV / JSON --- */
 async function copyToClipboard(text){
   try{await navigator.clipboard.writeText(text);return true;}catch{}
   if(execCopy(text))return true;
   return false;
 }
-document.getElementById("exportCsv").addEventListener("click",async()=>{
-  if(!S.rows.length)return;
-  const text=csvUrl||"No CSV link available";
-  if(await copyToClipboard(text))showToast("CSV link copied \u2014 paste in a new tab to download");
-  else{copyArea.value=text;copyModal.classList.add("show");copyArea.focus();copyArea.select();}
-});
-document.getElementById("exportJson").addEventListener("click",async()=>{
-  if(!S.rows.length)return;
-  const data=S.filteredIdx.map(i=>{const o={};for(const c of S.allCols){o[c]=S.rows[i].display[c]??null;}return o;});
-  const json=JSON.stringify(data,null,2);
-  if(await copyToClipboard(json))showToast("JSON copied to clipboard ("+S.filteredIdx.length+" rows)");
-  else{copyArea.value=json;copyModal.classList.add("show");copyArea.focus();copyArea.select();}
+
+document.getElementById("exportLink").addEventListener("click",async()=>{
+  if(!csvUrl){showToast("No download link available");return;}
+  if(await copyToClipboard(csvUrl))showToast("Download link copied \u2014 paste in a new tab");
+  else{copyArea.value=csvUrl;copyModal.classList.add("show");copyArea.focus();copyArea.select();}
 });
 
 /* --- row resize (drag bottom border) --- */

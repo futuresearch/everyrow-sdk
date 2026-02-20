@@ -171,8 +171,18 @@ def _configure_shared(
 
     state.mcp_server_url = mcp_server_url
 
-    # Re-register session resource with CSP allowing progress endpoint fetch
+    # CSP: allow widgets to fetch from unpkg (SDK) and our server (API calls)
     connect_domains: list[str] = [mcp_server_url]
+    widget_csp = {
+        "resourceDomains": ["https://unpkg.com"],
+        "connectDomains": connect_domains,
+    }
+
+    # Patch tool meta to include CSP (host may read CSP from tool, not resource)
+    for tool_name in ("everyrow_progress", "everyrow_results"):
+        tool = mcp._tool_manager._tools.get(tool_name)
+        if tool and tool.meta and "ui" in tool.meta:
+            tool.meta["ui"]["csp"] = widget_csp
 
     @mcp.resource(
         "ui://everyrow/session.html",
