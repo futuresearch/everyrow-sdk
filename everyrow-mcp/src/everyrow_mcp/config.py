@@ -15,6 +15,7 @@ class HttpSettings(BaseSettings):
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
     mcp_server_url: str
     supabase_url: str
+    supabase_anon_key: str
 
     redis_host: str = Field(default="localhost")
     redis_port: int = Field(default=6379)

@@ -7,7 +7,7 @@ import sys
 from typing import Any
 from urllib.parse import urlparse
 
-from mcp.server.auth.settings import AuthSettings
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import lifespan_wrapper
 from mcp.server.transport_security import TransportSecuritySettings
@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from everyrow_mcp.auth import SupabaseTokenVerifier
+from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
 from everyrow_mcp.config import DevHttpSettings, HttpSettings
 from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_utils import create_redis_client
@@ -58,7 +58,7 @@ def _configure_auth(
     port: int,
     _log: logging.Logger,
 ) -> None:
-    """Full OAuth HTTP mode."""
+    """Full OAuth HTTP mode -- our server is the authorization server."""
     try:
         settings = HttpSettings()  # pyright: ignore[reportCallIssue]
     except Exception as e:
@@ -76,14 +76,25 @@ def _configure_auth(
     )
     state.redis = redis_client
 
-    # Token verifier (resource-server mode — Supabase is the authorization server)
-    verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
-    mcp._token_verifier = verifier
+    # Auth provider (handles registration + OAuth flow via Supabase)
+    auth_provider = EveryRowAuthProvider(
+        supabase_url=settings.supabase_url,
+        supabase_anon_key=settings.supabase_anon_key,
+        mcp_server_url=settings.mcp_server_url,
+        redis=redis_client,
+    )
+    state.auth_provider = auth_provider
 
-    supabase_issuer = settings.supabase_url.rstrip("/") + "/auth/v1"
+    # Token verifier validates Supabase JWTs via JWKS
+    verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
+
+    # Wire auth into FastMCP
+    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
+    mcp._token_verifier = verifier
     mcp.settings.auth = AuthSettings(
-        issuer_url=AnyHttpUrl(supabase_issuer),
+        issuer_url=AnyHttpUrl(settings.mcp_server_url),
         resource_server_url=AnyHttpUrl(settings.mcp_server_url),
+        client_registration_options=ClientRegistrationOptions(enabled=True),
     )
     parsed = urlparse(settings.mcp_server_url)
     allowed_host = parsed.hostname or "localhost"
@@ -108,6 +119,7 @@ def _configure_auth(
         port,
         mcp_server_url,
         redis_client=redis_client,
+        auth_provider=auth_provider,
     )
 
 
@@ -150,6 +162,7 @@ def _configure_shared(
     *,
     redis_client: Any | None = None,
     no_auth: bool = False,
+    auth_provider: EveryRowAuthProvider | None = None,
 ) -> None:
     """Configuration shared between auth and no-auth HTTP modes."""
     mcp._mcp_server.lifespan = lifespan_wrapper(mcp, http_lifespan)
@@ -200,18 +213,12 @@ def _configure_shared(
     async def _health(_request: Request) -> Response:
         return JSONResponse({"status": "ok"})
 
-    async def _debug_routes(_request: Request) -> Response:
-        return JSONResponse(
-            {
-                "auth": str(mcp.settings.auth),
-                "token_verifier": bool(mcp._token_verifier),
-                "transport_security": str(mcp.settings.transport_security),
-                "has_instance_override": "streamable_http_app" in mcp.__dict__,
-            }
-        )
-
     mcp.custom_route("/health", ["GET"])(_health)
-    mcp.custom_route("/debug/routes", ["GET"])(_debug_routes)
+
+    # Auth routes (only in auth mode)
+    if auth_provider is not None:
+        mcp.custom_route("/auth/start/{state}", ["GET"])(auth_provider.handle_start)
+        mcp.custom_route("/auth/callback", ["GET"])(auth_provider.handle_callback)
 
     # Request logging + rate-limit middleware
     _original_streamable_http_app = mcp.streamable_http_app

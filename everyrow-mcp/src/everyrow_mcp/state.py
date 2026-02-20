@@ -39,6 +39,7 @@ class ServerState:
     mcp_server_url: str = ""
     settings: StdioSettings | HttpSettings | DevHttpSettings | None = None
     redis: Any | None = None
+    auth_provider: Any | None = None
 
     # ── Transport helpers ─────────────────────────────────────────
 
