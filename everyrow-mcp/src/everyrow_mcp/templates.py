@@ -200,7 +200,7 @@ app.onhostcontextchanged=(ctx)=>{
 /* --- helpers --- */
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 function escAttr(s){return esc(s).replace(/"/g,"&quot;");}
-function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\])]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(m[1])+'" target="_blank">'+esc(m[1])+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
+function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
 
 /* --- data processing --- */
 function flat(obj,pre){
