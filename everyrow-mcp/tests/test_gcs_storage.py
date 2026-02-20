@@ -1,11 +1,12 @@
 """Tests for the GCS storage module."""
 
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-from everyrow_mcp.gcs_storage import SIGNED_URL_EXPIRY, GCSResultStore, ResultURLs
+from everyrow_mcp.gcs_storage import GCSResultStore, ResultURLs
 
 
 @pytest.fixture
@@ -113,12 +114,12 @@ class TestGCSResultStore:
 
         json_blob = mock_gcs["bucket"].blob("results/task-abc-123/data.json")
         json_call = json_blob.generate_signed_url.call_args
-        assert json_call.kwargs["expiration"] == SIGNED_URL_EXPIRY
+        assert json_call.kwargs["expiration"] == timedelta(minutes=15)
         assert json_call.kwargs["version"] == "v4"
 
         csv_blob = mock_gcs["bucket"].blob("results/task-abc-123/data.csv")
         csv_call = csv_blob.generate_signed_url.call_args
-        assert csv_call.kwargs["expiration"] == SIGNED_URL_EXPIRY
+        assert csv_call.kwargs["expiration"] == timedelta(minutes=15)
         assert csv_call.kwargs["version"] == "v4"
         assert "attachment" in csv_call.kwargs["response_disposition"]
         assert "task-abc" in csv_call.kwargs["response_disposition"]

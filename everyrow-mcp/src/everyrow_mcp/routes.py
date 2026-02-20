@@ -38,10 +38,10 @@ async def api_progress(request: Request) -> Any:
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
 
     try:
+        if state.settings is None:
+            raise RuntimeError("MCP server not initialized")
         client = AuthenticatedClient(
-            base_url=state.settings.everyrow_api_url
-            if state.settings
-            else "https://everyrow.io/api/v0",
+            base_url=state.settings.everyrow_api_url,
             token=api_key,
             raise_on_unexpected_status=True,
             follow_redirects=True,
@@ -136,7 +136,7 @@ async def api_results(request: Request) -> Any:
             headers={**cors, **security_headers},
         )
 
-    df, _ts, expected_token = cached
+    df, expected_token = cached.df, cached.download_token
     if not token or not secrets.compare_digest(token, expected_token):
         return JSONResponse(
             {"error": "Invalid token"},

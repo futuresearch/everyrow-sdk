@@ -84,7 +84,10 @@ def configure_http_mode(
 
     # Initialize GCS result store if enabled via RESULT_STORAGE=gcs
     if settings.result_storage == "gcs" and settings.gcs_results_bucket:
-        state.gcs_store = GCSResultStore(settings.gcs_results_bucket)
+        state.gcs_store = GCSResultStore(
+            settings.gcs_results_bucket,
+            signed_url_expiry_minutes=settings.signed_url_expiry_minutes,
+        )
         logging.getLogger(__name__).info(
             "GCS result store enabled: %s", settings.gcs_results_bucket
         )

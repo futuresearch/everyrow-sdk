@@ -747,7 +747,7 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     await state.evict_stale_results()
     cached = await state.get_cached_result(task_id)
     if cached is not None:
-        df, _, download_token = cached
+        df, download_token = cached.df, cached.download_token
     else:
         # ── Fetch from API ─────────────────────────────────────────
         try:

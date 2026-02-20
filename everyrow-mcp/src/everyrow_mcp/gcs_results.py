@@ -69,7 +69,7 @@ def _build_gcs_response(
     if has_more:
         page_size_arg = (
             f", page_size={page_size}"
-            if page_size != (state.settings.preview_size if state.settings else 5)
+            if page_size != state.settings.preview_size
             else ""
         )
         summary = (

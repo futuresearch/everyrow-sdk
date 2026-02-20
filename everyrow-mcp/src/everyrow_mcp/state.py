@@ -29,15 +29,27 @@ TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
 
 
 @dataclass
+class CachedResult:
+    """An in-memory cached task result."""
+
+    df: pd.DataFrame
+    timestamp: float
+    download_token: str
+
+
+@dataclass
 class ServerState:
-    """Mutable state shared across the MCP server."""
+    """Mutable state shared across the MCP server.
+
+    This is a dataclass (not a BaseModel) because it holds runtime-only mutable
+    state — asyncio.Lock, Redis client, AuthenticatedClient — that doesn't fit
+    Pydantic's validation/serialization model.
+    """
 
     client: AuthenticatedClient | None = None
     transport: str = "stdio"
     mcp_server_url: str = ""
-    result_cache: dict[str, tuple[pd.DataFrame, float, str]] = field(
-        default_factory=dict
-    )
+    result_cache: dict[str, CachedResult] = field(default_factory=dict)
     gcs_store: GCSResultStore | None = None
     settings: _BaseSettings | None = None
     redis: Any | None = None
@@ -61,15 +73,13 @@ class ServerState:
             now = datetime.now(UTC).timestamp()
             stale = [
                 k
-                for k, (_, ts, _tok) in self.result_cache.items()
-                if now - ts > RESULT_CACHE_TTL
+                for k, v in self.result_cache.items()
+                if now - v.timestamp > RESULT_CACHE_TTL
             ]
             for k in stale:
                 self.result_cache.pop(k, None)
 
-    async def get_cached_result(
-        self, task_id: str
-    ) -> tuple[pd.DataFrame, float, str] | None:
+    async def get_cached_result(self, task_id: str) -> CachedResult | None:
         """Get a cached result, using a lock in HTTP mode."""
         async with self._lock:
             return self.result_cache.get(task_id)
@@ -79,7 +89,9 @@ class ServerState:
     ) -> None:
         """Store a result in the in-memory cache, using a lock in HTTP mode."""
         async with self._lock:
-            self.result_cache[task_id] = (df, timestamp, token)
+            self.result_cache[task_id] = CachedResult(
+                df=df, timestamp=timestamp, download_token=token
+            )
 
     async def pop_cached_result(self, task_id: str) -> None:
         """Remove a result from the in-memory cache, using a lock in HTTP mode."""

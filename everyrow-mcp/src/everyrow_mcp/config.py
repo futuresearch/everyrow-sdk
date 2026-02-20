@@ -11,6 +11,10 @@ class _BaseSettings(BaseSettings):
     preview_size: int = Field(
         default=5, description="Number of rows in the initial results preview"
     )
+    token_budget: int = Field(
+        default=20000,
+        description="Target token budget per page of inline results",
+    )
 
 
 class HttpSettings(_BaseSettings):
@@ -31,6 +35,10 @@ class HttpSettings(_BaseSettings):
 
     result_storage: Literal["memory", "gcs"]
     gcs_results_bucket: str | None = Field(default=None)
+
+    signed_url_expiry_minutes: int = Field(
+        default=15, description="GCS signed URL expiry in minutes"
+    )
 
     @model_validator(mode="after")
     def _validate_redis(self):

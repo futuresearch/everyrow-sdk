@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import secrets
 from datetime import datetime
 from typing import Any
@@ -192,7 +191,6 @@ async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, s
     raise ValueError("Task result has no table data.")
 
 
-_TOKEN_BUDGET = int(os.environ.get("EVERYROW_TOKEN_BUDGET", "20000"))
 _CHARS_PER_TOKEN = 4  # conservative estimate for JSON-heavy text
 
 
@@ -209,7 +207,8 @@ def _recommend_page_size(
     avg_tokens_per_row = avg_chars_per_row / _CHARS_PER_TOKEN
     if avg_tokens_per_row <= 0:
         return None
-    recommended = max(1, min(int(_TOKEN_BUDGET / avg_tokens_per_row), 100))
+    token_budget = state.settings.token_budget if state.settings else 20000
+    recommended = max(1, min(int(token_budget / avg_tokens_per_row), 100))
     # Only recommend if meaningfully different (>25% change) and there are more rows
     if (
         recommended >= total
