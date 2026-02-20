@@ -76,7 +76,7 @@ class TestScreenIntegration:
     @pytest.mark.asyncio
     async def test_screen_jobs(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         jobs_csv: Path,
         tmp_path: Path,
     ):
@@ -125,7 +125,7 @@ class TestRankIntegration:
     @pytest.mark.asyncio
     async def test_rank_companies(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         companies_csv: Path,
         tmp_path: Path,
     ):
@@ -171,7 +171,7 @@ class TestDedupeIntegration:
     @pytest.mark.asyncio
     async def test_dedupe_contacts(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         contacts_csv: Path,
         tmp_path: Path,
     ):
@@ -225,7 +225,7 @@ class TestMergeIntegration:
     @pytest.mark.asyncio
     async def test_merge_products_suppliers(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         products_csv: Path,
         suppliers_csv: Path,
         tmp_path: Path,
@@ -273,7 +273,7 @@ class TestAgentIntegration:
     @pytest.mark.asyncio
     async def test_agent_company_research(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         tmp_path: Path,
     ):
         """Test agent researching companies."""

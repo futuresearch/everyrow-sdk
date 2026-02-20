@@ -56,6 +56,7 @@ SKIPPED_URLS: set[str] = {
     "https://developers.openai.com/codex/skills",
     "https://docs.astral.sh/uv/",
     "https://en.wikipedia.org/wiki/Active_learning_(machine_learning)",
+    "https://everyrow.io/sessions/df145a50-2dfd-48c6-97ed-6f82a82bca66",
     "https://geminicli.com/docs/cli/skills/",
     "https://geminicli.com/docs/extensions/",
     "https://geminicli.com/docs/tools/mcp-server/",
