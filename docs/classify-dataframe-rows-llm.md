@@ -24,7 +24,7 @@ If you're categorizing support tickets, labeling training data, or tagging conte
 
 ## Walkthrough
 
-The `agent_map` function processes each row in parallel with structured output via Pydantic models. You define the schema, describe the task, and get back a DataFrame with your new columns. Download [hn_jobs_classify.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/hn_jobs_classify.csv) to follow along.
+The `agent_map` function processes each row in parallel with structured output via Pydantic models. You define the schema, describe the task, and get back a DataFrame with your new columns. To follow along, [right click this link](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/hn_jobs_classify.csv) and save the CSV file to your computer.
 
 ```bash
 pip install everyrow
