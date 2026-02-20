@@ -149,7 +149,7 @@ class SupabaseTokenVerifier(TokenVerifier):
             payload: dict[str, Any] = pyjwt.decode(
                 token,
                 signing_key.key,
-                algorithms=["RS256"],
+                algorithms=["RS256", "ES256"],
                 issuer=self._issuer,
                 audience="authenticated",
                 options={"require": ["exp", "sub", "iss", "aud"]},
