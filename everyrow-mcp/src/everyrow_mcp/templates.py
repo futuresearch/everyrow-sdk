@@ -143,7 +143,7 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 <div id="toolbar">
   <span id="sum">Loading...</span>
   <button id="selAllBtn">Select all</button>
-  <button id="copyBtn" disabled>Copy (0)</button>
+  <button id="copyBtn" disabled>Copy TSV (0)</button>
   <span class="export-btns"><button id="exportLink" title="Copy CSV download link to clipboard">Copy link</button></span>
   <span class="settings-wrap"><button id="settingsBtn" title="Settings">Settings</button><div id="settingsDrop" class="settings-drop"><div class="drop-hdr">Copy format</div><label><input type="radio" name="cfmt" value="tsv" checked> TSV (tabs)</label><label><input type="radio" name="cfmt" value="csv"> CSV</label><label><input type="radio" name="cfmt" value="json"> JSON</label><div class="drop-sep"></div><div class="drop-hdr">Table height</div><label><input type="radio" name="tsize" value="250"> Small</label><label><input type="radio" name="tsize" value="420" checked> Medium</label><label><input type="radio" name="tsize" value="700"> Large</label></div></span>
   <button id="expandBtn" title="Toggle fullscreen">&#x2922;</button>
@@ -377,7 +377,7 @@ function updateSelection(){
     const idx=parseInt(tr.dataset.idx,10);tr.classList.toggle("selected",S.selected.has(idx));
   });
 }
-function updateCopyBtn(){const n=S.selected.size;const fl=copyFmt.toUpperCase();copyBtn.textContent=n>0?"Copy ("+n+")":"Copy";copyBtn.title="Copy selected rows as "+fl;copyBtn.disabled=n===0;}
+function updateCopyBtn(){const n=S.selected.size;const fl=copyFmt.toUpperCase();copyBtn.textContent=n>0?"Copy "+fl+" ("+n+")":"Copy "+fl;copyBtn.disabled=n===0;}
 
 /* --- select all --- */
 selAllBtn.addEventListener("click",()=>{

@@ -1104,3 +1104,144 @@ class TestStdioVsHttpGating:
         assert ui_data["completed"] == 2
         assert ui_data["total"] == 5
         assert "2/5 complete" in result[1].text
+
+
+class TestResultsWidgetData:
+    """Tests for the HTTP fallback widget data in everyrow_results."""
+
+    @pytest.mark.asyncio
+    async def test_http_fallback_widget_includes_csv_url(self):
+        """Verify csv_url is present in widget JSON when _get_csv_url returns a URL."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+
+        status_response = _make_task_status_response(status="completed")
+        result_response = _make_task_result_response([{"name": "A"}])
+        csv_url = "https://example.com/api/results/123/download?token=abc"
+
+        with (
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.try_cached_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=result_response,
+            ),
+            patch(
+                "everyrow_mcp.tools.try_store_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tools._get_csv_url",
+                new_callable=AsyncMock,
+                return_value=csv_url,
+            ),
+        ):
+            result = await everyrow_results(ResultsInput(task_id=task_id))
+
+        assert len(result) == 2
+        widget_data = json.loads(result[0].text)
+        assert widget_data["csv_url"] == csv_url
+
+    @pytest.mark.asyncio
+    async def test_http_fallback_widget_omits_csv_url_when_unavailable(self):
+        """Verify csv_url is omitted when _get_csv_url returns empty string."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+
+        status_response = _make_task_status_response(status="completed")
+        result_response = _make_task_result_response([{"name": "A"}])
+
+        with (
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.try_cached_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=result_response,
+            ),
+            patch(
+                "everyrow_mcp.tools.try_store_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tools._get_csv_url",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+        ):
+            result = await everyrow_results(ResultsInput(task_id=task_id))
+
+        assert len(result) == 2
+        widget_data = json.loads(result[0].text)
+        assert "csv_url" not in widget_data
+
+    @pytest.mark.asyncio
+    async def test_http_fallback_widget_includes_session_url(self):
+        """Verify session_url is present in widget data when available."""
+        task_id = str(uuid4())
+        session_id = uuid4()
+        mock_client = _make_mock_client()
+        session_url = f"https://everyrow.io/sessions/{session_id}"
+
+        status_response = _make_task_status_response(
+            status="completed", session_id=session_id
+        )
+        result_response = _make_task_result_response([{"name": "A"}])
+
+        with (
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.try_cached_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=result_response,
+            ),
+            patch(
+                "everyrow_mcp.tools.try_store_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tools._get_csv_url",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+        ):
+            result = await everyrow_results(ResultsInput(task_id=task_id))
+
+        assert len(result) == 2
+        widget_data = json.loads(result[0].text)
+        assert widget_data["session_url"] == session_url
