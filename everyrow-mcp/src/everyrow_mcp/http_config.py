@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
@@ -17,6 +18,7 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.auth import SupabaseTokenVerifier
 from everyrow_mcp.config import DevHttpSettings, HttpSettings
+from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_download, api_progress
 from everyrow_mcp.state import state
@@ -75,7 +77,7 @@ def _configure_auth(
     state.redis = redis_client
 
     # Token verifier (resource-server mode — Supabase is the authorization server)
-    verifier = SupabaseTokenVerifier(settings.supabase_url)
+    verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
     mcp._token_verifier = verifier
 
     supabase_issuer = settings.supabase_url.rstrip("/") + "/auth/v1"
@@ -83,13 +85,30 @@ def _configure_auth(
         issuer_url=AnyHttpUrl(supabase_issuer),
         resource_server_url=AnyHttpUrl(settings.mcp_server_url),
     )
+    parsed = urlparse(settings.mcp_server_url)
+    allowed_host = parsed.hostname or "localhost"
     mcp.settings.transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
+        allowed_hosts=[allowed_host],
     )
 
     mcp_server_url = settings.mcp_server_url
 
-    _configure_shared(mcp, http_lifespan, host, port, mcp_server_url)
+    logging.warning(
+        "Auth configured: issuer=%s resource_server=%s allowed_hosts=%s",
+        mcp.settings.auth.issuer_url,
+        mcp.settings.auth.resource_server_url,
+        mcp.settings.transport_security.allowed_hosts,
+    )
+
+    _configure_shared(
+        mcp,
+        http_lifespan,
+        host,
+        port,
+        mcp_server_url,
+        redis_client=redis_client,
+    )
 
 
 def _configure_no_auth(
@@ -119,7 +138,7 @@ def _configure_no_auth(
 
     mcp_server_url = f"http://localhost:{port}"
 
-    _configure_shared(mcp, http_lifespan, host, port, mcp_server_url)
+    _configure_shared(mcp, http_lifespan, host, port, mcp_server_url, no_auth=True)
 
 
 def _configure_shared(
@@ -128,6 +147,9 @@ def _configure_shared(
     host: str,
     port: int,
     mcp_server_url: str,
+    *,
+    redis_client: Any | None = None,
+    no_auth: bool = False,
 ) -> None:
     """Configuration shared between auth and no-auth HTTP modes."""
     mcp._mcp_server.lifespan = lifespan_wrapper(mcp, http_lifespan)
@@ -178,12 +200,23 @@ def _configure_shared(
     async def _health(_request: Request) -> Response:
         return JSONResponse({"status": "ok"})
 
-    mcp.custom_route("/health", ["GET"])(_health)
+    async def _debug_routes(_request: Request) -> Response:
+        return JSONResponse(
+            {
+                "auth": str(mcp.settings.auth),
+                "token_verifier": bool(mcp._token_verifier),
+                "transport_security": str(mcp.settings.transport_security),
+                "has_instance_override": "streamable_http_app" in mcp.__dict__,
+            }
+        )
 
-    # Request logging middleware
+    mcp.custom_route("/health", ["GET"])(_health)
+    mcp.custom_route("/debug/routes", ["GET"])(_debug_routes)
+
+    # Request logging + rate-limit middleware
     _original_streamable_http_app = mcp.streamable_http_app
 
-    def _logging_streamable_http_app():
+    def _middleware_streamable_http_app():
         app = _original_streamable_http_app()
 
         class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -206,6 +239,10 @@ def _configure_shared(
                 return response
 
         app.add_middleware(RequestLoggingMiddleware)
+
+        if not no_auth and redis_client is not None:
+            app.add_middleware(RateLimitMiddleware, redis=redis_client)
+
         return app
 
-    mcp.streamable_http_app = _logging_streamable_http_app
+    mcp.streamable_http_app = _middleware_streamable_http_app

@@ -41,6 +41,14 @@ def main():
     if args.no_auth and not args.http:
         parser.error("--no-auth requires --http")
 
+    if args.no_auth and not os.environ.get("ALLOW_NO_AUTH"):
+        print(
+            "ERROR: --no-auth requires the ALLOW_NO_AUTH=1 environment variable.\n"
+            "This prevents accidental unauthenticated deployments in production.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
 

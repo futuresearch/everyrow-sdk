@@ -90,8 +90,7 @@ def mcp_server() -> str:
     env = {
         **os.environ,
         "REDIS_DB": str(REDIS_TEST_DB),
-        # No GCS — results go through Redis-backed result_store
-        "GCS_RESULTS_BUCKET": "",
+        "ALLOW_NO_AUTH": "1",
     }
 
     proc = subprocess.Popen(

@@ -1,5 +1,6 @@
 """Tests for Supabase JWT verification."""
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,10 +30,33 @@ def rsa_keypair():
 
 
 @pytest.fixture
-def verifier(rsa_keypair):
-    """Create a SupabaseTokenVerifier with a mocked JWKS client."""
+def mock_redis():
+    """In-memory dict-backed async Redis mock."""
+    store: dict[str, str] = {}
+
+    redis = AsyncMock()
+
+    async def _setex(key, _ttl, value):
+        store[key] = value
+
+    async def _exists(key):
+        return 1 if key in store else 0
+
+    async def _delete(key):
+        store.pop(key, None)
+
+    redis.setex = AsyncMock(side_effect=_setex)
+    redis.exists = AsyncMock(side_effect=_exists)
+    redis.delete = AsyncMock(side_effect=_delete)
+    redis._store = store  # exposed for assertions
+    return redis
+
+
+@pytest.fixture
+def verifier(rsa_keypair, mock_redis):
+    """Create a SupabaseTokenVerifier with a mocked JWKS client and Redis."""
     _private_key, public_key = rsa_keypair
-    verifier = SupabaseTokenVerifier(SUPABASE_URL)
+    verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
 
     mock_signing_key = MagicMock()
     mock_signing_key.key = public_key.public_bytes(
@@ -46,8 +70,13 @@ def verifier(rsa_keypair):
     return verifier
 
 
-def _make_jwt(private_key, claims: dict | None = None) -> str:
-    """Create a signed JWT with default claims, optionally overriding."""
+def _make_jwt(
+    private_key,
+    claims: dict | None = None,
+    *,
+    remove_claims: list[str] | None = None,
+) -> str:
+    """Create a signed JWT with default claims, optionally overriding/removing."""
     payload = {
         "sub": "user-123",
         "aud": "authenticated",
@@ -58,6 +87,9 @@ def _make_jwt(private_key, claims: dict | None = None) -> str:
     }
     if claims:
         payload.update(claims)
+    if remove_claims:
+        for key in remove_claims:
+            payload.pop(key, None)
     return jwt.encode(payload, private_key, algorithm="RS256")
 
 
@@ -127,6 +159,8 @@ class TestSupabaseTokenVerifier:
             mock_jwk_cls.assert_called_once_with(
                 "https://my-project.supabase.co/auth/v1/.well-known/jwks.json",
                 cache_keys=True,
+                lifespan=300,
+                max_cached_keys=16,
             )
 
     @pytest.mark.asyncio
@@ -136,6 +170,8 @@ class TestSupabaseTokenVerifier:
             mock_jwk_cls.assert_called_once_with(
                 "https://my-project.supabase.co/auth/v1/.well-known/jwks.json",
                 cache_keys=True,
+                lifespan=300,
+                max_cached_keys=16,
             )
             assert v._issuer == "https://my-project.supabase.co/auth/v1"
 
@@ -187,3 +223,120 @@ class TestSupabaseTokenVerifier:
                 verifier._jwks_client.get_signing_key_from_jwt, token
             )
             assert result is not None
+
+
+# ── Token revocation tests ──────────────────────────────────────────
+
+
+class TestTokenRevocation:
+    @pytest.mark.asyncio
+    async def test_revoke_adds_to_denylist(self, verifier, mock_redis):
+        """revoke_token stores a fingerprint key in Redis."""
+        token = "some-token"
+        result = await verifier.revoke_token(token)
+
+        assert result is True
+        assert len(mock_redis._store) == 1
+        key = next(iter(mock_redis._store))
+        assert key.startswith("mcp:revoked:")
+
+    @pytest.mark.asyncio
+    async def test_revoked_token_rejected(self, verifier, rsa_keypair):
+        """A revoked token is rejected by verify_token."""
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key)
+
+        await verifier.revoke_token(token)
+        result = await verifier.verify_token(token)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_unrevoked_token_passes(self, verifier, rsa_keypair):
+        """A token that has not been revoked passes verification."""
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key)
+
+        result = await verifier.verify_token(token)
+
+        assert result is not None
+        assert result.client_id == "user-123"
+
+    @pytest.mark.asyncio
+    async def test_revoke_without_redis_returns_false(self, rsa_keypair):
+        """revoke_token returns False when no Redis is configured."""
+        _, _public_key = rsa_keypair
+        verifier = SupabaseTokenVerifier(SUPABASE_URL)  # no redis
+        result = await verifier.revoke_token("some-token")
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_denylist_check_fails_open(self, verifier, rsa_keypair, mock_redis):
+        """If Redis raises during _is_revoked, the token is NOT rejected."""
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key)
+
+        mock_redis.exists = AsyncMock(side_effect=ConnectionError("Redis down"))
+
+        result = await verifier.verify_token(token)
+        assert result is not None
+        assert result.client_id == "user-123"
+
+
+# ── Required claims tests ───────────────────────────────────────────
+
+
+class TestRequiredClaims:
+    @pytest.mark.asyncio
+    async def test_missing_exp_rejected(self, verifier, rsa_keypair):
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key, remove_claims=["exp"])
+        assert await verifier.verify_token(token) is None
+
+    @pytest.mark.asyncio
+    async def test_missing_sub_rejected(self, verifier, rsa_keypair):
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key, remove_claims=["sub"])
+        assert await verifier.verify_token(token) is None
+
+    @pytest.mark.asyncio
+    async def test_missing_aud_rejected(self, verifier, rsa_keypair):
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key, remove_claims=["aud"])
+        assert await verifier.verify_token(token) is None
+
+
+# ── JWKS lock concurrency test ──────────────────────────────────────
+
+
+class TestJwksLock:
+    @pytest.mark.asyncio
+    async def test_concurrent_verify_serialized_by_lock(self, verifier, rsa_keypair):
+        """Multiple concurrent verify_token calls should serialize JWKS fetches."""
+        private_key, _ = rsa_keypair
+        token = _make_jwt(private_key)
+
+        call_order: list[str] = []
+        original_get_key = verifier._jwks_client.get_signing_key_from_jwt
+
+        def tracked_get_key(t):
+            call_order.append("start")
+            result = original_get_key(t)
+            call_order.append("end")
+            return result
+
+        verifier._jwks_client.get_signing_key_from_jwt = tracked_get_key
+
+        results = await asyncio.gather(
+            verifier.verify_token(token),
+            verifier.verify_token(token),
+            verifier.verify_token(token),
+        )
+
+        # All should succeed
+        assert all(r is not None for r in results)
+
+        # Calls should be serialized: start/end pairs should not interleave
+        for i in range(0, len(call_order), 2):
+            assert call_order[i] == "start"
+            assert call_order[i + 1] == "end"
