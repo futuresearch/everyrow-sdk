@@ -36,7 +36,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.result_store import try_cached_result, try_store_result
+from everyrow_mcp.result_store import _get_csv_url, try_cached_result, try_store_result
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
     TaskNotReady,
@@ -814,7 +814,10 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
             f"\nCall everyrow_results(task_id='{task_id}', offset={next_offset}) for the next page."
         )
 
-    widget_data = {"preview": preview, "total": total}
+    csv_url = await _get_csv_url(task_id)
+    widget_data: dict = {"preview": preview, "total": total}
+    if csv_url:
+        widget_data["csv_url"] = csv_url
     if session_url:
         widget_data["session_url"] = session_url
 
