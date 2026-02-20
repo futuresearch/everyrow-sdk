@@ -1,14 +1,15 @@
 """HTTP-mode integration tests with real everyrow API calls.
 
 These tests spin up a Starlette ASGI server (via httpx + ASGITransport),
-configure state for HTTP mode with fakeredis, and make real API calls to
-the everyrow backend. They exercise the full pipeline:
+configure state for HTTP mode with a real Redis instance, and make real
+API calls to the everyrow backend. They exercise the full pipeline:
 
     submit (MCP tool) → poll (REST endpoint) → results (MCP tool + GCS)
 
 Requirements:
     - EVERYROW_API_KEY must be set
     - RUN_INTEGRATION_TESTS=1
+    - Redis running on localhost:6379
 
 Run with: pytest tests/test_http_real.py -v -s
 """
@@ -21,10 +22,10 @@ import os
 import re
 from unittest.mock import AsyncMock, patch
 
-import fakeredis.aioredis
 import httpx
 import pandas as pd
 import pytest
+import redis.asyncio
 from everyrow.api_utils import create_client
 from mcp.types import TextContent
 from starlette.applications import Starlette
@@ -47,13 +48,31 @@ pytestmark = pytest.mark.skipif(
     reason="Integration tests are skipped by default. Set RUN_INTEGRATION_TESTS=1 to run.",
 )
 
+REDIS_TEST_DB = 15
+
 
 # ── Fixtures ───────────────────────────────────────────────────
 
 
 @pytest.fixture
-def _http_mode():
-    """Configure global state for HTTP mode with fakeredis, restore after test."""
+async def real_redis():
+    """Connect to real Redis on db=15, flush before/after each test."""
+    client = redis.asyncio.Redis(
+        host="localhost", port=6379, db=REDIS_TEST_DB, decode_responses=True
+    )
+    try:
+        await client.ping()
+    except redis.ConnectionError:
+        pytest.skip("Redis not reachable on localhost:6379")
+    await client.flushdb()
+    yield client
+    await client.flushdb()
+    await client.aclose()
+
+
+@pytest.fixture
+def _http_mode(real_redis):
+    """Configure global state for HTTP mode with real Redis, restore after test."""
     orig = {
         "transport": state.transport,
         "redis": state.redis,
@@ -64,7 +83,7 @@ def _http_mode():
     }
 
     state.transport = "streamable-http"
-    state.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    state.redis = real_redis
     state.mcp_server_url = "http://testserver"
     state.settings = StdioSettings(
         everyrow_api_key=os.environ.get("EVERYROW_API_KEY", ""),
@@ -200,9 +219,7 @@ class TestHttpScreenPipeline:
     ):
         """Submit a screen task, poll via REST, fetch results via MCP tool."""
         # 1. Submit via MCP tool (in HTTP mode)
-        with patch(
-            "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-        ):
+        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
             result = await everyrow_screen(
                 ScreenInput(
                     task="Filter for remote positions with salary > $100k",
@@ -238,9 +255,7 @@ class TestHttpScreenPipeline:
 
         # 4. Fetch results via MCP tool (GCS mode — mock GCS upload)
         with (
-            patch(
-                "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-            ),
+            patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
                 "everyrow_mcp.tools.try_cached_gcs_result",
                 new_callable=AsyncMock,
@@ -282,9 +297,7 @@ class TestHttpAgentPipeline:
         df.to_csv(input_csv, index=False)
 
         # 1. Submit via MCP tool
-        with patch(
-            "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-        ):
+        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
             result = await everyrow_agent(
                 AgentInput(
                     task="Find the company's headquarters city.",
@@ -316,9 +329,7 @@ class TestHttpAgentPipeline:
 
         # 3. Fetch results via MCP tool (GCS mode — mock GCS upload)
         with (
-            patch(
-                "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-            ),
+            patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
                 "everyrow_mcp.tools.try_cached_gcs_result",
                 new_callable=AsyncMock,
@@ -353,9 +364,7 @@ class TestProgressPollingModes:
         jobs_csv: str,
     ):
         """Submit a task and poll using both REST endpoint and MCP tool."""
-        with patch(
-            "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-        ):
+        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
             result = await everyrow_screen(
                 ScreenInput(
                     task="Filter for engineering roles",
@@ -378,9 +387,7 @@ class TestProgressPollingModes:
         )
 
         # Continue polling via MCP tool until complete
-        with patch(
-            "everyrow_mcp.tool_helpers._get_client", return_value=everyrow_client
-        ):
+        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
             final_text = await poll_via_tool(task_id)
 
         assert "everyrow_results" in final_text or "Completed:" in final_text
