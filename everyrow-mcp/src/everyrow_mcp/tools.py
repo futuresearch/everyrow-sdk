@@ -13,6 +13,9 @@ from everyrow.generated.api.tasks import (
     get_task_status_tasks_task_id_status_get,
 )
 from everyrow.generated.models.public_task_type import PublicTaskType
+from everyrow.generated.models.task_result_response_data_type_1 import (
+    TaskResultResponseDataType1,
+)
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.types import Unset
 from everyrow.ops import (
@@ -723,6 +726,8 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         if isinstance(result_response.data, list):
             records = [item.additional_properties for item in result_response.data]
             df = pd.DataFrame(records)
+        elif isinstance(result_response.data, TaskResultResponseDataType1):
+            df = pd.DataFrame([result_response.data.additional_properties])
         else:
             return [
                 TextContent(type="text", text="Error: Task result has no table data.")
