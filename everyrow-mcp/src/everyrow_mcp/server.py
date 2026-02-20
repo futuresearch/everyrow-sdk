@@ -6,10 +6,39 @@ import os
 import sys
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
-from everyrow_mcp.app import _http_lifespan, _no_auth_http_lifespan, mcp
+from everyrow_mcp.app import (
+    _http_lifespan,
+    _no_auth_http_lifespan,
+    mcp,
+)
 from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.http_config import configure_http_mode
+
+# Re-export models, helpers, and tools so existing imports from
+# ``everyrow_mcp.server`` keep working (tests, conftest, etc.).
+from everyrow_mcp.models import (  # noqa: F401
+    AgentInput,
+    DedupeInput,
+    MergeInput,
+    ProgressInput,
+    RankInput,
+    ResultsInput,
+    ScreenInput,
+    SingleAgentInput,
+    _schema_to_model,
+)
 from everyrow_mcp.state import state
+from everyrow_mcp.tool_helpers import _write_task_state  # noqa: F401
+from everyrow_mcp.tools import (  # noqa: F401
+    everyrow_agent,
+    everyrow_dedupe,
+    everyrow_merge,
+    everyrow_progress,
+    everyrow_rank,
+    everyrow_results,
+    everyrow_screen,
+    everyrow_single_agent,
+)
 
 
 def main():
