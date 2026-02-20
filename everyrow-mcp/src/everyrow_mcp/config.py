@@ -1,25 +1,18 @@
-from typing import Literal
-
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class _BaseSettings(BaseSettings):
+class StdioSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
-    preview_size: int = Field(
-        default=5, description="Number of rows in the initial results preview"
-    )
-    token_budget: int = Field(
-        default=20000,
-        description="Target token budget per page of inline results",
-    )
+    everyrow_api_key: str
 
 
-class HttpSettings(_BaseSettings):
+class HttpSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
+    everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
     mcp_server_url: str
     supabase_url: str
     supabase_anon_key: str
@@ -33,9 +26,15 @@ class HttpSettings(_BaseSettings):
     )
     redis_sentinel_master_name: str | None = Field(default=None)
 
-    result_storage: Literal["memory", "gcs"]
-    gcs_results_bucket: str | None = Field(default=None)
+    gcs_results_bucket: str
 
+    preview_size: int = Field(
+        default=5, description="Number of rows in the initial results preview"
+    )
+    token_budget: int = Field(
+        default=20000,
+        description="Target token budget per page of inline results",
+    )
     signed_url_expiry_minutes: int = Field(
         default=15, description="GCS signed URL expiry in minutes"
     )
@@ -50,15 +49,3 @@ class HttpSettings(_BaseSettings):
                 "or REDIS_HOST + REDIS_PORT"
             )
         return self
-
-    @model_validator(mode="after")
-    def _validate_gcs(self):
-        if self.result_storage == "gcs" and not self.gcs_results_bucket:
-            raise ValueError("RESULT_STORAGE=gcs requires GCS_RESULTS_BUCKET")
-        return self
-
-
-class StdioSettings(_BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
-
-    everyrow_api_key: str

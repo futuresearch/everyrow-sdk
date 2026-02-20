@@ -1,4 +1,4 @@
-"""REST endpoints for the everyrow MCP server (progress polling, results download)."""
+"""REST endpoints for the everyrow MCP server (progress polling)."""
 
 from __future__ import annotations
 
@@ -94,75 +94,3 @@ async def api_progress(request: Request) -> Any:
         return JSONResponse(data, headers=cors)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500, headers=cors)
-
-
-async def api_results(request: Request) -> Any:
-    """REST endpoint for results widget and CSV download.
-
-    Auth: Bearer token in Authorization header, OR ?token= query param (for direct downloads).
-    Query params:
-        format: "json" (default) or "csv"
-    """
-    cors = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET",
-        "Access-Control-Allow-Headers": "Authorization",
-    }
-    # Prevent token leakage via Referrer and caching
-    security_headers = {
-        "Referrer-Policy": "no-referrer",
-        "Cache-Control": "no-store, private",
-    }
-
-    if request.method == "OPTIONS":
-        return Response(status_code=204, headers=cors)
-
-    task_id = request.path_params["task_id"]
-    fmt = request.query_params.get("format", "json")
-
-    # Accept token from Authorization header (widget) or query param (direct download)
-    token = ""
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        token = request.query_params.get("token", "")
-
-    cached = await state.get_cached_result(task_id)
-    if not cached:
-        return JSONResponse(
-            {"error": "Results not found or expired"},
-            status_code=404,
-            headers={**cors, **security_headers},
-        )
-
-    df, expected_token = cached.df, cached.download_token
-    if not token or not secrets.compare_digest(token, expected_token):
-        return JSONResponse(
-            {"error": "Invalid token"},
-            status_code=403,
-            headers={**cors, **security_headers},
-        )
-
-    if fmt == "csv":
-        csv_data = df.to_csv(index=False)
-        return Response(
-            content=csv_data,
-            media_type="text/csv",
-            headers={
-                **cors,
-                **security_headers,
-                "Content-Disposition": f'attachment; filename="results_{task_id[:8]}.csv"',
-            },
-        )
-
-    # JSON format — paginated
-    offset = int(request.query_params.get("offset", "0"))
-    page_size = min(int(request.query_params.get("page_size", "100")), 500)
-    total = len(df)
-    page_df = df.iloc[offset : offset + page_size]
-    records = page_df.where(page_df.notna(), None).to_dict(orient="records")
-    return JSONResponse(
-        {"records": records, "total": total, "offset": offset, "page_size": page_size},
-        headers={**cors, **security_headers},
-    )

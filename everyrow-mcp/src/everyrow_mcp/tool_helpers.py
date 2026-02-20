@@ -1,7 +1,7 @@
 """Helper functions for MCP tool implementations.
 
 Includes transport-aware UI helpers, client construction, task state
-persistence, result fetching, and pagination logic.
+persistence, and result fetching.
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import TextContent
 
-from everyrow_mcp.models import ResultsInput
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
 
@@ -189,106 +188,3 @@ async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, s
     if isinstance(result_response.data, TaskResultResponseDataType1):
         return pd.DataFrame([result_response.data.additional_properties]), session_id
     raise ValueError("Task result has no table data.")
-
-
-_CHARS_PER_TOKEN = 4  # conservative estimate for JSON-heavy text
-
-
-def _recommend_page_size(
-    page_json: str, rows_shown: int, total: int, current_page_size: int
-) -> int | None:
-    """Estimate an optimal page_size based on the current page's token cost.
-
-    Returns a recommended page_size, or None if the current one is fine.
-    """
-    if rows_shown == 0:
-        return None
-    avg_chars_per_row = len(page_json) / rows_shown
-    avg_tokens_per_row = avg_chars_per_row / _CHARS_PER_TOKEN
-    if avg_tokens_per_row <= 0:
-        return None
-    token_budget = state.settings.token_budget if state.settings else 20000
-    recommended = max(1, min(int(token_budget / avg_tokens_per_row), 100))
-    # Only recommend if meaningfully different (>25% change) and there are more rows
-    if (
-        recommended >= total
-        or abs(recommended - current_page_size) / current_page_size < 0.25
-    ):
-        return None
-    return recommended
-
-
-def _build_inline_response(
-    task_id: str,
-    df: pd.DataFrame,
-    download_token: str,
-    params: ResultsInput,
-    session_url: str = "",
-) -> list[TextContent]:
-    """Build paginated inline response for in-memory results."""
-    total = len(df)
-    col_names = ", ".join(df.columns[:10])
-    if len(df.columns) > 10:
-        col_names += f", ... (+{len(df.columns) - 10} more)"
-
-    offset = min(params.offset, total)
-    page_size = params.page_size
-    page_df = df.iloc[offset : offset + page_size]
-    page_records = page_df.where(page_df.notna(), None).to_dict(orient="records")
-    has_more = offset + page_size < total
-    next_offset = offset + page_size if has_more else None
-
-    # Widget JSON: HTTP mode includes results_url, stdio mode is plain records
-    if state.is_http and state.mcp_server_url:
-        results_url = f"{state.mcp_server_url}/api/results/{task_id}?format=json"
-        csv_download_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
-        widget_data: dict[str, Any] = {
-            "results_url": results_url,
-            "download_token": download_token,
-            "csv_url": csv_download_url,
-            "preview": page_records,
-            "total": total,
-        }
-        if session_url:
-            widget_data["session_url"] = session_url
-        widget_json = json.dumps(widget_data)
-    else:
-        widget_json = json.dumps(page_records)
-
-    # Token-based page_size recommendation
-    recommended = _recommend_page_size(widget_json, len(page_df), total, page_size)
-
-    # Summary text for the LLM
-    csv_url = ""
-    if state.mcp_server_url:
-        csv_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
-
-    default_page_size = ResultsInput.model_fields["page_size"].default
-    if has_more:
-        # Use recommendation in the call hint; fall back to current page_size
-        hint_page_size = recommended if recommended is not None else page_size
-        page_size_arg = (
-            f", page_size={hint_page_size}"
-            if hint_page_size != default_page_size
-            else ""
-        )
-        summary = (
-            f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "
-            f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
-        )
-        if recommended is not None:
-            summary += f"Recommended page_size={recommended} for these results.\n"
-        summary += f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
-        if csv_url and offset == 0:
-            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
-    elif offset == 0:
-        summary = f"Results: {total} rows, {len(df.columns)} columns ({col_names}). All rows shown."
-        if csv_url:
-            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
-    else:
-        summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
-
-    return _with_ui(
-        widget_json,
-        TextContent(type="text", text=summary),
-    )

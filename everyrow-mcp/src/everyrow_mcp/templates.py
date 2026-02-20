@@ -700,7 +700,8 @@ app.ontoolresult=({content})=>{
     if(meta.preview)processData(meta.preview);
     const opts=meta.download_token?{headers:{"Authorization":"Bearer "+meta.download_token}}:{};
     fetchFullResults(meta.results_url,opts,!!meta.preview,meta.total);
-  }else if(Array.isArray(meta)){processData(meta);}
+  }else if(meta.preview){processData(meta.preview);}
+  else if(Array.isArray(meta)){processData(meta);}
   else{sum.textContent=JSON.stringify(meta);}
 };
 

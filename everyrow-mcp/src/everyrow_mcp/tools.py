@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -41,7 +40,6 @@ from everyrow_mcp.models import (
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
     TaskNotReady,
-    _build_inline_response,
     _fetch_task_result,
     _get_client,
     _submission_text,
@@ -728,7 +726,7 @@ async def everyrow_progress(  # noqa: PLR0912
     ),
     meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
-async def everyrow_results(params: ResultsInput) -> list[TextContent]:
+async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
     """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
@@ -737,63 +735,60 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
     client = _get_client()
     task_id = params.task_id
 
-    # ── GCS mode: return from Redis cache if available ─────────────
-    gcs_cached = await try_cached_gcs_result(task_id, params.offset, params.page_size)
-    if gcs_cached is not None:
-        return gcs_cached
-
-    # ── In-memory cache hit ────────────────────────────────────────
-    session_url = ""
-    await state.evict_stale_results()
-    cached = await state.get_cached_result(task_id)
-    if cached is not None:
-        df, download_token = cached.df, cached.download_token
-    else:
-        # ── Fetch from API ─────────────────────────────────────────
-        try:
-            df, session_id = await _fetch_task_result(client, task_id)
-            session_url = get_session_url(session_id) if session_id else ""
-        except TaskNotReady as e:
-            return [
-                TextContent(
-                    type="text",
-                    text=(
-                        f"Task status is {e.status}. Cannot fetch results yet.\n"
-                        f"Call everyrow_progress(task_id='{task_id}') to check again."
-                    ),
-                )
-            ]
-        except Exception as e:
-            return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
-
-        # ── Try GCS upload (returns None if not configured or fails) ──
-        gcs_response = await try_upload_gcs_result(
-            task_id, df, params.offset, params.page_size, session_url
+    # ── HTTP mode: return from GCS cache if available ─────────────
+    if state.is_http:
+        gcs_cached = await try_cached_gcs_result(
+            task_id, params.offset, params.page_size
         )
-        if gcs_response is not None:
-            return gcs_response
+        if gcs_cached is not None:
+            return gcs_cached
 
-        # ── Fall back to in-memory cache ───────────────────────────
-        download_token = secrets.token_urlsafe(32)
-        await state.set_cached_result(
-            task_id, df, datetime.now(UTC).timestamp(), download_token
-        )
-
-    # ── stdio mode: save to file (all rows, no pagination) ──────────
-    if params.output_path and state.is_stdio:
-        output_file = Path(params.output_path)
-        save_result_to_csv(df, output_file)
-        await state.pop_cached_result(task_id)
+    # ── Fetch from API ────────────────────────────────────────────
+    try:
+        df, session_id = await _fetch_task_result(client, task_id)
+        session_url = get_session_url(session_id) if session_id else ""
+    except TaskNotReady as e:
         return [
             TextContent(
                 type="text",
                 text=(
-                    f"Saved {len(df)} rows to {output_file}\n\n"
-                    "Tip: For multi-step pipelines, custom response models, or preview mode, "
-                    "ask your AI assistant to write Python using the everyrow SDK."
+                    f"Task status is {e.status}. Cannot fetch results yet.\n"
+                    f"Call everyrow_progress(task_id='{task_id}') to check again."
                 ),
             )
         ]
+    except Exception as e:
+        return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
 
-    # ── Build paginated inline response ─────────────────────────────
-    return _build_inline_response(task_id, df, download_token, params, session_url)
+    # ── stdio mode: save to file ──────────────────────────────────
+    if state.is_stdio:
+        if params.output_path:
+            output_file = Path(params.output_path)
+            save_result_to_csv(df, output_file)
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Saved {len(df)} rows to {output_file}\n\n"
+                        "Tip: For multi-step pipelines, custom response models, or preview mode, "
+                        "ask your AI assistant to write Python using the everyrow SDK."
+                    ),
+                )
+            ]
+        return [
+            TextContent(
+                type="text",
+                text=f"Results ready: {len(df)} rows. Provide output_path to save to CSV.",
+            )
+        ]
+
+    # ── HTTP mode: upload to GCS ──────────────────────────────────
+    gcs_response = await try_upload_gcs_result(
+        task_id, df, params.offset, params.page_size, session_url
+    )
+    if gcs_response is not None:
+        return gcs_response
+
+    return [
+        TextContent(type="text", text="Error: failed to store results. Please retry.")
+    ]

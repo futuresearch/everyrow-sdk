@@ -6,7 +6,7 @@ and building the MCP TextContent responses for both paths.
 Caching strategy:
   - Base metadata (total, columns) cached at  result:{task_id}
   - Per-page previews cached at               result:{task_id}:page:{offset}:{page_size}
-  - On a page cache miss, the JSON is fetched from GCS and the page is sliced.
+  - On a page cache miss, the CSV is fetched from GCS and the page is sliced.
 """
 
 from __future__ import annotations
@@ -14,15 +14,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from mcp.types import TextContent
 
 from everyrow_mcp.state import state
-
-if TYPE_CHECKING:
-    from everyrow_mcp.gcs_storage import ResultURLs
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +39,7 @@ def _slice_preview(records: list[dict], offset: int, page_size: int) -> list[dic
 
 def _build_gcs_response(
     task_id: str,
-    urls: ResultURLs,
+    csv_url: str,
     preview: list[dict],
     total: int,
     columns: list[str],
@@ -55,7 +51,7 @@ def _build_gcs_response(
     col_names = _format_columns(columns)
 
     widget_data: dict = {
-        "results_url": urls.json_url,
+        "csv_url": csv_url,
         "preview": preview,
         "total": total,
     }
@@ -69,7 +65,7 @@ def _build_gcs_response(
     if has_more:
         page_size_arg = (
             f", page_size={page_size}"
-            if page_size != state.settings.preview_size
+            if page_size != getattr(state.settings, "preview_size", 5)
             else ""
         )
         summary = (
@@ -79,7 +75,7 @@ def _build_gcs_response(
         )
         if offset == 0:
             summary += (
-                f"\nFull CSV download: {urls.csv_url}\n"
+                f"\nFull CSV download: {csv_url}\n"
                 "Share this download link with the user."
             )
     elif offset == 0:
@@ -127,11 +123,9 @@ async def try_cached_gcs_result(
     if cached_page is not None:
         preview = json.loads(cached_page)
     else:
-        # Page cache miss — fetch from GCS and slice
+        # Page cache miss — fetch CSV from GCS and slice
         try:
-            all_records = await asyncio.to_thread(
-                state.gcs_store.download_json, task_id
-            )
+            all_records = await asyncio.to_thread(state.gcs_store.download_csv, task_id)
             preview = _slice_preview(all_records, offset, page_size)
             await state.store_result_page(
                 task_id, offset, page_size, json.dumps(preview)
@@ -140,11 +134,11 @@ async def try_cached_gcs_result(
             logger.warning("Failed to fetch page from GCS for task %s", task_id)
             preview = []
 
-    urls = await asyncio.to_thread(state.gcs_store.generate_signed_urls, task_id)
+    csv_url = await asyncio.to_thread(state.gcs_store.generate_signed_url, task_id)
 
     return _build_gcs_response(
         task_id=task_id,
-        urls=urls,
+        csv_url=csv_url,
         preview=preview,
         total=total,
         columns=columns,
@@ -170,7 +164,7 @@ async def try_upload_gcs_result(
         return None
 
     try:
-        urls = await asyncio.to_thread(state.gcs_store.upload_result, task_id, df)
+        csv_url = await asyncio.to_thread(state.gcs_store.upload_result, task_id, df)
         total = len(df)
         columns = list(df.columns)
 
@@ -188,7 +182,7 @@ async def try_upload_gcs_result(
 
         return _build_gcs_response(
             task_id=task_id,
-            urls=urls,
+            csv_url=csv_url,
             preview=preview,
             total=total,
             columns=columns,

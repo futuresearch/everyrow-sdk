@@ -24,6 +24,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
+from mcp.types import TextContent
 from pydantic import ValidationError
 
 from everyrow_mcp.models import (
@@ -457,7 +458,7 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("API error"),
             ),
@@ -485,7 +486,7 @@ class TestResults:
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
@@ -508,8 +509,8 @@ class TestResults:
         assert list(output_df.columns) == ["name", "answer"]
 
     @pytest.mark.asyncio
-    async def test_results_inline_without_output_path(self):
-        """Test results returns a page of JSON records + compact summary."""
+    async def test_results_stdio_no_output_path(self):
+        """In stdio mode without output_path, returns hint to provide one."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -521,11 +522,10 @@ class TestResults:
             ]
         )
 
-        state.result_cache.pop(task_id, None)
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
@@ -538,145 +538,9 @@ class TestResults:
             params = ResultsInput(task_id=task_id)
             result = await everyrow_results(params)
 
-        # In stdio mode, only human-readable summary is returned
         assert len(result) == 1
-        text = result[0].text
-        assert "2 rows" in text
-        assert "2 columns" in text
-        assert "All rows shown" in text
-
-        # Clean up cache
-        state.result_cache.pop(task_id, None)
-
-    @pytest.mark.asyncio
-    async def test_results_pagination_with_offset(self):
-        """Test paginated results return correct page with next offset hint."""
-        task_id = str(uuid4())
-        mock_client = _make_mock_client()
-
-        page_size = 20  # default page_size on ResultsInput
-        num_rows = page_size + 3
-        data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
-        status_response = _make_task_status_response(status="completed")
-        result_response = _make_task_result_response(data)
-
-        state.result_cache.pop(task_id, None)
-        with (
-            patch.object(state, "client", mock_client),
-            patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
-                new_callable=AsyncMock,
-                return_value=status_response,
-            ),
-            patch(
-                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
-                new_callable=AsyncMock,
-                return_value=result_response,
-            ),
-        ):
-            # First page (offset=0)
-            result = await everyrow_results(ResultsInput(task_id=task_id))
-
-        # In stdio mode, only human-readable summary is returned
-        assert len(result) == 1
-        summary = result[0].text
-        assert f"{num_rows} rows" in summary
-        assert f"offset={page_size}" in summary
-
-        # Second page (offset=page_size) — hits cache
-        with patch.object(state, "client", mock_client):
-            result2 = await everyrow_results(
-                ResultsInput(task_id=task_id, offset=page_size)
-            )
-
-        assert len(result2) == 1
-        assert "final page" in result2[0].text
-
-        state.result_cache.pop(task_id, None)
-
-    @pytest.mark.asyncio
-    async def test_results_custom_page_size(self):
-        """Test that page_size parameter controls how many rows are returned."""
-        task_id = str(uuid4())
-        mock_client = _make_mock_client()
-
-        data = [{"id": i, "val": f"row_{i}"} for i in range(20)]
-        status_response = _make_task_status_response(status="completed")
-        result_response = _make_task_result_response(data)
-
-        state.result_cache.pop(task_id, None)
-        with (
-            patch.object(state, "client", mock_client),
-            patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
-                new_callable=AsyncMock,
-                return_value=status_response,
-            ),
-            patch(
-                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
-                new_callable=AsyncMock,
-                return_value=result_response,
-            ),
-        ):
-            # Request page_size=10
-            result = await everyrow_results(ResultsInput(task_id=task_id, page_size=10))
-
-        # In stdio mode, only human-readable summary is returned
-        assert len(result) == 1
-        summary = result[0].text
-        assert "20 rows" in summary
-        assert "offset=10" in summary
-        # page_size in hint may differ from request if token recommendation kicks in
-        assert "page_size" in summary or "offset=10" in summary
-
-        # Second page
-        with patch.object(state, "client", mock_client):
-            result2 = await everyrow_results(
-                ResultsInput(task_id=task_id, offset=10, page_size=10)
-            )
-
-        assert len(result2) == 1
-        assert "final page" in result2[0].text
-
-        state.result_cache.pop(task_id, None)
-
-    @pytest.mark.asyncio
-    async def test_results_cache_reuse(self):
-        """Test that second call uses cache and doesn't re-fetch from API."""
-        task_id = str(uuid4())
-        mock_client = _make_mock_client()
-
-        status_response = _make_task_status_response(status="completed")
-        result_response = _make_task_result_response(
-            [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
-        )
-
-        state.result_cache.pop(task_id, None)
-        mock_status = AsyncMock(return_value=status_response)
-        mock_result = AsyncMock(return_value=result_response)
-
-        with (
-            patch.object(state, "client", mock_client),
-            patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
-                mock_status,
-            ),
-            patch(
-                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
-                mock_result,
-            ),
-        ):
-            # First call fetches from API
-            await everyrow_results(ResultsInput(task_id=task_id))
-            assert mock_status.call_count == 1
-            assert mock_result.call_count == 1
-
-            # Second call uses cache — no additional API calls
-            await everyrow_results(ResultsInput(task_id=task_id))
-            assert mock_status.call_count == 1
-            assert mock_result.call_count == 1
-
-        state.result_cache.pop(task_id, None)
+        assert "2 rows" in result[0].text
+        assert "output_path" in result[0].text
 
     @pytest.mark.asyncio
     async def test_results_scalar_single_agent(self):
@@ -694,11 +558,10 @@ class TestResults:
             data=scalar_data,
         )
 
-        state.result_cache.pop(task_id, None)
         with (
             patch.object(state, "client", mock_client),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
@@ -711,31 +574,50 @@ class TestResults:
             params = ResultsInput(task_id=task_id)
             result = await everyrow_results(params)
 
-        # In stdio mode, only human-readable summary is returned
         assert len(result) == 1
         assert "1 rows" in result[0].text
 
-        state.result_cache.pop(task_id, None)
-
     @pytest.mark.asyncio
-    async def test_results_http_mode_returns_download_url(self):
-        """In HTTP mode, large results return a signed download URL."""
+    async def test_results_http_gcs_upload(self):
+        """In HTTP mode, results are uploaded to GCS and returned with download URL."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        page_size = 20  # default page_size on ResultsInput
-        num_rows = page_size + 5
-        data = [{"id": i, "val": f"row_{i}"} for i in range(num_rows)]
         status_response = _make_task_status_response(status="completed")
-        result_response = _make_task_result_response(data)
+        result_response = _make_task_result_response(
+            [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
+        )
 
-        state.result_cache.pop(task_id, None)
+        gcs_response = [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "csv_url": "https://storage.googleapis.com/signed/data.csv",
+                        "preview": [
+                            {"name": "A", "val": "1"},
+                            {"name": "B", "val": "2"},
+                        ],
+                        "total": 2,
+                    }
+                ),
+            ),
+            TextContent(
+                type="text",
+                text="Results: 2 rows, 2 columns (name, val). All rows shown.",
+            ),
+        ]
+
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
-            patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.try_cached_gcs_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
@@ -744,41 +626,71 @@ class TestResults:
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
+            patch(
+                "everyrow_mcp.tools.try_upload_gcs_result",
+                new_callable=AsyncMock,
+                return_value=gcs_response,
+            ),
         ):
-            params = ResultsInput(task_id=task_id)
-            result = await everyrow_results(params)
+            result = await everyrow_results(ResultsInput(task_id=task_id))
 
-        # TextContent 1: widget metadata with results_url and preview
+        assert len(result) == 2
         widget_data = json.loads(result[0].text)
-        assert "results_url" in widget_data
-        assert "https://mcp.example.com/api/results/" in widget_data["results_url"]
-        assert widget_data["total"] == num_rows
-        assert len(widget_data["preview"]) == page_size
-
-        # TextContent 2: summary with download URL
-        summary = result[1].text
-        assert f"{num_rows} rows" in summary
-        assert "download" in summary.lower()
-
-        state.result_cache.pop(task_id, None)
+        assert "csv_url" in widget_data
+        assert "2 rows" in result[1].text
 
     @pytest.mark.asyncio
-    async def test_results_http_mode_small_data_includes_csv_url(self):
-        """In HTTP mode, small results still include CSV download URL."""
+    async def test_results_http_gcs_cache_hit(self):
+        """In HTTP mode, GCS cached results are returned directly."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
-        data = [{"name": "A"}, {"name": "B"}]
-        status_response = _make_task_status_response(status="completed")
-        result_response = _make_task_result_response(data)
+        cached_response = [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "csv_url": "https://storage.googleapis.com/signed/data.csv",
+                        "preview": [{"name": "A"}],
+                        "total": 1,
+                    }
+                ),
+            ),
+            TextContent(type="text", text="Results: 1 rows. All rows shown."),
+        ]
 
-        state.result_cache.pop(task_id, None)
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
-            patch.object(state, "mcp_server_url", "https://mcp.example.com"),
             patch(
-                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                "everyrow_mcp.tools.try_cached_gcs_result",
+                new_callable=AsyncMock,
+                return_value=cached_response,
+            ),
+        ):
+            result = await everyrow_results(ResultsInput(task_id=task_id))
+
+        assert result == cached_response
+
+    @pytest.mark.asyncio
+    async def test_results_http_gcs_failure(self):
+        """In HTTP mode, GCS upload failure returns error message."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+
+        status_response = _make_task_status_response(status="completed")
+        result_response = _make_task_result_response([{"name": "A"}])
+
+        with (
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.try_cached_gcs_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
@@ -787,21 +699,17 @@ class TestResults:
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
+            patch(
+                "everyrow_mcp.tools.try_upload_gcs_result",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
-            params = ResultsInput(task_id=task_id)
-            result = await everyrow_results(params)
+            result = await everyrow_results(ResultsInput(task_id=task_id))
 
-        # Widget metadata still has results_url
-        widget_data = json.loads(result[0].text)
-        assert "results_url" in widget_data
-        assert widget_data["total"] == 2
-
-        # Summary says all rows shown, includes CSV download for HTTP mode
-        summary = result[1].text
-        assert "All rows shown" in summary
-        assert "download" in summary.lower()
-
-        state.result_cache.pop(task_id, None)
+        assert len(result) == 1
+        assert "Error" in result[0].text
+        assert "failed to store results" in result[0].text
 
 
 class TestAgentInlineInput:
