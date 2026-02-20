@@ -6,7 +6,18 @@ Hybrid model:
   user authentication to Supabase and returning the Supabase JWT directly
   as the MCP access token.
 
-No Fernet encryption — tokens stored in Redis as plain JSON.
+Redis storage model:
+  Auth codes, refresh tokens, and client registrations are stored as plain JSON
+  in Redis (no at-rest encryption). This is acceptable because:
+  1. All tokens are short-lived (auth codes 5 min, refresh tokens 7 days) and
+     single-use (consumed atomically via GETDEL).
+  2. Redis must be deployed on an internal network with AUTH enabled and
+     TLS in transit — see deployment docs.
+  3. The access tokens themselves (Supabase JWTs) are never stored in Redis;
+     they are verified via JWKS on every request.
+  If your threat model includes Redis host compromise, add Fernet/AES envelope
+  encryption in _redis_set/_redis_get and rotate the key via settings.
+
 Refresh tokens supported — opaque tokens in Redis mapped to Supabase refresh tokens.
 Token lookup done via JWKS, not Redis.
 """
@@ -147,11 +158,26 @@ class EveryRowAuthProvider(
         self.supabase_anon_key = supabase_anon_key
         self.mcp_server_url = mcp_server_url.rstrip("/")
         self._redis = redis
-        self._http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+        self._http = httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
 
     async def close(self) -> None:
         """Close the HTTP client. Call from your lifespan handler."""
         await self._http.aclose()
+
+    # ── Helpers ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _decode_trusted_supabase_jwt(token: str) -> dict[str, Any]:
+        """Decode a JWT that was *just* received from Supabase's token endpoint.
+
+        This skips signature verification because the token came from a
+        server-to-server exchange over HTTPS — it was never exposed to the
+        client.  NEVER use this for tokens received from end users.
+        """
+        return pyjwt.decode(token, options={"verify_signature": False})
 
     # ── Redis helpers (plain JSON, no encryption) ─────────────────
 
@@ -178,11 +204,13 @@ class EveryRowAuthProvider(
         )
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        # Global rate limit on registrations
+        # Global rate limit on registrations (atomic pipeline avoids orphan keys
+        # if process crashes between INCR and EXPIRE).
         rl_key = build_key("ratelimit", "register")
-        count = await self._redis.incr(rl_key)
-        if count == 1:
-            await self._redis.expire(rl_key, REGISTRATION_RATE_WINDOW)
+        pipe = self._redis.pipeline()
+        pipe.incr(rl_key)
+        pipe.expire(rl_key, REGISTRATION_RATE_WINDOW)
+        count, _ = await pipe.execute()
         if count > REGISTRATION_RATE_LIMIT:
             raise ValueError("Registration rate limit exceeded")
 
@@ -354,11 +382,7 @@ class EveryRowAuthProvider(
     ) -> OAuthToken:
         await self._redis.delete(build_key("authcode", authorization_code.code))
 
-        # Safe: JWT was just received from Supabase's token endpoint (server-to-server).
-        # Do NOT copy this pattern for tokens received from clients.
-        jwt_claims = pyjwt.decode(
-            authorization_code.supabase_jwt, options={"verify_signature": False}
-        )
+        jwt_claims = self._decode_trusted_supabase_jwt(authorization_code.supabase_jwt)
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
         # Store refresh token in Redis if available
@@ -415,9 +439,7 @@ class EveryRowAuthProvider(
             refresh_token.supabase_refresh_token
         )
 
-        # Safe: JWT was just received from Supabase's token endpoint (server-to-server).
-        # Do NOT copy this pattern for tokens received from clients.
-        jwt_claims = pyjwt.decode(new_jwt, options={"verify_signature": False})
+        jwt_claims = self._decode_trusted_supabase_jwt(new_jwt)
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
         # Issue new refresh token
