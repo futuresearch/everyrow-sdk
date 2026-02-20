@@ -1,5 +1,6 @@
 """Input models and schema helpers for everyrow MCP tools."""
 
+from pathlib import Path
 from typing import Any, Literal
 
 from jsonschema import SchemaError
@@ -379,6 +380,13 @@ class ResultsInput(BaseModel):
     @field_validator("output_path")
     @classmethod
     def validate_output(cls, v: str | None) -> str | None:
-        if v is not None and v.lower().endswith(".csv") is False:
-            raise ValueError("output_path must end in .csv")
+        if v is not None:
+            if not v.lower().endswith(".csv"):
+                raise ValueError("output_path must end in .csv")
+            parent = Path(v).parent
+            if not parent.exists():
+                raise ValueError(
+                    f"Parent directory does not exist: {parent}. "
+                    "Create it first or use a different path."
+                )
         return v

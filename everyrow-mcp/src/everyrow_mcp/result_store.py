@@ -83,12 +83,14 @@ def _build_result_response(
         if offset == 0:
             summary += (
                 f"\nFull CSV download: {csv_url}\n"
-                "Share this download link with the user."
+                "IMPORTANT: Display this download link to the user as a clickable URL in your response."
             )
     elif offset == 0:
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
-            "All rows shown."
+            f"All rows shown.\n"
+            f"Full CSV download: {csv_url}\n"
+            "IMPORTANT: Display this download link to the user as a clickable URL in your response."
         )
     else:
         summary = (
