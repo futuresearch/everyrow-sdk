@@ -156,6 +156,13 @@ async def api_results(request: Request) -> Any:
             },
         )
 
-    # JSON format
-    records = df.where(df.notna(), None).to_dict(orient="records")
-    return JSONResponse(records, headers={**cors, **security_headers})
+    # JSON format — paginated
+    offset = int(request.query_params.get("offset", "0"))
+    page_size = min(int(request.query_params.get("page_size", "100")), 500)
+    total = len(df)
+    page_df = df.iloc[offset : offset + page_size]
+    records = page_df.where(page_df.notna(), None).to_dict(orient="records")
+    return JSONResponse(
+        {"records": records, "total": total, "offset": offset, "page_size": page_size},
+        headers={**cors, **security_headers},
+    )

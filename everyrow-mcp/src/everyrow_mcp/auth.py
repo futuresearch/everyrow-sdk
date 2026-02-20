@@ -359,13 +359,13 @@ class EveryRowAuthProvider(
         refresh_token: EveryRowRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        # Delete old token (rotation)
-        await self._redis.delete(build_key("refresh", refresh_token.token))
-
-        # Call Supabase to refresh
+        # Call Supabase to refresh (before deleting old token, so it survives failures)
         new_jwt, new_supabase_refresh = await self._refresh_supabase_token(
             refresh_token.supabase_refresh_token
         )
+
+        # Delete old token only after successful refresh (rotation)
+        await self._redis.delete(build_key("refresh", refresh_token.token))
 
         # Decode new JWT for exp
         jwt_claims = pyjwt.decode(new_jwt, options={"verify_signature": False})

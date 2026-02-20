@@ -193,6 +193,13 @@ class SingleAgentInput(BaseModel):
         description="Optional JSON schema for the agent's response.",
     )
 
+    @field_validator("response_schema")
+    @classmethod
+    def validate_response_schema(
+        cls, v: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return _validate_response_schema(v)
+
 
 class RankInput(_SingleSourceInput):
     """Input for the rank operation."""
