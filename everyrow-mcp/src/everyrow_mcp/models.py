@@ -174,33 +174,6 @@ class AgentInput(_SingleSourceInput):
         return _validate_response_schema(v)
 
 
-class SingleAgentInput(BaseModel):
-    """Input for the single agent operation."""
-
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
-    task: str = Field(
-        ...,
-        description="Natural language task for the agent to perform.",
-        min_length=1,
-    )
-    input_data: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional context as key-value pairs (e.g. {'company': 'Acme', 'url': 'acme.com'}).",
-    )
-    response_schema: dict[str, Any] | None = Field(
-        default=None,
-        description="Optional JSON schema for the agent's response.",
-    )
-
-    @field_validator("response_schema")
-    @classmethod
-    def validate_response_schema(
-        cls, v: dict[str, Any] | None
-    ) -> dict[str, Any] | None:
-        return _validate_response_schema(v)
-
-
 class RankInput(_SingleSourceInput):
     """Input for the rank operation."""
 

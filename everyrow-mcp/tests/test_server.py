@@ -35,7 +35,6 @@ from everyrow_mcp.models import (
     RankInput,
     ResultsInput,
     ScreenInput,
-    SingleAgentInput,
     _schema_to_model,
 )
 from everyrow_mcp.state import state
@@ -870,24 +869,6 @@ class TestInputModelsUnchanged:
         """MergeInput still requires left_csv and right_csv."""
         with pytest.raises(ValidationError):
             MergeInput(task="test")
-
-    def test_single_agent_requires_task(self):
-        """SingleAgentInput requires a task."""
-        with pytest.raises(ValidationError):
-            SingleAgentInput()
-
-    def test_single_agent_accepts_no_input(self):
-        """SingleAgentInput works with just a task (no input_data)."""
-        params = SingleAgentInput(task="Find the CEO of Apple")
-        assert params.input_data is None
-
-    def test_single_agent_accepts_input_data(self):
-        """SingleAgentInput accepts context as key-value pairs."""
-        params = SingleAgentInput(
-            task="Find funding info",
-            input_data={"company": "Stripe", "url": "stripe.com"},
-        )
-        assert params.input_data == {"company": "Stripe", "url": "stripe.com"}
 
 
 class TestStdioVsHttpGating:

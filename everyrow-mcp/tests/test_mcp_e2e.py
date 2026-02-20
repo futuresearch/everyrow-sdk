@@ -142,14 +142,13 @@ class TestMcpProtocol:
 
     @pytest.mark.asyncio
     async def test_list_tools(self, _http_state):
-        """list_tools returns all 8 registered tools."""
+        """list_tools returns all 7 registered tools."""
         async with mcp_client() as session:
             result = await session.list_tools()
             tool_names = sorted(t.name for t in result.tools)
             expected = sorted(
                 [
                     "everyrow_agent",
-                    "everyrow_single_agent",
                     "everyrow_rank",
                     "everyrow_screen",
                     "everyrow_dedupe",

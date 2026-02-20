@@ -18,11 +18,10 @@ from everyrow.ops import (
     merge_async,
     rank_async,
     screen_async,
-    single_agent_async,
 )
 from everyrow.session import create_session, get_session_url
 from mcp.types import TextContent, ToolAnnotations
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel
 
 from everyrow_mcp.app import _clear_task_state, mcp
 from everyrow_mcp.models import (
@@ -33,7 +32,6 @@ from everyrow_mcp.models import (
     RankInput,
     ResultsInput,
     ScreenInput,
-    SingleAgentInput,
     _schema_to_model,
 )
 from everyrow_mcp.result_store import try_cached_result, try_store_result
@@ -116,81 +114,6 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             type="text",
             text=_submission_text(
                 f"Submitted: {len(df)} agents starting.", session_url, task_id
-            ),
-        ),
-    )
-
-
-@mcp.tool(
-    name="everyrow_single_agent",
-    structured_output=False,
-    annotations=ToolAnnotations(
-        title="Run a Single Research Agent",
-        readOnlyHint=False,
-        destructiveHint=False,
-        idempotentHint=False,
-        openWorldHint=True,
-    ),
-)
-async def everyrow_single_agent(params: SingleAgentInput) -> list[TextContent]:
-    """Run a single web research agent on a task, optionally with context data.
-
-    Unlike everyrow_agent (which processes many rows), this dispatches ONE agent
-    to research a single question. The agent can search the web, read pages, and
-    return structured results.
-
-    Examples:
-    - "Find the current CEO of Apple and their background"
-    - "Research the latest funding round for this company" (with input_data: {"company": "Stripe"})
-    - "What are the pricing tiers for this product?" (with input_data: {"product": "Snowflake"})
-
-    This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
-    Then immediately call everyrow_progress(task_id) to monitor.
-    Once the task is completed, call everyrow_results to save the output.
-    """
-    client = _get_client()
-
-    _clear_task_state()
-
-    response_model: type[BaseModel] | None = None
-    if params.response_schema:
-        response_model = _schema_to_model("SingleAgentResult", params.response_schema)
-
-    # Convert input_data dict to a BaseModel if provided
-    input_model: BaseModel | None = None
-    if params.input_data:
-        fields: dict[str, Any] = {k: (type(v), v) for k, v in params.input_data.items()}
-        DynamicInput = create_model("DynamicInput", **fields)  # pyright: ignore[reportArgumentType, reportCallIssue]
-        input_model = DynamicInput()
-
-    async with create_session(client=client) as session:
-        session_url = session.get_url()
-        kwargs: dict[str, Any] = {"task": params.task, "session": session}
-        if input_model is not None:
-            kwargs["input"] = input_model
-        if response_model is not None:
-            kwargs["response_model"] = response_model
-        cohort_task = await single_agent_async(**kwargs)
-        task_id = str(cohort_task.task_id)
-        _write_task_state(
-            task_id,
-            task_type=PublicTaskType.AGENT,
-            session_url=session_url,
-            total=1,
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
-        )
-
-    return _with_ui(
-        await _submission_ui_json(session_url, task_id, 1, client.token),
-        TextContent(
-            type="text",
-            text=_submission_text(
-                "Submitted: single agent starting.", session_url, task_id
             ),
         ),
     )
