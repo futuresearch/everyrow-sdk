@@ -15,7 +15,6 @@ class HttpSettings(BaseSettings):
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
     mcp_server_url: str
     supabase_url: str
-    supabase_anon_key: str
 
     redis_host: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
@@ -49,3 +48,29 @@ class HttpSettings(BaseSettings):
                 "or REDIS_HOST + REDIS_PORT"
             )
         return self
+
+
+class DevHttpSettings(BaseSettings):
+    """Settings for --no-auth HTTP mode (local development only).
+
+    Only requires EVERYROW_API_KEY. Redis defaults to localhost:6379:13.
+    GCS is optional — if not set, results are inline only.
+    """
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
+    everyrow_api_key: str
+
+    redis_host: str = Field(default="localhost")
+    redis_port: int = Field(default=6379)
+    redis_db: int = Field(default=13)
+    redis_password: str | None = Field(default=None)
+
+    gcs_results_bucket: str | None = Field(default=None)
+    signed_url_expiry_minutes: int = Field(default=15)
+    preview_size: int = Field(default=5)
+    token_budget: int = Field(
+        default=20000,
+        description="Target token budget per page of inline results",
+    )

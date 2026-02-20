@@ -47,16 +47,26 @@ async def _stdio_lifespan(_server: FastMCP):
 
 @asynccontextmanager
 async def _http_lifespan(_server: FastMCP):
-    """HTTP mode lifespan — verify Redis on startup, clean up on shutdown."""
+    """HTTP mode lifespan — verify Redis on startup."""
     log = logging.getLogger(__name__)
     await state.redis_ping()
     log.info("Redis health check passed")
-    try:
-        yield
-    finally:
-        if state.auth_provider is not None:
-            await state.auth_provider.close()
-            log.info("Auth provider HTTP client closed")
+    yield
+
+
+@asynccontextmanager
+async def _no_auth_http_lifespan(_server: FastMCP):
+    """HTTP no-auth mode: singleton client from API key, verify Redis."""
+    await state.redis_ping()
+    with _create_sdk_client() as client:
+        state.client = client
+        response = await get_billing(client=client)
+        if response is None:
+            raise RuntimeError("Failed to authenticate with everyrow API")
+        try:
+            yield
+        finally:
+            state.client = None
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)

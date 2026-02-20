@@ -13,7 +13,7 @@ from typing import Any
 
 from everyrow.generated.client import AuthenticatedClient
 
-from everyrow_mcp.config import HttpSettings, StdioSettings
+from everyrow_mcp.config import DevHttpSettings, HttpSettings, StdioSettings
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
 
@@ -38,9 +38,8 @@ class ServerState:
     transport: str = "stdio"
     mcp_server_url: str = ""
     gcs_store: GCSResultStore | None = None
-    settings: StdioSettings | HttpSettings | None = None
+    settings: StdioSettings | HttpSettings | DevHttpSettings | None = None
     redis: Any | None = None
-    auth_provider: Any | None = None
 
     # ── Transport helpers ─────────────────────────────────────────
 
