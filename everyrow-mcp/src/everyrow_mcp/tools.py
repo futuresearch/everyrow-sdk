@@ -81,6 +81,13 @@ def _get_client():
     )
 
 
+def _with_ui(ui_text: str, *human: TextContent) -> list[TextContent]:
+    """Prepend a widget JSON TextContent in HTTP mode; skip it in stdio to save tokens."""
+    if state.is_http:
+        return [TextContent(type="text", text=ui_text), *human]
+    return list(human)
+
+
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
     """Build human-readable text for submission tool results."""
     if state.is_stdio:
@@ -217,18 +224,15 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(session_url, task_id, len(df), client.token),
-        ),
+    return _with_ui(
+        await _submission_ui_json(session_url, task_id, len(df), client.token),
         TextContent(
             type="text",
             text=_submission_text(
                 f"Submitted: {len(df)} agents starting.", session_url, task_id
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -295,18 +299,15 @@ async def everyrow_single_agent(params: SingleAgentInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(session_url, task_id, 1, client.token),
-        ),
+    return _with_ui(
+        await _submission_ui_json(session_url, task_id, 1, client.token),
         TextContent(
             type="text",
             text=_submission_text(
                 "Submitted: single agent starting.", session_url, task_id
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -381,18 +382,15 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(session_url, task_id, len(df), client.token),
-        ),
+    return _with_ui(
+        await _submission_ui_json(session_url, task_id, len(df), client.token),
         TextContent(
             type="text",
             text=_submission_text(
                 f"Submitted: {len(df)} rows for ranking.", session_url, task_id
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -469,18 +467,15 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(session_url, task_id, len(df), client.token),
-        ),
+    return _with_ui(
+        await _submission_ui_json(session_url, task_id, len(df), client.token),
         TextContent(
             type="text",
             text=_submission_text(
                 f"Submitted: {len(df)} rows for screening.", session_url, task_id
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -526,15 +521,12 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(
-                session_url=session_url,
-                task_id=task_id,
-                total=len(df),
-                token=client.token,
-            ),
+    return _with_ui(
+        await _submission_ui_json(
+            session_url=session_url,
+            task_id=task_id,
+            total=len(df),
+            token=client.token,
         ),
         TextContent(
             type="text",
@@ -544,7 +536,7 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
                 task_id,
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -601,15 +593,12 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=await _submission_ui_json(
-                session_url=session_url,
-                task_id=task_id,
-                total=len(left_df),
-                token=client.token,
-            ),
+    return _with_ui(
+        await _submission_ui_json(
+            session_url=session_url,
+            task_id=task_id,
+            total=len(left_df),
+            token=client.token,
         ),
         TextContent(
             type="text",
@@ -619,7 +608,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
                 task_id,
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -657,13 +646,13 @@ async def everyrow_progress(  # noqa: PLR0912
             )
         )
     except Exception as e:
-        return [
-            TextContent(type="text", text=json.dumps({"status": "error"})),
+        return _with_ui(
+            json.dumps({"status": "error"}),
             TextContent(
                 type="text",
                 text=f"Error polling task: {e!r}\nRetry: call everyrow_progress(task_id='{task_id}').",
             ),
-        ]
+        )
 
     status = status_response.status
     progress = status_response.progress
@@ -713,29 +702,26 @@ async def everyrow_progress(  # noqa: PLR0912
         started_at=started_at,
     )
 
-    # JSON for MCP App progress UI (first TextContent, parsed by progress.html)
-    ui_json = TextContent(
-        type="text",
-        text=json.dumps(
-            {
-                "status": status.value,
-                "completed": completed,
-                "total": total,
-                "failed": failed,
-                "running": running,
-                "elapsed_s": elapsed_s,
-                "session_url": session_url,
-            }
-        ),
+    # JSON for MCP App progress UI (parsed by progress.html, skipped in stdio)
+    ui_json_str = json.dumps(
+        {
+            "status": status.value,
+            "completed": completed,
+            "total": total,
+            "failed": failed,
+            "running": running,
+            "elapsed_s": elapsed_s,
+            "session_url": session_url,
+        }
     )
 
     if is_terminal:
         error = status_response.error
         if error and not isinstance(error, Unset):
-            return [
-                ui_json,
+            return _with_ui(
+                ui_json_str,
                 TextContent(type="text", text=f"Task {status.value}: {error}"),
-            ]
+            )
         if status == TaskStatus.COMPLETED:
             if is_screen:
                 completed_msg = f"Screening complete ({elapsed_s}s)."
@@ -743,8 +729,8 @@ async def everyrow_progress(  # noqa: PLR0912
                 completed_msg = (
                     f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
                 )
-            return [
-                ui_json,
+            return _with_ui(
+                ui_json_str,
                 TextContent(
                     type="text",
                     text=(
@@ -752,17 +738,17 @@ async def everyrow_progress(  # noqa: PLR0912
                         f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
                     ),
                 ),
-            ]
-        return [
-            ui_json,
+            )
+        return _with_ui(
+            ui_json_str,
             TextContent(
                 type="text", text=f"Task {status.value}. Report the error to the user."
             ),
-        ]
+        )
 
     if is_screen:
-        return [
-            ui_json,
+        return _with_ui(
+            ui_json_str,
             TextContent(
                 type="text",
                 text=(
@@ -770,11 +756,11 @@ async def everyrow_progress(  # noqa: PLR0912
                     f"Immediately call everyrow_progress(task_id='{task_id}')."
                 ),
             ),
-        ]
+        )
 
     fail_part = f", {failed} failed" if failed else ""
-    return [
-        ui_json,
+    return _with_ui(
+        ui_json_str,
         TextContent(
             type="text",
             text=(
@@ -782,7 +768,7 @@ async def everyrow_progress(  # noqa: PLR0912
                 f"Immediately call everyrow_progress(task_id='{task_id}')."
             ),
         ),
-    ]
+    )
 
 
 @mcp.tool(
@@ -1026,7 +1012,7 @@ def _build_inline_response(
     else:
         summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
 
-    return [
-        TextContent(type="text", text=widget_json),
+    return _with_ui(
+        widget_json,
         TextContent(type="text", text=summary),
-    ]
+    )

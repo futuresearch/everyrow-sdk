@@ -341,14 +341,9 @@ class TestAgent:
             )
             result = await everyrow_agent(params)
 
-            # First TextContent is JSON for MCP App session UI
-            ui_data = json.loads(result[0].text)
-            assert ui_data["task_id"] == str(mock_task.task_id)
-            assert "session_url" in ui_data
-            assert ui_data["status"] == "submitted"
-
-            # Second TextContent is human-readable instructions
-            text = result[1].text
+            # In stdio mode, _with_ui returns only human-readable text
+            assert len(result) == 1
+            text = result[0].text
             assert str(mock_task.task_id) in text
             assert "Session:" in text
             assert "everyrow_progress" in text
@@ -375,9 +370,10 @@ class TestProgress:
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
 
-        assert json.loads(result[0].text)["status"] == "error"
-        assert "Error polling task" in result[1].text
-        assert "Retry:" in result[1].text
+        # In stdio mode, only human-readable text is returned
+        assert len(result) == 1
+        assert "Error polling task" in result[0].text
+        assert "Retry:" in result[0].text
 
     @pytest.mark.asyncio
     async def test_progress_running_task(self):
@@ -406,16 +402,9 @@ class TestProgress:
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
 
-        # First TextContent is JSON for MCP App progress UI
-        ui_data = json.loads(result[0].text)
-        assert ui_data["completed"] == 4
-        assert ui_data["total"] == 10
-        assert ui_data["failed"] == 1
-        assert ui_data["running"] == 3
-        assert ui_data["status"] == "running"
-
-        # Second TextContent is human-readable
-        text = result[1].text
+        # In stdio mode, only human-readable text is returned
+        assert len(result) == 1
+        text = result[0].text
         assert "4/10 complete" in text
         assert "1 failed" in text
         assert "3 running" in text
@@ -448,14 +437,9 @@ class TestProgress:
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params)
 
-        # First TextContent is JSON for MCP App progress UI
-        ui_data = json.loads(result[0].text)
-        assert ui_data["status"] == "completed"
-        assert ui_data["completed"] == 5
-        assert ui_data["total"] == 5
-
-        # Second TextContent is human-readable
-        text = result[1].text
+        # In stdio mode, only human-readable text is returned
+        assert len(result) == 1
+        text = result[0].text
         assert "Completed: 5/5" in text
         assert "everyrow_results" in text
 
@@ -554,17 +538,12 @@ class TestResults:
             params = ResultsInput(task_id=task_id)
             result = await everyrow_results(params)
 
-        # First TextContent is JSON records for MCP App results table
-        records = json.loads(result[0].text)
-        assert len(records) == 2
-        assert records[0]["name"] == "TechStart"
-        assert records[1]["name"] == "AILabs"
-        assert records[0]["answer"] == "Series A"
-
-        # Second TextContent is compact summary for LLM
-        assert "2 rows" in result[1].text
-        assert "2 columns" in result[1].text
-        assert "All rows shown" in result[1].text
+        # In stdio mode, only human-readable summary is returned
+        assert len(result) == 1
+        text = result[0].text
+        assert "2 rows" in text
+        assert "2 columns" in text
+        assert "All rows shown" in text
 
         # Clean up cache
         state.result_cache.pop(task_id, None)
@@ -598,11 +577,9 @@ class TestResults:
             # First page (offset=0)
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
-        records = json.loads(result[0].text)
-        assert len(records) == page_size
-        assert records[0]["id"] == 0
-
-        summary = result[1].text
+        # In stdio mode, only human-readable summary is returned
+        assert len(result) == 1
+        summary = result[0].text
         assert f"{num_rows} rows" in summary
         assert f"offset={page_size}" in summary
 
@@ -612,11 +589,8 @@ class TestResults:
                 ResultsInput(task_id=task_id, offset=page_size)
             )
 
-        records2 = json.loads(result2[0].text)
-        assert len(records2) == 3
-        assert records2[0]["id"] == page_size
-
-        assert "final page" in result2[1].text
+        assert len(result2) == 1
+        assert "final page" in result2[0].text
 
         state.result_cache.pop(task_id, None)
 
@@ -647,12 +621,9 @@ class TestResults:
             # Request page_size=10
             result = await everyrow_results(ResultsInput(task_id=task_id, page_size=10))
 
-        records = json.loads(result[0].text)
-        assert len(records) == 10
-        assert records[0]["id"] == 0
-        assert records[9]["id"] == 9
-
-        summary = result[1].text
+        # In stdio mode, only human-readable summary is returned
+        assert len(result) == 1
+        summary = result[0].text
         assert "20 rows" in summary
         assert "offset=10" in summary
         # page_size in hint may differ from request if token recommendation kicks in
@@ -664,10 +635,8 @@ class TestResults:
                 ResultsInput(task_id=task_id, offset=10, page_size=10)
             )
 
-        records2 = json.loads(result2[0].text)
-        assert len(records2) == 10
-        assert records2[0]["id"] == 10
-        assert "final page" in result2[1].text
+        assert len(result2) == 1
+        assert "final page" in result2[0].text
 
         state.result_cache.pop(task_id, None)
 
@@ -742,12 +711,9 @@ class TestResults:
             params = ResultsInput(task_id=task_id)
             result = await everyrow_results(params)
 
-        records = json.loads(result[0].text)
-        assert len(records) == 1
-        assert records[0]["ceo"] == "Tim Cook"
-        assert records[0]["company"] == "Apple"
-
-        assert "1 rows" in result[1].text
+        # In stdio mode, only human-readable summary is returned
+        assert len(result) == 1
+        assert "1 rows" in result[0].text
 
         state.result_cache.pop(task_id, None)
 
@@ -866,13 +832,9 @@ class TestAgentInlineInput:
             )
             result = await everyrow_agent(params)
 
-            # First TextContent is JSON for MCP App session UI
-            ui_data = json.loads(result[0].text)
-            assert ui_data["task_id"] == str(mock_task.task_id)
-            assert ui_data["total"] == 2
-
-            # Second TextContent is human-readable
-            text = result[1].text
+            # In stdio mode, _with_ui returns only human-readable text
+            assert len(result) == 1
+            text = result[0].text
             assert str(mock_task.task_id) in text
             assert "2 agents starting" in text
 
@@ -1017,3 +979,111 @@ class TestInputModelsUnchanged:
             input_data={"company": "Stripe", "url": "stripe.com"},
         )
         assert params.input_data == {"company": "Stripe", "url": "stripe.com"}
+
+
+class TestStdioVsHttpGating:
+    """Verify that widget JSON is only included in HTTP mode responses."""
+
+    @pytest.mark.asyncio
+    async def test_submit_stdio_returns_single_content(self, companies_csv: str):
+        """In stdio mode, submission tools return only human-readable text."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch.object(state, "client", mock_client),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+            params = AgentInput(task="test", input_csv=companies_csv)
+            result = await everyrow_agent(params)
+
+        assert len(result) == 1
+        assert "Task ID:" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_submit_http_returns_widget_and_text(self, companies_csv: str):
+        """In HTTP mode, submission tools return widget JSON + human text."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+            params = AgentInput(task="test", input_csv=companies_csv)
+            result = await everyrow_agent(params)
+
+        assert len(result) == 2
+        ui_data = json.loads(result[0].text)
+        assert ui_data["task_id"] == str(mock_task.task_id)
+        assert ui_data["status"] == "submitted"
+        assert "Task ID:" in result[1].text
+
+    @pytest.mark.asyncio
+    async def test_progress_stdio_returns_single_content(self):
+        """In stdio mode, progress returns only human-readable text."""
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+        status_response = _make_task_status_response(
+            status="running", completed=2, total=5
+        )
+
+        with (
+            patch.object(state, "client", mock_client),
+            patch(
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools._write_task_state"),
+        ):
+            result = await everyrow_progress(ProgressInput(task_id=task_id))
+
+        assert len(result) == 1
+        assert "2/5 complete" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_progress_http_returns_widget_and_text(self):
+        """In HTTP mode, progress returns widget JSON + human text."""
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+        status_response = _make_task_status_response(
+            status="running", completed=2, total=5
+        )
+
+        with (
+            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
+            patch.object(state, "transport", "streamable-http"),
+            patch(
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools._write_task_state"),
+        ):
+            result = await everyrow_progress(ProgressInput(task_id=task_id))
+
+        assert len(result) == 2
+        ui_data = json.loads(result[0].text)
+        assert ui_data["completed"] == 2
+        assert ui_data["total"] == 5
+        assert "2/5 complete" in result[1].text
