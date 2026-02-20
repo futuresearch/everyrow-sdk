@@ -578,8 +578,8 @@ class TestResults:
         assert "1 rows" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_results_http_gcs_upload(self):
-        """In HTTP mode, results are uploaded to GCS and returned with download URL."""
+    async def test_results_http_store(self):
+        """In HTTP mode, results are stored in Redis and returned with download URL."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -588,7 +588,7 @@ class TestResults:
             [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
         )
 
-        gcs_response = [
+        store_response = [
             TextContent(
                 type="text",
                 text=json.dumps(
@@ -612,7 +612,7 @@ class TestResults:
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
             patch(
-                "everyrow_mcp.tools.try_cached_gcs_result",
+                "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -627,9 +627,9 @@ class TestResults:
                 return_value=result_response,
             ),
             patch(
-                "everyrow_mcp.tools.try_upload_gcs_result",
+                "everyrow_mcp.tools.try_store_result",
                 new_callable=AsyncMock,
-                return_value=gcs_response,
+                return_value=store_response,
             ),
         ):
             result = await everyrow_results(ResultsInput(task_id=task_id))
@@ -640,8 +640,8 @@ class TestResults:
         assert "2 rows" in result[1].text
 
     @pytest.mark.asyncio
-    async def test_results_http_gcs_cache_hit(self):
-        """In HTTP mode, GCS cached results are returned directly."""
+    async def test_results_http_cache_hit(self):
+        """In HTTP mode, cached results are returned directly."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -663,7 +663,7 @@ class TestResults:
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
             patch(
-                "everyrow_mcp.tools.try_cached_gcs_result",
+                "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
                 return_value=cached_response,
             ),
@@ -673,8 +673,8 @@ class TestResults:
         assert result == cached_response
 
     @pytest.mark.asyncio
-    async def test_results_http_gcs_failure(self):
-        """In HTTP mode, GCS upload failure falls back to inline results."""
+    async def test_results_http_store_failure(self):
+        """In HTTP mode, store failure falls back to inline results."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -685,7 +685,7 @@ class TestResults:
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", "streamable-http"),
             patch(
-                "everyrow_mcp.tools.try_cached_gcs_result",
+                "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -700,7 +700,7 @@ class TestResults:
                 return_value=result_response,
             ),
             patch(
-                "everyrow_mcp.tools.try_upload_gcs_result",
+                "everyrow_mcp.tools.try_store_result",
                 new_callable=AsyncMock,
                 return_value=None,
             ),

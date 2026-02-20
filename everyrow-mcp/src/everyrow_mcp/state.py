@@ -14,7 +14,6 @@ from typing import Any
 from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.config import DevHttpSettings, HttpSettings, StdioSettings
-from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
 
 logger = logging.getLogger(__name__)
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 PROGRESS_POLL_DELAY = 12
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 RESULT_CACHE_TTL = 600
+CSV_CACHE_TTL = 3600  # 1 hour — full CSV stored in Redis for download
 TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
 
 
@@ -37,7 +37,6 @@ class ServerState:
     client: AuthenticatedClient | None = None
     transport: str = "stdio"
     mcp_server_url: str = ""
-    gcs_store: GCSResultStore | None = None
     settings: StdioSettings | HttpSettings | DevHttpSettings | None = None
     redis: Any | None = None
 
@@ -59,7 +58,7 @@ class ServerState:
             await self.redis.ping()
 
     async def get_result_meta(self, task_id: str) -> str | None:
-        """Get cached GCS result metadata from Redis."""
+        """Get cached result metadata from Redis."""
         redis = self.redis
         if redis is None:
             return None
@@ -70,7 +69,7 @@ class ServerState:
             return None
 
     async def store_result_meta(self, task_id: str, meta_json: str) -> None:
-        """Store GCS result metadata in Redis with TTL."""
+        """Store result metadata in Redis with TTL."""
         redis = self.redis
         if redis is None:
             return
@@ -112,6 +111,33 @@ class ServerState:
             )
         except Exception:
             pass
+
+    # ── CSV result storage ─────────────────────────────────────
+
+    async def store_result_csv(self, task_id: str, csv_text: str) -> None:
+        """Store full CSV text in Redis with 1h TTL."""
+        redis = self.redis
+        if redis is None:
+            return
+        try:
+            await redis.setex(
+                build_key("result", task_id, "csv"),
+                CSV_CACHE_TTL,
+                csv_text,
+            )
+        except Exception:
+            logger.warning("Failed to store result CSV in Redis for %s", task_id)
+
+    async def get_result_csv(self, task_id: str) -> str | None:
+        """Read full CSV text from Redis."""
+        redis = self.redis
+        if redis is None:
+            return None
+        try:
+            return await redis.get(build_key("result", task_id, "csv"))
+        except Exception:
+            logger.warning("Failed to get result CSV from Redis for %s", task_id)
+            return None
 
     # ── Redis-backed token storage (multi-pod safe) ──────────────
 
@@ -158,17 +184,19 @@ class ServerState:
             return None
 
     async def pop_task_token(self, task_id: str) -> None:
-        """Remove tokens for a task from Redis."""
+        """Remove the API task token from Redis.
+
+        The poll token is intentionally kept — it's needed to authenticate
+        CSV download requests after the task completes (it expires naturally
+        via its 24h TTL).
+        """
         redis = self.redis
         if redis is None:
             return
         try:
-            await redis.delete(
-                build_key("task_token", task_id),
-                build_key("poll_token", task_id),
-            )
+            await redis.delete(build_key("task_token", task_id))
         except Exception:
-            logger.warning("Failed to delete tokens from Redis for %s", task_id)
+            logger.warning("Failed to delete task token from Redis for %s", task_id)
 
 
 state = ServerState()

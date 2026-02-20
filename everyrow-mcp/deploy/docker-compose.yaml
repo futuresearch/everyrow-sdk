@@ -25,5 +25,4 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_DB: "13"
-      GCS_RESULTS_BUCKET: "${GCS_RESULTS_BUCKET:?Set GCS_RESULTS_BUCKET}"
       EVERYROW_API_URL: "https://everyrow.io/api/v0"

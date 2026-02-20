@@ -17,9 +17,8 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.auth import SupabaseTokenVerifier
 from everyrow_mcp.config import DevHttpSettings, HttpSettings
-from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import create_redis_client
-from everyrow_mcp.routes import api_progress
+from everyrow_mcp.routes import api_download, api_progress
 from everyrow_mcp.state import state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
@@ -55,7 +54,7 @@ def _configure_auth(
     http_lifespan: Any,
     host: str,
     port: int,
-    log: logging.Logger,
+    _log: logging.Logger,
 ) -> None:
     """Full OAuth HTTP mode."""
     try:
@@ -90,13 +89,6 @@ def _configure_auth(
 
     mcp_server_url = settings.mcp_server_url
 
-    # GCS result store (required in auth mode)
-    state.gcs_store = GCSResultStore(
-        settings.gcs_results_bucket,
-        signed_url_expiry_minutes=settings.signed_url_expiry_minutes,
-    )
-    log.info("GCS result store enabled: %s", settings.gcs_results_bucket)
-
     _configure_shared(mcp, http_lifespan, host, port, mcp_server_url)
 
 
@@ -126,14 +118,6 @@ def _configure_no_auth(
     state.redis = redis_client
 
     mcp_server_url = f"http://localhost:{port}"
-
-    # GCS is optional in no-auth mode
-    if settings.gcs_results_bucket:
-        state.gcs_store = GCSResultStore(
-            settings.gcs_results_bucket,
-            signed_url_expiry_minutes=settings.signed_url_expiry_minutes,
-        )
-        log.info("GCS result store enabled: %s", settings.gcs_results_bucket)
 
     _configure_shared(mcp, http_lifespan, host, port, mcp_server_url)
 
@@ -170,11 +154,6 @@ def _configure_shared(
     def _session_ui_http() -> str:
         return SESSION_HTML
 
-    # Re-register results resource with CSP allowing GCS fetch
-    results_connect = list(connect_domains)
-    if state.gcs_store is not None:
-        results_connect.append("https://storage.googleapis.com")
-
     @mcp.resource(
         "ui://everyrow/results.html",
         mime_type="text/html;profile=mcp-app",
@@ -182,7 +161,7 @@ def _configure_shared(
             "ui": {
                 "csp": {
                     "resourceDomains": ["https://unpkg.com"],
-                    "connectDomains": results_connect,
+                    "connectDomains": connect_domains,
                 }
             }
         },
@@ -190,8 +169,11 @@ def _configure_shared(
     def _results_ui_http() -> str:
         return RESULTS_HTML
 
-    # Progress + health routes
+    # Progress, download + health routes
     mcp.custom_route("/api/progress/{task_id}", ["GET", "OPTIONS"])(api_progress)
+    mcp.custom_route("/api/results/{task_id}/download", ["GET", "OPTIONS"])(
+        api_download
+    )
 
     async def _health(_request: Request) -> Response:
         return JSONResponse({"status": "ok"})

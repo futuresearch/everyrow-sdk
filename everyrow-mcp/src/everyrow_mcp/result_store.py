@@ -1,17 +1,18 @@
-"""GCS-backed result retrieval for the everyrow MCP server.
+"""Redis-backed result retrieval for the everyrow MCP server.
 
-Handles checking Redis for cached GCS metadata, uploading new results to GCS,
-and building the MCP TextContent responses for both paths.
+Handles checking Redis for cached metadata, storing CSV results,
+and building the MCP TextContent responses.
 
 Caching strategy:
   - Base metadata (total, columns) cached at  result:{task_id}
   - Per-page previews cached at               result:{task_id}:page:{offset}:{page_size}
-  - On a page cache miss, the CSV is fetched from GCS and the page is sliced.
+  - Full CSV stored at                        result:{task_id}:csv  (1h TTL)
+  - On a page cache miss, the CSV is read from Redis and the page is sliced.
 """
 
 from __future__ import annotations
 
-import asyncio
+import io
 import json
 import logging
 
@@ -37,7 +38,13 @@ def _slice_preview(records: list[dict], offset: int, page_size: int) -> list[dic
     return records[clamped : clamped + page_size]
 
 
-def _build_gcs_response(
+def _build_csv_url(task_id: str) -> str:
+    """Build the internal download URL for a task's CSV."""
+    poll_token = ""  # Will be filled async; see callers
+    return f"{state.mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
+
+
+def _build_result_response(
     task_id: str,
     csv_url: str,
     preview: list[dict],
@@ -47,7 +54,7 @@ def _build_gcs_response(
     page_size: int,
     session_url: str = "",
 ) -> list[TextContent]:
-    """Build MCP TextContent response for GCS-backed results."""
+    """Build MCP TextContent response for Redis-backed results."""
     col_names = _format_columns(columns)
 
     widget_data: dict = {
@@ -95,20 +102,25 @@ def _build_gcs_response(
     ]
 
 
-async def try_cached_gcs_result(
+async def _get_csv_url(task_id: str) -> str:
+    """Build the CSV download URL with the current poll token."""
+    poll_token = await state.get_poll_token(task_id) or ""
+    return f"{state.mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
+
+
+async def try_cached_result(
     task_id: str,
     offset: int,
     page_size: int,
 ) -> list[TextContent] | None:
-    """Return a GCS-backed result page, using per-page Redis cache.
+    """Return a Redis-backed result page, using per-page cache.
 
-    Returns None if GCS is not configured or no cached metadata exists
-    (i.e. the task was never uploaded to GCS).
+    Returns None if Redis is not available or no cached metadata exists.
     """
-    if state.gcs_store is None:
+    if state.redis is None:
         return None
 
-    # Check base metadata — if absent, this task isn't in GCS
+    # Check base metadata — if absent, this task isn't cached
     cached_meta_raw = await state.get_result_meta(task_id)
     if not cached_meta_raw:
         return None
@@ -123,20 +135,25 @@ async def try_cached_gcs_result(
     if cached_page is not None:
         preview = json.loads(cached_page)
     else:
-        # Page cache miss — fetch CSV from GCS and slice
+        # Page cache miss — read full CSV from Redis and slice
         try:
-            all_records = await asyncio.to_thread(state.gcs_store.download_csv, task_id)
-            preview = _slice_preview(all_records, offset, page_size)
-            await state.store_result_page(
-                task_id, offset, page_size, json.dumps(preview)
-            )
+            csv_text = await state.get_result_csv(task_id)
+            if csv_text is None:
+                preview = []
+            else:
+                df = pd.read_csv(io.StringIO(csv_text))
+                all_records = df.where(df.notna(), None).to_dict(orient="records")
+                preview = _slice_preview(all_records, offset, page_size)
+                await state.store_result_page(
+                    task_id, offset, page_size, json.dumps(preview)
+                )
         except Exception:
-            logger.warning("Failed to fetch page from GCS for task %s", task_id)
+            logger.warning("Failed to read CSV from Redis for task %s", task_id)
             preview = []
 
-    csv_url = await asyncio.to_thread(state.gcs_store.generate_signed_url, task_id)
+    csv_url = await _get_csv_url(task_id)
 
-    return _build_gcs_response(
+    return _build_result_response(
         task_id=task_id,
         csv_url=csv_url,
         preview=preview,
@@ -148,27 +165,29 @@ async def try_cached_gcs_result(
     )
 
 
-async def try_upload_gcs_result(
+async def try_store_result(
     task_id: str,
     df: pd.DataFrame,
     offset: int,
     page_size: int,
     session_url: str = "",
 ) -> list[TextContent] | None:
-    """Upload a DataFrame to GCS, cache metadata in Redis, and return a response.
+    """Store a DataFrame in Redis and return a response.
 
-    Returns None if GCS is not configured or the upload fails (caller should
-    fall back to in-memory cache).
+    Returns None if Redis is not available (caller should fall back to
+    inline results).
     """
-    if state.gcs_store is None:
+    if state.redis is None:
         return None
 
     try:
-        csv_url = await asyncio.to_thread(state.gcs_store.upload_result, task_id, df)
+        # Store full CSV in Redis
+        await state.store_result_csv(task_id, df.to_csv(index=False))
+
         total = len(df)
         columns = list(df.columns)
 
-        # Store base metadata (including session_url for cache hits)
+        # Store base metadata
         meta: dict = {"total": total, "columns": columns}
         if session_url:
             meta["session_url"] = session_url
@@ -180,7 +199,9 @@ async def try_upload_gcs_result(
         preview = page_df.where(page_df.notna(), None).to_dict(orient="records")
         await state.store_result_page(task_id, offset, page_size, json.dumps(preview))
 
-        return _build_gcs_response(
+        csv_url = await _get_csv_url(task_id)
+
+        return _build_result_response(
             task_id=task_id,
             csv_url=csv_url,
             preview=preview,
@@ -192,7 +213,7 @@ async def try_upload_gcs_result(
         )
     except Exception:
         logger.exception(
-            "GCS upload failed for task %s, falling back to in-memory cache",
+            "Failed to store results in Redis for task %s, falling back to inline",
             task_id,
         )
         return None

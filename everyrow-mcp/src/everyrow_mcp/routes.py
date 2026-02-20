@@ -100,3 +100,34 @@ async def api_progress(request: Request) -> Any:
         return JSONResponse(
             {"error": "Internal server error"}, status_code=500, headers=cors
         )
+
+
+async def api_download(request: Request) -> Any:
+    """REST endpoint to download task results as CSV."""
+    cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET"}
+
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=cors)
+
+    task_id = request.path_params["task_id"]
+
+    # Validate poll token
+    expected_poll = await state.get_poll_token(task_id)
+    request_poll = request.query_params.get("token", "")
+    if not expected_poll or not secrets.compare_digest(request_poll, expected_poll):
+        return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
+
+    csv_text = await state.get_result_csv(task_id)
+    if csv_text is None:
+        return JSONResponse(
+            {"error": "Results not found or expired"}, status_code=404, headers=cors
+        )
+
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={
+            **cors,
+            "Content-Disposition": f'attachment; filename="results_{task_id[:8]}.csv"',
+        },
+    )

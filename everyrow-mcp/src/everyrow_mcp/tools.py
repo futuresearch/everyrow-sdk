@@ -25,7 +25,6 @@ from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp.app import _clear_task_state, mcp
-from everyrow_mcp.gcs_results import try_cached_gcs_result, try_upload_gcs_result
 from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
@@ -37,6 +36,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
+from everyrow_mcp.result_store import try_cached_result, try_store_result
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
     TaskNotReady,
@@ -735,13 +735,11 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     client = _get_client()
     task_id = params.task_id
 
-    # ── HTTP mode: return from GCS cache if available ─────────────
+    # ── HTTP mode: return from cache if available ───────────────
     if state.is_http:
-        gcs_cached = await try_cached_gcs_result(
-            task_id, params.offset, params.page_size
-        )
-        if gcs_cached is not None:
-            return gcs_cached
+        cached = await try_cached_result(task_id, params.offset, params.page_size)
+        if cached is not None:
+            return cached
 
     # ── Fetch from API ────────────────────────────────────────────
     try:
@@ -782,14 +780,14 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
             )
         ]
 
-    # ── HTTP mode: upload to GCS ──────────────────────────────────
-    gcs_response = await try_upload_gcs_result(
+    # ── HTTP mode: store in Redis ────────────────────────────────
+    store_response = await try_store_result(
         task_id, df, params.offset, params.page_size, session_url
     )
-    if gcs_response is not None:
-        return gcs_response
+    if store_response is not None:
+        return store_response
 
-    # ── HTTP mode fallback: inline results (--no-auth / GCS failure) ──
+    # ── HTTP mode fallback: inline results (Redis unavailable) ──
     total = len(df)
     columns = list(df.columns)
     clamped = min(params.offset, total)

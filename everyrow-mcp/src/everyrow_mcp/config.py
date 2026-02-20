@@ -25,17 +25,12 @@ class HttpSettings(BaseSettings):
     )
     redis_sentinel_master_name: str | None = Field(default=None)
 
-    gcs_results_bucket: str
-
     preview_size: int = Field(
         default=5, description="Number of rows in the initial results preview"
     )
     token_budget: int = Field(
         default=20000,
         description="Target token budget per page of inline results",
-    )
-    signed_url_expiry_minutes: int = Field(
-        default=15, description="GCS signed URL expiry in minutes"
     )
 
     @model_validator(mode="after")
@@ -54,7 +49,6 @@ class DevHttpSettings(BaseSettings):
     """Settings for --no-auth HTTP mode (local development only).
 
     Only requires EVERYROW_API_KEY. Redis defaults to localhost:6379:13.
-    GCS is optional — if not set, results are inline only.
     """
 
     model_config = SettingsConfigDict(extra="ignore")
@@ -67,8 +61,6 @@ class DevHttpSettings(BaseSettings):
     redis_db: int = Field(default=13)
     redis_password: str | None = Field(default=None)
 
-    gcs_results_bucket: str | None = Field(default=None)
-    signed_url_expiry_minutes: int = Field(default=15)
     preview_size: int = Field(default=5)
     token_budget: int = Field(
         default=20000,

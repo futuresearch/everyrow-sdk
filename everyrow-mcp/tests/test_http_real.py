@@ -4,7 +4,7 @@ These tests spin up a Starlette ASGI server (via httpx + ASGITransport),
 configure state for HTTP mode with a real Redis instance, and make real
 API calls to the everyrow backend. They exercise the full pipeline:
 
-    submit (MCP tool) → poll (REST endpoint) → results (MCP tool + GCS)
+    submit (MCP tool) → poll (REST endpoint) → results (MCP tool)
 
 Requirements:
     - EVERYROW_API_KEY must be set
@@ -79,7 +79,6 @@ def _http_mode(real_redis):
         "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
         "client": state.client,
-        "gcs_store": state.gcs_store,
     }
 
     state.transport = "streamable-http"
@@ -89,7 +88,6 @@ def _http_mode(real_redis):
         everyrow_api_key=os.environ.get("EVERYROW_API_KEY", ""),
         everyrow_api_url="https://everyrow.io/api/v0",
     )
-    state.gcs_store = None
 
     yield
 
@@ -98,7 +96,6 @@ def _http_mode(real_redis):
     state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
     state.client = orig["client"]
-    state.gcs_store = orig["gcs_store"]
 
 
 @pytest.fixture
@@ -247,30 +244,29 @@ class TestHttpScreenPipeline:
         assert "session_url" in progress
         print(f"  Session: {progress['session_url']}")
 
-        # 3. After completion, tokens are cleaned up — next poll should 403
+        # 3. After completion, task token is cleaned up — next poll returns 404
         resp = await client.get(
             f"/api/progress/{task_id}", params={"token": poll_token}
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 404
 
-        # 4. Fetch results via MCP tool (GCS mode — mock GCS upload)
+        # 4. Fetch results via MCP tool (mock store)
         with (
             patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
-                "everyrow_mcp.tools.try_cached_gcs_result",
+                "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "everyrow_mcp.tools.try_upload_gcs_result",
+                "everyrow_mcp.tools.try_store_result",
                 new_callable=AsyncMock,
-            ) as mock_upload,
+            ) as mock_store,
         ):
-            # Simulate GCS upload returning a GCS response
-            mock_upload.return_value = [
+            mock_store.return_value = [
                 TextContent(
                     type="text",
-                    text='{"csv_url": "https://storage.test/data.csv", "preview": [], "total": 0}',
+                    text='{"csv_url": "http://testserver/api/results/x/download?token=t", "preview": [], "total": 0}',
                 ),
                 TextContent(type="text", text="Results ready."),
             ]
@@ -327,23 +323,23 @@ class TestHttpAgentPipeline:
         assert progress["status"] == "completed"
         assert progress["completed"] == 2
 
-        # 3. Fetch results via MCP tool (GCS mode — mock GCS upload)
+        # 3. Fetch results via MCP tool (mock store)
         with (
             patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
-                "everyrow_mcp.tools.try_cached_gcs_result",
+                "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "everyrow_mcp.tools.try_upload_gcs_result",
+                "everyrow_mcp.tools.try_store_result",
                 new_callable=AsyncMock,
-            ) as mock_upload,
+            ) as mock_store,
         ):
-            mock_upload.return_value = [
+            mock_store.return_value = [
                 TextContent(
                     type="text",
-                    text='{"csv_url": "https://storage.test/data.csv", "preview": [], "total": 2}',
+                    text='{"csv_url": "http://testserver/api/results/x/download?token=t", "preview": [], "total": 2}',
                 ),
                 TextContent(type="text", text="Results: 2 rows."),
             ]
