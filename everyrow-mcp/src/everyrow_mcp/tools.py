@@ -1,25 +1,16 @@
-"""MCP tool functions and their helpers."""
+"""MCP tool functions for the everyrow MCP server."""
 
 import asyncio
 import json
-import logging
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-import pandas as pd
 from everyrow.api_utils import handle_response
-from everyrow.generated.api.tasks import (
-    get_task_result_tasks_task_id_result_get,
-    get_task_status_tasks_task_id_status_get,
-)
-from everyrow.generated.client import AuthenticatedClient
+from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.models.public_task_type import PublicTaskType
-from everyrow.generated.models.task_result_response_data_type_1 import (
-    TaskResultResponseDataType1,
-)
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.types import Unset
 from everyrow.ops import (
@@ -31,7 +22,6 @@ from everyrow.ops import (
     single_agent_async,
 )
 from everyrow.session import create_session, get_session_url
-from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
@@ -48,120 +38,18 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.state import (
-    PROGRESS_POLL_DELAY,
-    TASK_STATE_FILE,
-    state,
+from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
+from everyrow_mcp.tool_helpers import (
+    TaskNotReady,
+    _build_inline_response,
+    _fetch_task_result,
+    _get_client,
+    _submission_text,
+    _submission_ui_json,
+    _with_ui,
+    _write_task_state,
 )
 from everyrow_mcp.utils import load_csv, save_result_to_csv
-
-
-def _get_client():
-    """Get an EveryRow API client for the current request.
-
-    In stdio mode, returns the singleton client initialized at startup.
-    In HTTP mode, creates a per-request client using the authenticated
-    user's API key from the OAuth access token.
-    """
-    if state.is_stdio:
-        if state.client is None:
-            raise RuntimeError("MCP server not initialized")
-        return state.client
-    # HTTP mode: get JWT from authenticated request
-    access_token = get_access_token()
-    if access_token is None:
-        raise RuntimeError("Not authenticated")
-    if state.settings is None:
-        raise RuntimeError("MCP server not initialized")
-    return AuthenticatedClient(
-        base_url=state.settings.everyrow_api_url,
-        token=access_token.token,
-        raise_on_unexpected_status=True,
-        follow_redirects=True,
-    )
-
-
-def _with_ui(ui_text: str, *human: TextContent) -> list[TextContent]:
-    """Prepend a widget JSON TextContent in HTTP mode; skip it in stdio to save tokens."""
-    if state.is_http:
-        return [TextContent(type="text", text=ui_text), *human]
-    return list(human)
-
-
-def _submission_text(label: str, session_url: str, task_id: str) -> str:
-    """Build human-readable text for submission tool results."""
-    if state.is_stdio:
-        return (
-            f"{label}\n"
-            f"Session: {session_url}\n"
-            f"Task ID: {task_id}\n\n"
-            f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
-        )
-    return (
-        f"{label}\n"
-        f"Task ID: {task_id}\n\n"
-        f"Immediately call everyrow_progress(task_id='{task_id}')."
-    )
-
-
-async def _submission_ui_json(
-    session_url: str,
-    task_id: str,
-    total: int,
-    token: str,
-) -> str:
-    """Build JSON for the session MCP App widget, and store the token for polling."""
-    await state.store_task_token(task_id, token)
-    poll_token = secrets.token_urlsafe(32)
-    await state.store_poll_token(task_id, poll_token)
-    data: dict[str, Any] = {
-        "session_url": session_url,
-        "task_id": task_id,
-        "total": total,
-        "status": "submitted",
-    }
-    if state.mcp_server_url:
-        data["progress_url"] = (
-            f"{state.mcp_server_url}/api/progress/{task_id}?token={poll_token}"
-        )
-    return json.dumps(data)
-
-
-def _write_task_state(
-    task_id: str,
-    task_type: PublicTaskType,
-    session_url: str,
-    total: int,
-    completed: int,
-    failed: int,
-    running: int,
-    status: TaskStatus,
-    started_at: datetime,
-) -> None:
-    """Write task tracking state for hooks/status line to read.
-
-    Note: Only one task is tracked at a time. If multiple tasks run concurrently,
-    only the most recent one's progress is shown.
-    """
-    if state.is_http:
-        return
-    try:
-        TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        task_state = {
-            "task_id": task_id,
-            "task_type": task_type.value,
-            "session_url": session_url,
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "running": running,
-            "status": status.value,
-            "started_at": started_at.timestamp(),
-        }
-        with open(TASK_STATE_FILE, "w") as f:
-            json.dump(task_state, f)
-    except Exception as e:
-        logging.getLogger(__name__).debug(f"Failed to write task state: {e!r}")
 
 
 @mcp.tool(
@@ -841,20 +729,10 @@ async def everyrow_progress(  # noqa: PLR0912
     meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:
-    """Retrieve results from a completed everyrow task.
+    """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
-    If output_path is provided (stdio mode), saves all results to a CSV file.
-    If output_path is omitted, returns a page of results inline.
-
-    Pagination example (100-row result set):
-      everyrow_results(task_id='abc')                        → rows 1-5, next offset=5
-      everyrow_results(task_id='abc', offset=5)              → rows 6-10, next offset=10
-      everyrow_results(task_id='abc', offset=0, page_size=50) → rows 1-50, next offset=50
-      everyrow_results(task_id='abc', offset=50, page_size=50) → rows 51-100, final page
-
-    For large result sets a CSV download link is also provided on the first page.
-    Share the download link with the user so they can get the full data.
+    The output_path must be a full file path ending in .csv.
     """
     client = _get_client()
     task_id = params.task_id
@@ -919,157 +797,3 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
 
     # ── Build paginated inline response ─────────────────────────────
     return _build_inline_response(task_id, df, download_token, params, session_url)
-
-
-class TaskNotReady(Exception):
-    """Raised when a task is not in a terminal state."""
-
-    def __init__(self, status: str) -> None:
-        self.status = status
-        super().__init__(status)
-
-
-async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, str]:
-    """Fetch a task's result DataFrame and session ID from the API.
-
-    Checks task status first, then retrieves and parses the result data.
-
-    Returns:
-        Tuple of (DataFrame, session_id).
-
-    Raises:
-        TaskNotReady: If the task is not in a terminal state.
-        ValueError: If the result has no table data.
-        Exception: On API errors.
-    """
-    status_response = handle_response(
-        await get_task_status_tasks_task_id_status_get.asyncio(
-            task_id=UUID(task_id),
-            client=client,
-        )
-    )
-    if status_response.status not in (
-        TaskStatus.COMPLETED,
-        TaskStatus.FAILED,
-        TaskStatus.REVOKED,
-    ):
-        raise TaskNotReady(status_response.status.value)
-
-    session_id = str(status_response.session_id) if status_response.session_id else ""
-
-    result_response = handle_response(
-        await get_task_result_tasks_task_id_result_get.asyncio(
-            task_id=UUID(task_id),
-            client=client,
-        )
-    )
-
-    if isinstance(result_response.data, list):
-        records = [item.additional_properties for item in result_response.data]
-        return pd.DataFrame(records), session_id
-    if isinstance(result_response.data, TaskResultResponseDataType1):
-        return pd.DataFrame([result_response.data.additional_properties]), session_id
-    raise ValueError("Task result has no table data.")
-
-
-_TOKEN_BUDGET = 4000  # target tokens per page of inline results
-_CHARS_PER_TOKEN = 4  # conservative estimate for JSON-heavy text
-
-
-def _recommend_page_size(
-    page_json: str, rows_shown: int, total: int, current_page_size: int
-) -> int | None:
-    """Estimate an optimal page_size based on the current page's token cost.
-
-    Returns a recommended page_size, or None if the current one is fine.
-    """
-    if rows_shown == 0:
-        return None
-    avg_chars_per_row = len(page_json) / rows_shown
-    avg_tokens_per_row = avg_chars_per_row / _CHARS_PER_TOKEN
-    if avg_tokens_per_row <= 0:
-        return None
-    recommended = max(1, min(int(_TOKEN_BUDGET / avg_tokens_per_row), 100))
-    # Only recommend if meaningfully different (>25% change) and there are more rows
-    if (
-        recommended >= total
-        or abs(recommended - current_page_size) / current_page_size < 0.25
-    ):
-        return None
-    return recommended
-
-
-def _build_inline_response(
-    task_id: str,
-    df: pd.DataFrame,
-    download_token: str,
-    params: ResultsInput,
-    session_url: str = "",
-) -> list[TextContent]:
-    """Build paginated inline response for in-memory results."""
-    total = len(df)
-    col_names = ", ".join(df.columns[:10])
-    if len(df.columns) > 10:
-        col_names += f", ... (+{len(df.columns) - 10} more)"
-
-    offset = min(params.offset, total)
-    page_size = params.page_size
-    page_df = df.iloc[offset : offset + page_size]
-    page_records = page_df.where(page_df.notna(), None).to_dict(orient="records")
-    has_more = offset + page_size < total
-    next_offset = offset + page_size if has_more else None
-
-    # Widget JSON: HTTP mode includes results_url, stdio mode is plain records
-    if state.is_http and state.mcp_server_url:
-        results_url = f"{state.mcp_server_url}/api/results/{task_id}?format=json"
-        csv_download_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
-        widget_data: dict[str, Any] = {
-            "results_url": results_url,
-            "download_token": download_token,
-            "csv_url": csv_download_url,
-            "preview": page_records,
-            "total": total,
-        }
-        if session_url:
-            widget_data["session_url"] = session_url
-        widget_json = json.dumps(widget_data)
-    else:
-        widget_json = json.dumps(page_records)
-
-    # Token-based page_size recommendation
-    recommended = _recommend_page_size(widget_json, len(page_df), total, page_size)
-
-    # Summary text for the LLM
-    csv_url = ""
-    if state.mcp_server_url:
-        csv_url = f"{state.mcp_server_url}/api/results/{task_id}?token={download_token}&format=csv"
-
-    default_page_size = ResultsInput.model_fields["page_size"].default
-    if has_more:
-        # Use recommendation in the call hint; fall back to current page_size
-        hint_page_size = recommended if recommended is not None else page_size
-        page_size_arg = (
-            f", page_size={hint_page_size}"
-            if hint_page_size != default_page_size
-            else ""
-        )
-        summary = (
-            f"Results: {total} rows, {len(df.columns)} columns ({col_names}). "
-            f"Showing rows {offset + 1}-{offset + len(page_df)} of {total}.\n"
-        )
-        if recommended is not None:
-            summary += f"Recommended page_size={recommended} for these results.\n"
-        summary += f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
-        if csv_url and offset == 0:
-            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
-    elif offset == 0:
-        summary = f"Results: {total} rows, {len(df.columns)} columns ({col_names}). All rows shown."
-        if csv_url:
-            summary += f"\nFull CSV download: {csv_url}\nShare this download link with the user."
-    else:
-        summary = f"Results: showing rows {offset + 1}-{offset + len(page_df)} of {total} (final page)."
-
-    return _with_ui(
-        widget_json,
-        TextContent(type="text", text=summary),
-    )

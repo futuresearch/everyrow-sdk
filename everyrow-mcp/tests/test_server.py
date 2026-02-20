@@ -490,7 +490,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -530,7 +530,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -569,7 +569,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -613,7 +613,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -662,7 +662,7 @@ class TestResults:
                 mock_status,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 mock_result,
             ),
         ):
@@ -703,7 +703,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -740,7 +740,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),
@@ -783,7 +783,7 @@ class TestResults:
                 return_value=status_response,
             ),
             patch(
-                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                "everyrow_mcp.tool_helpers.get_task_result_tasks_task_id_result_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=result_response,
             ),

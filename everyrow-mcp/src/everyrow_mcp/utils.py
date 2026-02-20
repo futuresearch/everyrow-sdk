@@ -109,6 +109,7 @@ def resolve_output_path(output_path: str, input_path: str, prefix: str) -> Path:
 
 
 def load_csv(
+    *,
     input_csv: str | None = None,
     input_data: str | None = None,
     input_json: list[dict[str, Any]] | None = None,
