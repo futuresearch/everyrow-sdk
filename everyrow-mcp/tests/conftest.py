@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
 
-from everyrow_mcp import server
+from everyrow_mcp import app
 
 
 @pytest.fixture
@@ -18,10 +18,10 @@ async def everyrow_client():
     """
     try:
         with create_client() as client:
-            server._client = client
+            app._client = client
             yield client
     finally:
-        server._client = None
+        app._client = None
 
 
 @pytest.fixture
