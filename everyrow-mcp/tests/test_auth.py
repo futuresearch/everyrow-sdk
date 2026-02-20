@@ -517,8 +517,12 @@ class TestRefreshToken:
             build_key("refresh", "old-rt"), old_rt, ttl=REFRESH_TOKEN_TTL
         )
 
+        # load_refresh_token now atomically consumes the token (GETDEL)
+        loaded_rt = await provider.load_refresh_token(client_info, "old-rt")
+        assert loaded_rt is not None
+
         token = await provider.exchange_refresh_token(
-            client_info, old_rt, scopes=["read"]
+            client_info, loaded_rt, scopes=["read"]
         )
 
         # New JWT returned

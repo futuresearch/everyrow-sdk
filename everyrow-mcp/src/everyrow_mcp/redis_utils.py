@@ -15,7 +15,9 @@ HEALTH_CHECK_INTERVAL = 30
 
 
 def build_key(*parts: str) -> str:
-    return "mcp:" + ":".join(parts)
+    # Sanitize parts to prevent key-injection via embedded colons
+    sanitized = [p.replace(":", "_") for p in parts]
+    return "mcp:" + ":".join(sanitized)
 
 
 def create_redis_client(

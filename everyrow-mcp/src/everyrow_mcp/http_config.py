@@ -19,7 +19,7 @@ from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
 from everyrow_mcp.config import HttpSettings
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import create_redis_client
-from everyrow_mcp.routes import api_progress, api_results
+from everyrow_mcp.routes import api_progress
 from everyrow_mcp.state import state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
@@ -64,6 +64,9 @@ def configure_http_mode(
     # Token verifier validates Supabase JWTs via JWKS (no Redis lookup needed)
     verifier = SupabaseTokenVerifier(settings.supabase_url)
 
+    # Store auth provider on state so the lifespan can close it
+    state.auth_provider = auth_provider
+
     # Configure auth on the existing FastMCP instance (tools already registered)
     mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
     mcp._token_verifier = verifier
@@ -82,17 +85,14 @@ def configure_http_mode(
     # Store server URL for progress polling
     state.mcp_server_url = settings.mcp_server_url
 
-    # Initialize GCS result store if enabled via RESULT_STORAGE=gcs
-    if settings.result_storage == "gcs" and settings.gcs_results_bucket:
-        state.gcs_store = GCSResultStore(
-            settings.gcs_results_bucket,
-            signed_url_expiry_minutes=settings.signed_url_expiry_minutes,
-        )
-        logging.getLogger(__name__).info(
-            "GCS result store enabled: %s", settings.gcs_results_bucket
-        )
-    else:
-        logging.getLogger(__name__).info("Using in-memory result cache")
+    # Initialize GCS result store
+    state.gcs_store = GCSResultStore(
+        settings.gcs_results_bucket,
+        signed_url_expiry_minutes=settings.signed_url_expiry_minutes,
+    )
+    logging.getLogger(__name__).info(
+        "GCS result store enabled: %s", settings.gcs_results_bucket
+    )
 
     # Re-register session resource with CSP allowing progress endpoint fetch
     @mcp.resource(
@@ -110,11 +110,7 @@ def configure_http_mode(
     def _session_ui_http() -> str:
         return SESSION_HTML
 
-    # Re-register results resource with CSP allowing results endpoint fetch
-    results_connect_domains = [settings.mcp_server_url]
-    if state.gcs_store:
-        results_connect_domains.append("https://storage.googleapis.com")
-
+    # Re-register results resource with CSP allowing GCS fetch
     @mcp.resource(
         "ui://everyrow/results.html",
         mime_type="text/html;profile=mcp-app",
@@ -122,7 +118,10 @@ def configure_http_mode(
             "ui": {
                 "csp": {
                     "resourceDomains": ["https://unpkg.com"],
-                    "connectDomains": results_connect_domains,
+                    "connectDomains": [
+                        settings.mcp_server_url,
+                        "https://storage.googleapis.com",
+                    ],
                 }
             }
         },
@@ -134,7 +133,6 @@ def configure_http_mode(
     mcp.custom_route("/auth/start/{state}", ["GET"])(auth_provider.handle_start)
     mcp.custom_route("/auth/callback", ["GET"])(auth_provider.handle_callback)
     mcp.custom_route("/api/progress/{task_id}", ["GET", "OPTIONS"])(api_progress)
-    mcp.custom_route("/api/results/{task_id}", ["GET", "OPTIONS"])(api_results)
 
     async def _health(_request: Request) -> Response:
         return JSONResponse({"status": "ok"})

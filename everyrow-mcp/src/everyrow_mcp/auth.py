@@ -52,6 +52,10 @@ PENDING_AUTH_TTL = 600  # 10 minutes
 CLIENT_REGISTRATION_TTL = 2_592_000  # 30 days
 REFRESH_TOKEN_TTL = 604_800  # 7 days
 
+# Rate limits
+REGISTRATION_RATE_LIMIT = 10  # max registrations per window
+REGISTRATION_RATE_WINDOW = 60  # seconds
+
 
 # ── Token verifier (resource-server mode) ─────────────────────────────
 
@@ -70,18 +74,20 @@ class SupabaseTokenVerifier(TokenVerifier):
             signing_key = await asyncio.to_thread(
                 self._jwks_client.get_signing_key_from_jwt, token
             )
-            header = pyjwt.get_unverified_header(token)
-            algorithm = header.get("alg", "RS256")
             payload: dict[str, Any] = pyjwt.decode(
                 token,
                 signing_key.key,
-                algorithms=[algorithm],
+                algorithms=["RS256"],
                 issuer=self._issuer,
                 audience="authenticated",
             )
+            sub = payload.get("sub")
+            if not sub:
+                logger.debug("JWT missing required 'sub' claim")
+                return None
             return AccessToken(
                 token=token,
-                client_id=payload.get("sub", "unknown"),
+                client_id=sub,
                 scopes=payload.get("scope", "").split() if payload.get("scope") else [],
                 expires_at=payload.get("exp"),
             )
@@ -141,7 +147,11 @@ class EveryRowAuthProvider(
         self.supabase_anon_key = supabase_anon_key
         self.mcp_server_url = mcp_server_url.rstrip("/")
         self._redis = redis
-        self._http = httpx.AsyncClient()
+        self._http = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
+
+    async def close(self) -> None:
+        """Close the HTTP client. Call from your lifespan handler."""
+        await self._http.aclose()
 
     # ── Redis helpers (plain JSON, no encryption) ─────────────────
 
@@ -168,6 +178,14 @@ class EveryRowAuthProvider(
         )
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        # Global rate limit on registrations
+        rl_key = build_key("ratelimit", "register")
+        count = await self._redis.incr(rl_key)
+        if count == 1:
+            await self._redis.expire(rl_key, REGISTRATION_RATE_WINDOW)
+        if count > REGISTRATION_RATE_LIMIT:
+            raise ValueError("Registration rate limit exceeded")
+
         cid = client_info.client_id
         if cid is None:
             raise ValueError("client_id is required")
@@ -308,7 +326,8 @@ class EveryRowAuthProvider(
     ) -> OAuthToken:
         await self._redis.delete(build_key("authcode", authorization_code.code))
 
-        # Derive expires_in from the JWT's actual exp claim
+        # Safe: JWT was just received from Supabase's token endpoint (server-to-server).
+        # Do NOT copy this pattern for tokens received from clients.
         jwt_claims = pyjwt.decode(
             authorization_code.supabase_jwt, options={"verify_signature": False}
         )
@@ -346,10 +365,14 @@ class EveryRowAuthProvider(
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> EveryRowRefreshToken | None:
-        rt = await self._redis_get(
-            build_key("refresh", refresh_token), EveryRowRefreshToken
-        )
-        if rt is None or rt.client_id != client.client_id:
+        # Atomic GETDEL: prevents race condition where two concurrent refresh
+        # requests both succeed with the same token, defeating rotation.
+        key = build_key("refresh", refresh_token)
+        data = await self._redis.getdel(key)
+        if data is None:
+            return None
+        rt = EveryRowRefreshToken.model_validate_json(data)
+        if rt.client_id != client.client_id:
             return None
         return rt
 
@@ -359,15 +382,13 @@ class EveryRowAuthProvider(
         refresh_token: EveryRowRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        # Call Supabase to refresh (before deleting old token, so it survives failures)
+        # Old refresh token already consumed atomically in load_refresh_token (GETDEL)
         new_jwt, new_supabase_refresh = await self._refresh_supabase_token(
             refresh_token.supabase_refresh_token
         )
 
-        # Delete old token only after successful refresh (rotation)
-        await self._redis.delete(build_key("refresh", refresh_token.token))
-
-        # Decode new JWT for exp
+        # Safe: JWT was just received from Supabase's token endpoint (server-to-server).
+        # Do NOT copy this pattern for tokens received from clients.
         jwt_claims = pyjwt.decode(new_jwt, options={"verify_signature": False})
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 

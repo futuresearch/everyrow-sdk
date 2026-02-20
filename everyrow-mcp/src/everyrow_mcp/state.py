@@ -6,17 +6,14 @@ Provides Redis-backed token storage methods for multi-pod deployments.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 from everyrow.generated.client import AuthenticatedClient
 
-from everyrow_mcp.config import _BaseSettings
+from everyrow_mcp.config import HttpSettings, StdioSettings
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
 
@@ -26,15 +23,6 @@ PROGRESS_POLL_DELAY = 12
 TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 RESULT_CACHE_TTL = 600
 TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
-
-
-@dataclass
-class CachedResult:
-    """An in-memory cached task result."""
-
-    df: pd.DataFrame
-    timestamp: float
-    download_token: str
 
 
 @dataclass
@@ -49,11 +37,10 @@ class ServerState:
     client: AuthenticatedClient | None = None
     transport: str = "stdio"
     mcp_server_url: str = ""
-    result_cache: dict[str, CachedResult] = field(default_factory=dict)
     gcs_store: GCSResultStore | None = None
-    settings: _BaseSettings | None = None
+    settings: StdioSettings | HttpSettings | None = None
     redis: Any | None = None
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    auth_provider: Any | None = None
 
     # ── Transport helpers ─────────────────────────────────────────
 
@@ -64,39 +51,6 @@ class ServerState:
     @property
     def is_http(self) -> bool:
         return self.transport != "stdio"
-
-    # ── In-memory cache (protected by lock in HTTP mode) ──────────
-
-    async def evict_stale_results(self) -> None:
-        """Remove in-memory cache entries older than RESULT_CACHE_TTL."""
-        async with self._lock:
-            now = datetime.now(UTC).timestamp()
-            stale = [
-                k
-                for k, v in self.result_cache.items()
-                if now - v.timestamp > RESULT_CACHE_TTL
-            ]
-            for k in stale:
-                self.result_cache.pop(k, None)
-
-    async def get_cached_result(self, task_id: str) -> CachedResult | None:
-        """Get a cached result, using a lock in HTTP mode."""
-        async with self._lock:
-            return self.result_cache.get(task_id)
-
-    async def set_cached_result(
-        self, task_id: str, df: pd.DataFrame, timestamp: float, token: str
-    ) -> None:
-        """Store a result in the in-memory cache, using a lock in HTTP mode."""
-        async with self._lock:
-            self.result_cache[task_id] = CachedResult(
-                df=df, timestamp=timestamp, download_token=token
-            )
-
-    async def pop_cached_result(self, task_id: str) -> None:
-        """Remove a result from the in-memory cache, using a lock in HTTP mode."""
-        async with self._lock:
-            self.result_cache.pop(task_id, None)
 
     # ── Redis access (sealed — no direct .redis outside this class) ───
 
