@@ -200,6 +200,7 @@ app.onhostcontextchanged=(ctx)=>{
 /* --- helpers --- */
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 function escAttr(s){return esc(s).replace(/"/g,"&quot;");}
+function truncSafe(s,len){if(s.length<=len)return s;let t=s.slice(0,len);const urlRe=/(https?:\\/\\/[^\\s<>"'\\]]+)$/;const m=t.match(urlRe);if(m){const full=s.slice(m.index).match(/^https?:\\/\\/[^\\s<>"'\\]]+/);if(full&&full[0].length>m[1].length)t=s.slice(0,m.index+full[0].length);}return t;}
 function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
 
 /* --- data processing --- */
@@ -306,7 +307,7 @@ function renderTable(){
       const dc=' data-col="'+escAttr(c)+'"';
       if(v==null){h+="<td"+cls+dc+"></td>";}
       else{const s=String(v);
-        if(s.length>TRUNC)h+='<td'+cls+dc+'><span class="cell-text">'+linkify(s.slice(0,TRUNC))+'</span><span class="cell-more">&hellip; more</span></td>';
+        if(s.length>TRUNC)h+='<td'+cls+dc+'><span class="cell-text">'+linkify(truncSafe(s,TRUNC))+'</span><span class="cell-more">&hellip; more</span></td>';
         else h+='<td'+cls+dc+'>'+linkify(s)+'</td>';
       }
     }
@@ -363,7 +364,7 @@ tbl.addEventListener("click",e=>{
     const td=less.closest("td"),tr=td.closest("tr");
     const idx=parseInt(tr.dataset.idx,10),col=td.dataset.col;
     const full=String(S.rows[idx].display[col]);
-    td.querySelector(".cell-text").innerHTML=linkify(full.slice(0,TRUNC));
+    td.querySelector(".cell-text").innerHTML=linkify(truncSafe(full,TRUNC));
     less.textContent="\\u2026 more";less.className="cell-more";
     return;
   }
