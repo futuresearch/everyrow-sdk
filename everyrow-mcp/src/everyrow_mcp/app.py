@@ -47,16 +47,16 @@ async def _stdio_lifespan(_server: FastMCP):
 
 @asynccontextmanager
 async def _http_lifespan(_server: FastMCP):
-    """HTTP mode lifespan — verify Redis on startup, clean up on shutdown."""
+    """HTTP mode lifespan — verify Redis on startup.
+
+    NOTE: This runs per MCP *session*, not per server. Do NOT close
+    shared resources (auth_provider, Redis) here — they must survive
+    across sessions. Process exit handles cleanup.
+    """
     log = logging.getLogger(__name__)
     await state.redis_ping()
     log.info("Redis health check passed")
-    try:
-        yield
-    finally:
-        if state.auth_provider is not None:
-            await state.auth_provider.close()
-            log.info("Auth provider HTTP client closed")
+    yield
 
 
 @asynccontextmanager
