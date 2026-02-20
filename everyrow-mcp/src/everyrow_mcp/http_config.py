@@ -16,10 +16,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
+from everyrow_mcp.config import HttpSettings
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_progress, api_results
-from everyrow_mcp.settings import HttpSettings
 from everyrow_mcp.state import state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 

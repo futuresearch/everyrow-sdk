@@ -16,9 +16,9 @@ from typing import Any
 import pandas as pd
 from everyrow.generated.client import AuthenticatedClient
 
+from everyrow_mcp.config import _BaseSettings
 from everyrow_mcp.gcs_storage import GCSResultStore
 from everyrow_mcp.redis_utils import build_key
-from everyrow_mcp.settings import _BaseSettings
 
 logger = logging.getLogger(__name__)
 

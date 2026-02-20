@@ -7,8 +7,8 @@ import sys
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
 from everyrow_mcp.app import _http_lifespan, mcp
+from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.http_config import configure_http_mode
-from everyrow_mcp.settings import StdioSettings
 from everyrow_mcp.state import state
 
 
