@@ -1,27 +1,17 @@
-"""Tests for Redis-backed methods on ServerState.
-
-Uses fakeredis to test token and result metadata round-trips
-without requiring a real Redis instance.
-"""
+"""Tests for Redis-backed methods on ServerState."""
 
 from __future__ import annotations
 
 import json
 
-import fakeredis.aioredis
 import pytest
 
 from everyrow_mcp.state import ServerState
 
 
 @pytest.fixture
-def fake_redis():
-    return fakeredis.aioredis.FakeRedis(decode_responses=True)
-
-
-@pytest.fixture
 def server_state(fake_redis) -> ServerState:
-    """A ServerState wired to fakeredis."""
+    """A ServerState wired to mock Redis."""
     s = ServerState()
     s.redis = fake_redis
     return s
@@ -42,14 +32,15 @@ class TestTaskTokenRoundTrip:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_pop_removes_both_tokens(self, server_state):
+    async def test_pop_removes_task_token_only(self, server_state):
         await server_state.store_task_token("task-2", "key")
         await server_state.store_poll_token("task-2", "poll-tok")
 
         await server_state.pop_task_token("task-2")
 
         assert await server_state.get_task_token("task-2") is None
-        assert await server_state.get_poll_token("task-2") is None
+        # Poll token is kept — needed for CSV download after task completes
+        assert await server_state.get_poll_token("task-2") == "poll-tok"
 
 
 class TestPollTokenRoundTrip:

@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-import fakeredis.aioredis
 import httpx
 import pytest
 from everyrow.generated.models.public_task_type import PublicTaskType
@@ -34,11 +33,6 @@ from everyrow_mcp.state import state
 
 
 @pytest.fixture
-def fake_redis():
-    return fakeredis.aioredis.FakeRedis(decode_responses=True)
-
-
-@pytest.fixture
 def _http_state(fake_redis):
     """Configure global state for HTTP mode and restore after test."""
     orig = {
@@ -46,7 +40,6 @@ def _http_state(fake_redis):
         "redis": state.redis,
         "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
-        "gcs_store": state.gcs_store,
     }
 
     state.transport = "streamable-http"
@@ -56,7 +49,6 @@ def _http_state(fake_redis):
         everyrow_api_key="test-key",
         everyrow_api_url="https://everyrow.io/api/v0",
     )
-    state.gcs_store = None
 
     yield
 
@@ -64,7 +56,6 @@ def _http_state(fake_redis):
     state.redis = orig["redis"]
     state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
-    state.gcs_store = orig["gcs_store"]
 
 
 def _health_endpoint(_request):
@@ -231,9 +222,9 @@ class TestProgressEndpoint:
         assert resp.status_code == 200
         assert resp.json()["status"] == "completed"
 
-        # Tokens should be cleaned up — next request fails
+        # Task token cleaned up; poll token kept for CSV download
         assert await state.get_task_token(task_id) is None
-        assert await state.get_poll_token(task_id) is None
+        assert await state.get_poll_token(task_id) is not None
 
     @pytest.mark.asyncio
     async def test_api_error_returns_500(self, client: httpx.AsyncClient):
@@ -303,9 +294,9 @@ class TestProgressLifecycle:
         assert resp.status_code == 200
         assert resp.json()["status"] == "completed"
 
-        # 4. Tokens are gone — further progress polls fail
+        # 4. Task token is gone — further progress polls return 404
         resp = await client.get(
             f"/api/progress/{task_id}",
             params={"token": poll_token},
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 404

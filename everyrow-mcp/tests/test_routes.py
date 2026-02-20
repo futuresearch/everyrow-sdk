@@ -1,8 +1,4 @@
-"""Tests for REST endpoints in routes.py (api_progress).
-
-Uses mock Starlette Request objects and fakeredis to test handler logic
-without running a real ASGI server.
-"""
+"""Tests for REST endpoints in routes.py (api_progress)."""
 
 from __future__ import annotations
 
@@ -12,7 +8,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-import fakeredis.aioredis
 import pytest
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_progress_info import TaskProgressInfo
@@ -73,13 +68,8 @@ def _make_status_response(
 
 
 @pytest.fixture
-def fake_redis():
-    return fakeredis.aioredis.FakeRedis(decode_responses=True)
-
-
-@pytest.fixture
 async def setup_state(fake_redis):
-    """Temporarily wire state to fakeredis and restore after test."""
+    """Temporarily wire state to mock Redis and restore after test."""
     original_redis = state.redis
     state.redis = fake_redis
     yield
@@ -198,9 +188,9 @@ class TestApiProgress:
         body = json.loads(resp.body.decode())
         assert body["status"] == "completed"
 
-        # Tokens should be cleaned up
+        # Task token cleaned up; poll token kept for CSV download
         assert await state.get_task_token(task_id) is None
-        assert await state.get_poll_token(task_id) is None
+        assert await state.get_poll_token(task_id) is not None
 
     @pytest.mark.asyncio
     async def test_api_error_returns_500(self, setup_state):

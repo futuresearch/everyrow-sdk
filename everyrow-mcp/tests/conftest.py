@@ -1,5 +1,7 @@
 """Shared pytest fixtures for everyrow MCP server tests."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pandas as pd
@@ -8,6 +10,38 @@ from everyrow.api_utils import create_client
 
 from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.state import state
+
+
+class MockRedis:
+    """Minimal async Redis mock backed by a dict. Replaces fakeredis in tests."""
+
+    def __init__(self) -> None:
+        self._data: dict[str, str] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self._data.get(key)
+
+    async def set(self, key: str, value: str) -> None:
+        self._data[key] = value
+
+    async def setex(self, key: str, ttl: int, value: str) -> None:
+        self._data[key] = value  # TTL ignored in tests
+
+    async def delete(self, *keys: str) -> int:
+        count = 0
+        for k in keys:
+            if self._data.pop(k, None) is not None:
+                count += 1
+        return count
+
+    async def ping(self) -> bool:
+        return True
+
+
+@pytest.fixture
+def fake_redis() -> MockRedis:
+    return MockRedis()
+
 
 # Ensure state.settings is always available in tests
 state.settings = StdioSettings(

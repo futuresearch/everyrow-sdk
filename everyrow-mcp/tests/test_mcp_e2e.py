@@ -18,7 +18,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-import fakeredis.aioredis
 import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
@@ -39,25 +38,23 @@ from everyrow_mcp.state import state
 
 
 @pytest.fixture
-def _http_state():
+def _http_state(fake_redis):
     """Configure global state for HTTP mode, restore after test."""
     orig = {
         "transport": state.transport,
         "redis": state.redis,
         "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
-        "gcs_store": state.gcs_store,
         "client": state.client,
     }
 
     state.transport = "streamable-http"
-    state.redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    state.redis = fake_redis
     state.mcp_server_url = "http://testserver"
     state.settings = StdioSettings(
         everyrow_api_key="test-key",
         everyrow_api_url="https://everyrow.io/api/v0",
     )
-    state.gcs_store = None
 
     yield
 
@@ -65,7 +62,6 @@ def _http_state():
     state.redis = orig["redis"]
     state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
-    state.gcs_store = orig["gcs_store"]
     state.client = orig["client"]
 
 
@@ -417,12 +413,12 @@ class TestMcpE2ERealApi:
                     return_value=_real_client,
                 ),
                 patch(
-                    "everyrow_mcp.tools.try_cached_gcs_result",
+                    "everyrow_mcp.tools.try_cached_result",
                     new_callable=AsyncMock,
                     return_value=None,
                 ),
                 patch(
-                    "everyrow_mcp.tools.try_upload_gcs_result",
+                    "everyrow_mcp.tools.try_store_result",
                     new_callable=AsyncMock,
                     return_value=None,
                 ),
@@ -499,12 +495,12 @@ class TestMcpE2ERealApi:
                     return_value=_real_client,
                 ),
                 patch(
-                    "everyrow_mcp.tools.try_cached_gcs_result",
+                    "everyrow_mcp.tools.try_cached_result",
                     new_callable=AsyncMock,
                     return_value=None,
                 ),
                 patch(
-                    "everyrow_mcp.tools.try_upload_gcs_result",
+                    "everyrow_mcp.tools.try_store_result",
                     new_callable=AsyncMock,
                     return_value=None,
                 ),
