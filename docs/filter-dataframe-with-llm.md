@@ -5,7 +5,7 @@ description: How to screen data by criteria that require research in Python. LLM
 
 # How to Filter a DataFrame with an LLM
 
-Here we show how to filter a pandas dataframe by qualitative criteria, when normal filtering like df[df['column'] == value] won't work.
+Here we show how to filter a pandas dataframe by qualitative criteria, when normal filtering like `df[df['column'] == value]` won't work.
 
 LLMs, and LLM-web-agents, can evaluate qualitative criteria at high accuracy. But they can be very expensive and difficult to orchestrate at scale. We provide a low cost solution by handling the orchestration, batching, and consistency checking.
 
