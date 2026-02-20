@@ -79,7 +79,7 @@ def configure_http_mode(
     mcp.settings.host = host
     mcp.settings.port = port
     mcp.settings.transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=False,
+        enable_dns_rebinding_protection=True,
     )
 
     # Store server URL for progress polling

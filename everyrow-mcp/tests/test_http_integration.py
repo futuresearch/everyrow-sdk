@@ -252,7 +252,7 @@ class TestProgressEndpoint:
             )
 
         assert resp.status_code == 500
-        assert "upstream timeout" in resp.json()["error"]
+        assert resp.json()["error"] == "Internal server error"
 
 
 # ── Progress lifecycle ────────────────────────────────────────

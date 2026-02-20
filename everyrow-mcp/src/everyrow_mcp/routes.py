@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import UTC, datetime
 from typing import Any
@@ -16,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.state import state
+
+logger = logging.getLogger(__name__)
 
 
 async def api_progress(request: Request) -> Any:
@@ -92,5 +95,8 @@ async def api_progress(request: Request) -> Any:
             await state.pop_task_token(task_id)
 
         return JSONResponse(data, headers=cors)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500, headers=cors)
+    except Exception:
+        logger.exception("Progress poll failed for task %s", task_id)
+        return JSONResponse(
+            {"error": "Internal server error"}, status_code=500, headers=cors
+        )

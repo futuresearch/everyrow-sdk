@@ -200,6 +200,11 @@ class EveryRowAuthProvider(
         client: OAuthClientInformationFull,
         params: AuthorizationParams,
     ) -> str:
+        # Defense-in-depth: verify redirect_uri against registered URIs
+        if params.redirect_uri and client.redirect_uris:
+            if str(params.redirect_uri) not in [str(u) for u in client.redirect_uris]:
+                raise ValueError("redirect_uri does not match any registered URI")
+
         state = secrets.token_urlsafe(32)
 
         # Generate PKCE pair for the Supabase leg
@@ -250,6 +255,7 @@ class EveryRowAuthProvider(
             httponly=True,
             samesite="lax",
             secure=self.mcp_server_url.startswith("https"),
+            path="/auth/callback",
         )
         return response
 
@@ -264,6 +270,20 @@ class EveryRowAuthProvider(
         pending = await self._redis_get(build_key("pending", state), PendingAuth)
         if pending is None:
             return Response("No pending authorization found", status_code=400)
+
+        # Defense-in-depth: re-verify redirect_uri against registered client
+        client_info = await self.get_client(pending.client_id)
+        if client_info is None:
+            return Response("Unknown client", status_code=400)
+        if pending.params.redirect_uri and client_info.redirect_uris:
+            if str(pending.params.redirect_uri) not in [
+                str(u) for u in client_info.redirect_uris
+            ]:
+                logger.warning(
+                    "redirect_uri mismatch for client %s in callback",
+                    pending.client_id,
+                )
+                return Response("Invalid redirect_uri", status_code=400)
 
         try:
             (
@@ -300,10 +320,18 @@ class EveryRowAuthProvider(
         redirect_params: dict[str, str] = {"code": auth_code_str}
         if pending.params.state:
             redirect_params["state"] = pending.params.state
-        return RedirectResponse(
+        response = RedirectResponse(
             url=f"{pending.params.redirect_uri}?{urlencode(redirect_params)}",
             status_code=302,
         )
+        response.delete_cookie(
+            "mcp_auth_state",
+            path="/auth/callback",
+            httponly=True,
+            samesite="lax",
+            secure=self.mcp_server_url.startswith("https"),
+        )
+        return response
 
     # ── Authorization code exchange ───────────────────────────────
 

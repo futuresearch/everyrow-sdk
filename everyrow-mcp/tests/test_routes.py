@@ -223,4 +223,4 @@ class TestApiProgress:
 
         assert resp.status_code == 500
         body = json.loads(resp.body.decode())
-        assert "API down" in body["error"]
+        assert body["error"] == "Internal server error"
