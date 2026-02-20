@@ -6,7 +6,7 @@ import os
 import sys
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
-from everyrow_mcp.app import _http_lifespan, mcp
+from everyrow_mcp.app import _http_lifespan, _no_auth_http_lifespan, mcp
 from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.http_config import configure_http_mode
 from everyrow_mcp.state import state
@@ -21,6 +21,11 @@ def main():
         help="Use Streamable HTTP transport instead of stdio.",
     )
     parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="Disable OAuth (dev only). Requires EVERYROW_API_KEY.",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8000,
@@ -32,6 +37,9 @@ def main():
         help="Host for HTTP transport (default: 0.0.0.0).",
     )
     args = parser.parse_args()
+
+    if args.no_auth and not args.http:
+        parser.error("--no-auth requires --http")
 
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
@@ -45,7 +53,10 @@ def main():
     )
 
     if args.http:
-        configure_http_mode(mcp, _http_lifespan, host=args.host, port=args.port)
+        lifespan = _no_auth_http_lifespan if args.no_auth else _http_lifespan
+        configure_http_mode(
+            mcp, lifespan, host=args.host, port=args.port, no_auth=args.no_auth
+        )
         mcp.run(transport="streamable-http")
     else:
         state.transport = "stdio"

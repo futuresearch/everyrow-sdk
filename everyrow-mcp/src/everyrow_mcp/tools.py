@@ -789,6 +789,30 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     if gcs_response is not None:
         return gcs_response
 
-    return [
-        TextContent(type="text", text="Error: failed to store results. Please retry.")
-    ]
+    # ── HTTP mode fallback: inline results (--no-auth / GCS failure) ──
+    total = len(df)
+    columns = list(df.columns)
+    clamped = min(params.offset, total)
+    page = df.iloc[clamped : clamped + params.page_size]
+    preview = page.where(page.notna(), None).to_dict(orient="records")
+    col_names = ", ".join(columns[:10])
+    if len(columns) > 10:
+        col_names += f", ... (+{len(columns) - 10} more)"
+
+    summary = f"Results: {total} rows, {len(columns)} columns ({col_names})."
+    has_more = clamped + params.page_size < total
+    if has_more:
+        next_offset = clamped + params.page_size
+        summary += (
+            f"\nShowing rows {clamped + 1}-{clamped + params.page_size} of {total}."
+            f"\nCall everyrow_results(task_id='{task_id}', offset={next_offset}) for the next page."
+        )
+
+    widget_data = {"preview": preview, "total": total}
+    if session_url:
+        widget_data["session_url"] = session_url
+
+    return _with_ui(
+        json.dumps(widget_data),
+        TextContent(type="text", text=summary),
+    )

@@ -674,7 +674,7 @@ class TestResults:
 
     @pytest.mark.asyncio
     async def test_results_http_gcs_failure(self):
-        """In HTTP mode, GCS upload failure returns error message."""
+        """In HTTP mode, GCS upload failure falls back to inline results."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
 
@@ -707,9 +707,10 @@ class TestResults:
         ):
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
-        assert len(result) == 1
-        assert "Error" in result[0].text
-        assert "failed to store results" in result[0].text
+        # HTTP mode returns widget JSON + summary text
+        assert len(result) == 2
+        assert '"preview"' in result[0].text
+        assert "Results: 1 rows" in result[1].text
 
 
 class TestAgentInlineInput:

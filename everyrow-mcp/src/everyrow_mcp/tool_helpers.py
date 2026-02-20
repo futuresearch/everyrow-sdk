@@ -34,13 +34,12 @@ from everyrow_mcp.state import TASK_STATE_FILE, state
 def _get_client():
     """Get an EveryRow API client for the current request.
 
-    In stdio mode, returns the singleton client initialized at startup.
-    In HTTP mode, creates a per-request client using the authenticated
-    user's API key from the OAuth access token.
+    In stdio mode or --no-auth HTTP mode, returns the singleton client
+    initialized at startup. In HTTP mode with auth, creates a per-request
+    client using the authenticated user's API key from the OAuth access token.
     """
-    if state.is_stdio:
-        if state.client is None:
-            raise RuntimeError("MCP server not initialized")
+    # Singleton client (stdio mode or --no-auth HTTP mode)
+    if state.client is not None:
         return state.client
     # HTTP mode: get JWT from authenticated request
     access_token = get_access_token()
