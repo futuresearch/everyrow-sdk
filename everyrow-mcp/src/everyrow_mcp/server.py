@@ -1,42 +1,38 @@
 """MCP server for everyrow SDK operations."""
 
+import argparse
 import logging
 import os
 import sys
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
-
-# Re-export models, helpers, and tools so existing imports from
-# ``everyrow_mcp.server`` keep working (tests, conftest, etc.).
-from everyrow_mcp.app import (  # noqa: F401
-    _clear_task_state,
-    _client,
-    _write_task_state,
-    mcp,
-)
-from everyrow_mcp.models import (  # noqa: F401
-    AgentInput,
-    DedupeInput,
-    MergeInput,
-    ProgressInput,
-    RankInput,
-    ResultsInput,
-    ScreenInput,
-    _schema_to_model,
-)
-from everyrow_mcp.tools import (  # noqa: F401
-    everyrow_agent,
-    everyrow_dedupe,
-    everyrow_merge,
-    everyrow_progress,
-    everyrow_rank,
-    everyrow_results,
-    everyrow_screen,
-)
+from everyrow_mcp.app import _http_lifespan, mcp
+from everyrow_mcp.http_config import configure_http_mode
+from everyrow_mcp.settings import StdioSettings
+from everyrow_mcp.state import state
 
 
 def main():
     """Run the MCP server."""
+    parser = argparse.ArgumentParser(description="everyrow MCP server")
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Use Streamable HTTP transport instead of stdio.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for HTTP transport (default: 8000).",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host for HTTP transport (default: 0.0.0.0).",
+    )
+    args = parser.parse_args()
+
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
 
@@ -48,13 +44,21 @@ def main():
         force=True,
     )
 
-    # Check for API key before starting
-    if "EVERYROW_API_KEY" not in os.environ:
-        logging.error("EVERYROW_API_KEY environment variable is not set.")
-        logging.error("Get an API key at https://everyrow.io/api-key")
-        sys.exit(1)
+    if args.http:
+        configure_http_mode(mcp, _http_lifespan, host=args.host, port=args.port)
+        mcp.run(transport="streamable-http")
+    else:
+        state.transport = "stdio"
 
-    mcp.run(transport="stdio")
+        # Validate required env vars for stdio mode
+        try:
+            state.settings = StdioSettings()  # pyright: ignore[reportCallIssue]
+        except Exception as e:
+            logging.error(f"Configuration error: {e}")
+            logging.error("Get an API key at https://everyrow.io/api-key")
+            sys.exit(1)
+
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
