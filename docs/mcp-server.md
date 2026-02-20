@@ -19,7 +19,7 @@ Filter rows in a CSV based on criteria that require judgment.
 |-----------|------|----------|-------------|
 | `task` | string | Yes | Screening criteria. Rows that meet the criteria pass. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `response_schema` | object | No | JSON schema for custom fields. Default: `{passes: bool}`. |
+| `response_schema` | object | No | JSON schema for custom fields. Default: `{"type": "object", "properties": {"passes": {"type": "boolean"}}}`. |
 
 Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
@@ -73,7 +73,7 @@ Run web research agents on each row.
 |-----------|------|----------|-------------|
 | `task` | string | Yes | Task for the agent to perform on each row. |
 | `input_csv` | string | Yes | Absolute path to input CSV. |
-| `response_schema` | object | No | JSON schema for structured output. Default: `{answer: str}`. |
+| `response_schema` | object | No | JSON schema for structured output. Default: `{"type": "object", "properties": {"answer": {"type": "string"}}}`. |
 
 Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
@@ -128,6 +128,7 @@ All tools that accept `response_schema` take a JSON schema object:
 
 ```json
 {
+  "type": "object",
   "properties": {
     "annual_revenue": {
       "type": "integer",
@@ -142,7 +143,8 @@ All tools that accept `response_schema` take a JSON schema object:
 }
 ```
 
-Supported types: `string`, `integer`, `number`, `boolean`, `array`, `object`.
+The top-level `type` must be `object`, and the `properties` must be non-empty.
+The valid field types are: `string`, `integer`, `number`, `boolean`, `array`, `object`.
 
 ## Plugin
 

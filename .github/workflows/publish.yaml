@@ -36,10 +36,10 @@ jobs:
     permissions:
       contents: write
     # MCPB bundles enable one-click installation in Claude Desktop.
-    # Note: Local MCP servers currently only work in Chat mode, not Cowork mode.
-    # See: https://github.com/anthropics/claude-code/issues/20377
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
