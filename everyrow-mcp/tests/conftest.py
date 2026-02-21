@@ -20,7 +20,7 @@ import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
-from everyrow_mcp import app
+from everyrow_mcp.state import state
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
 
@@ -78,10 +78,10 @@ async def everyrow_client():
     """
     try:
         with create_client() as client:
-            app._client = client
+            state.client = client
             yield client
     finally:
-        app._client = None
+        state.client = None
 
 
 @pytest.fixture
