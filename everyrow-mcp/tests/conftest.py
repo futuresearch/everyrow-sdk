@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# Set env vars for HttpSettings before any everyrow imports
+import os
+
+os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
+os.environ.setdefault("MCP_SERVER_URL", "https://mcp.example.com")
+os.environ.setdefault("REDIS_PORT", "6380")
+
 import socket
 import subprocess
 import time
