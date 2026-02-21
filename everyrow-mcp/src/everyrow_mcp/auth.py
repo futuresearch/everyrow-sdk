@@ -62,27 +62,34 @@ class SupabaseTokenVerifier(TokenVerifier):
     def _token_fingerprint(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    async def verify_token(self, token: str) -> AccessToken | None:
-        try:
-            async with self._jwks_lock:
-                signing_key = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self._jwks_client.get_signing_key_from_jwt, token
-                    ),
-                    timeout=10.0,
-                )
-            payload: dict[str, Any] = pyjwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["RS256", "ES256"],
-                issuer=self._issuer,
-                audience=self._audience,
-                options={"require": ["exp", "sub", "iss", "aud"]},
+    async def _is_revoked(self, token: str) -> bool:
+        key = build_key("revoked", self._token_fingerprint(token))
+        return await self._redis.exists(key) > 0
+
+    async def _get_signing_key(self, token: str):
+        async with self._jwks_lock:
+            return await asyncio.wait_for(
+                asyncio.to_thread(self._jwks_client.get_signing_key_from_jwt, token),
+                timeout=10.0,
             )
 
-            _key = build_key("revoked", self._token_fingerprint(token))
-            if await self._redis.exists(_key) > 0:
-                logger.debug("Token is denied")
+    def _decode_jwt(self, token: str, signing_key) -> dict[str, Any]:
+        return pyjwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256", "ES256"],
+            issuer=self._issuer,
+            audience=self._audience,
+            options={"require": ["exp", "sub", "iss", "aud"]},
+        )
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        try:
+            signing_key = await self._get_signing_key(token)
+            payload = self._decode_jwt(token, signing_key)
+
+            if await self._is_revoked(token):
+                logger.debug("Token is revoked")
                 return None
 
             sub = payload.get("sub")
@@ -316,8 +323,6 @@ class EveryRowAuthProvider(
             return narrowed
         return refresh_token.scopes
 
-    # ── Handlers ───────────────────────────────────────────────
-
     async def authorize(
         self,
         client: OAuthClientInformationFull,
@@ -419,34 +424,46 @@ class EveryRowAuthProvider(
             return None
         return code_obj
 
-    async def exchange_authorization_code(
+    async def _issue_token_response(
         self,
-        client: OAuthClientInformationFull,
-        authorization_code: EveryRowAuthorizationCode,
+        access_token: str,
+        client_id: str,
+        scopes: list[str],
+        supabase_refresh_token: str,
     ) -> OAuthToken:
-        jwt_claims = self._UNSAFE_decode_server_jwt(
-            authorization_code.supabase_access_token
-        )
+        jwt_claims = self._UNSAFE_decode_server_jwt(access_token)
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
-        refresh_token_str = secrets.token_urlsafe(32)
+        rt_str = secrets.token_urlsafe(32)
         rt = EveryRowRefreshToken(
-            token=refresh_token_str,
-            client_id=client.client_id,
-            scopes=authorization_code.scopes,
-            supabase_refresh_token=authorization_code.supabase_refresh_token,
+            token=rt_str,
+            client_id=client_id,
+            scopes=scopes,
+            supabase_refresh_token=supabase_refresh_token,
         )
         await self._redis.setex(
-            name=build_key("refresh", refresh_token_str),
+            name=build_key("refresh", rt_str),
             time=http_settings.refresh_token_ttl,
             value=rt.model_dump_json(),
         )
 
         return OAuthToken(
-            access_token=authorization_code.supabase_access_token,
+            access_token=access_token,
             token_type="Bearer",
             expires_in=expires_in,
-            refresh_token=refresh_token_str,
+            refresh_token=rt_str,
+        )
+
+    async def exchange_authorization_code(
+        self,
+        client: OAuthClientInformationFull,
+        authorization_code: EveryRowAuthorizationCode,
+    ) -> OAuthToken:
+        return await self._issue_token_response(
+            access_token=authorization_code.supabase_access_token,
+            client_id=client.client_id,
+            scopes=authorization_code.scopes,
+            supabase_refresh_token=authorization_code.supabase_refresh_token,
         )
 
     async def load_access_token(self, token: str) -> AccessToken | None:  # noqa: ARG002
@@ -476,28 +493,11 @@ class EveryRowAuthProvider(
         supa_tokens = await self._refresh_supabase_token(
             refresh_token.supabase_refresh_token
         )
-
-        jwt_claims = self._UNSAFE_decode_server_jwt(supa_tokens.access_token)
-        expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
-
-        new_rt_str = secrets.token_urlsafe(32)
-        new_rt = EveryRowRefreshToken(
-            token=new_rt_str,
+        return await self._issue_token_response(
+            access_token=supa_tokens.access_token,
             client_id=client.client_id,
             scopes=final_scopes,
             supabase_refresh_token=supa_tokens.refresh_token,
-        )
-        await self._redis.setex(
-            name=build_key("refresh", new_rt_str),
-            time=http_settings.refresh_token_ttl,
-            value=new_rt.model_dump_json(),
-        )
-
-        return OAuthToken(
-            access_token=supa_tokens.access_token,
-            token_type="Bearer",
-            expires_in=expires_in,
-            refresh_token=new_rt_str,
         )
 
     async def revoke_token(self, token: AccessToken | EveryRowRefreshToken) -> None:
