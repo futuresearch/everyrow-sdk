@@ -1,36 +1,39 @@
-"""FastMCP application instance, lifespan, and task state management."""
+"""FastMCP application instance, lifespans, and resource handlers."""
 
-import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
 
-from everyrow.api_utils import create_client
+from everyrow.api_utils import create_client as _create_sdk_client
 from everyrow.generated.api.billing.get_billing_balance_billing_get import (
     asyncio as get_billing,
 )
-from everyrow.generated.client import AuthenticatedClient
-from everyrow.generated.models.public_task_type import PublicTaskType
-from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.fastmcp import FastMCP
 
-PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
-TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
-# Singleton client, initialized in lifespan
-_client: AuthenticatedClient | None = None
+from everyrow_mcp.state import TASK_STATE_FILE, state
+from everyrow_mcp.templates import (
+    PROGRESS_HTML,
+    RESULTS_HTML,
+    SESSION_HTML,
+    UI_CSP_META,
+)
+
+
+def _clear_task_state() -> None:
+    if state.is_http:
+        return
+    if TASK_STATE_FILE.exists():
+        TASK_STATE_FILE.unlink()
 
 
 @asynccontextmanager
-async def lifespan(_server: FastMCP):
-    """Initialize singleton client and validate credentials on startup."""
-    global _client  # noqa: PLW0603
-
+async def _stdio_lifespan(_server: FastMCP):
+    """Initialize singleton client and validate credentials on startup (stdio mode)."""
     _clear_task_state()
 
     try:
-        with create_client() as _client:
-            response = await get_billing(client=_client)
+        with _create_sdk_client() as client:
+            state.client = client
+            response = await get_billing(client=client)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
             yield
@@ -38,48 +41,64 @@ async def lifespan(_server: FastMCP):
         logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
         raise
     finally:
-        _client = None
+        state.client = None
         _clear_task_state()
 
 
-mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
+@asynccontextmanager
+async def _http_lifespan(_server: FastMCP):
+    """HTTP mode lifespan — verify Redis on startup.
 
-
-def _clear_task_state() -> None:
-    if TASK_STATE_FILE.exists():
-        TASK_STATE_FILE.unlink()
-
-
-def _write_task_state(
-    task_id: str,
-    task_type: PublicTaskType,
-    session_url: str,
-    total: int,
-    completed: int,
-    failed: int,
-    running: int,
-    status: TaskStatus,
-    started_at: datetime,
-) -> None:
-    """Write task tracking state for hooks/status line to read.
-
-    Note: Only one task is tracked at a time. If multiple tasks run concurrently,
-    only the most recent one's progress is shown.
+    NOTE: This runs per MCP *session*, not per server. Do NOT close
+    shared resources (auth_provider, Redis) here — they must survive
+    across sessions. Process exit handles cleanup.
     """
-    try:
-        TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        state = {
-            "task_id": task_id,
-            "task_type": task_type.value,
-            "session_url": session_url,
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "running": running,
-            "status": status.value,
-            "started_at": started_at.timestamp(),
-        }
-        with open(TASK_STATE_FILE, "w") as f:
-            json.dump(state, f)
-    except Exception as e:
-        logging.getLogger(__name__).debug(f"Failed to write task state: {e!r}")
+    log = logging.getLogger(__name__)
+    await state.store.ping()
+    log.info("Redis health check passed")
+    yield
+
+
+@asynccontextmanager
+async def _no_auth_http_lifespan(_server: FastMCP):
+    """HTTP no-auth mode: singleton client from API key, verify Redis."""
+    await state.store.ping()
+    with _create_sdk_client() as client:
+        state.client = client
+        response = await get_billing(client=client)
+        if response is None:
+            raise RuntimeError("Failed to authenticate with everyrow API")
+        try:
+            yield
+        finally:
+            state.client = None
+
+
+mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)
+
+
+@mcp.resource(
+    "ui://everyrow/progress.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=UI_CSP_META,
+)
+def _progress_ui() -> str:
+    return PROGRESS_HTML
+
+
+@mcp.resource(
+    "ui://everyrow/results.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=UI_CSP_META,
+)
+def _results_ui() -> str:
+    return RESULTS_HTML
+
+
+@mcp.resource(
+    "ui://everyrow/session.html",
+    mime_type="text/html;profile=mcp-app",
+    meta=UI_CSP_META,
+)
+def _session_ui() -> str:
+    return SESSION_HTML
