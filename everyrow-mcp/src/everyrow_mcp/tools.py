@@ -679,7 +679,7 @@ async def everyrow_progress(  # noqa: PLR0912
                     f"Call everyrow_results(task_id='{task_id}') to view the output."
                 )
             else:
-                next_call = f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
+                next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
             return _with_ui(
                 ui_json_str,
                 TextContent(
@@ -735,10 +735,6 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-
-    In stdio mode, pass output_path (ending in .csv) to save the CSV locally.
-    In HTTP mode, results are returned as a preview table with a download URL.
-    Do NOT pass output_path in HTTP mode — no local file is created.
     """
     client = _get_client()
     task_id = params.task_id
@@ -776,8 +772,8 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: 
                     type="text",
                     text=(
                         f"Saved {len(df)} rows to {output_file}\n\n"
-                        "Tip: For multi-step pipelines, custom response models, or preview mode, "
-                        "ask your AI assistant to write Python using the everyrow SDK."
+                        "Tip: For multi-step pipelines or custom response models, "
+                        "use the everyrow Python SDK directly."
                     ),
                 )
             ]

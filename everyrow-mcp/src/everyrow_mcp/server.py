@@ -28,6 +28,7 @@ from everyrow_mcp.models import (  # noqa: F401
     _schema_to_model,
 )
 from everyrow_mcp.state import state
+from everyrow_mcp.tool_descriptions import set_tool_descriptions
 from everyrow_mcp.tool_helpers import _write_task_state  # noqa: F401
 from everyrow_mcp.tools import (  # noqa: F401
     everyrow_agent,
@@ -90,6 +91,7 @@ def main():
     )
 
     if args.http:
+        set_tool_descriptions("http")
         lifespan = _no_auth_http_lifespan if args.no_auth else _http_lifespan
         configure_http_mode(
             mcp, lifespan, host=args.host, port=args.port, no_auth=args.no_auth
@@ -97,6 +99,7 @@ def main():
         mcp.run(transport="streamable-http")
     else:
         state.transport = "stdio"
+        set_tool_descriptions("stdio")
 
         # Validate required env vars for stdio mode
         try:
