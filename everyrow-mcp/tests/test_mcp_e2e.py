@@ -32,7 +32,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp.app import mcp as mcp_app
 from everyrow_mcp.config import StdioSettings
-from everyrow_mcp.state import state
+from everyrow_mcp.state import RedisStore, state
 
 # ── Fixtures / helpers ────────────────────────────────────────
 
@@ -42,14 +42,14 @@ def _http_state(fake_redis):
     """Configure global state for HTTP mode, restore after test."""
     orig = {
         "transport": state.transport,
-        "redis": state.redis,
+        "store": state.store,
         "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
         "client": state.client,
     }
 
     state.transport = "streamable-http"
-    state.redis = fake_redis
+    state.store = RedisStore(fake_redis)
     state.mcp_server_url = "http://testserver"
     state.settings = StdioSettings(
         everyrow_api_key="test-key",
@@ -59,7 +59,7 @@ def _http_state(fake_redis):
     yield
 
     state.transport = orig["transport"]
-    state.redis = orig["redis"]
+    state.store = orig["store"]
     state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
     state.client = orig["client"]

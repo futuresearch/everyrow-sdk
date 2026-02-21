@@ -31,12 +31,12 @@ async def api_progress(request: Request) -> Any:
     task_id = request.path_params["task_id"]
 
     # Validate poll token
-    expected_poll = await state.get_poll_token(task_id)
+    expected_poll = await state.store.get_poll_token(task_id)
     request_poll = request.query_params.get("token", "")
     if not expected_poll or not secrets.compare_digest(request_poll, expected_poll):
         return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
 
-    api_key = await state.get_task_token(task_id)
+    api_key = await state.store.get_task_token(task_id)
     if not api_key:
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
 
@@ -92,7 +92,7 @@ async def api_progress(request: Request) -> Any:
         }
 
         if status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED):
-            await state.pop_task_token(task_id)
+            await state.store.pop_task_token(task_id)
 
         return JSONResponse(data, headers=cors)
     except Exception:
@@ -112,12 +112,12 @@ async def api_download(request: Request) -> Any:
     task_id = request.path_params["task_id"]
 
     # Validate poll token
-    expected_poll = await state.get_poll_token(task_id)
+    expected_poll = await state.store.get_poll_token(task_id)
     request_poll = request.query_params.get("token", "")
     if not expected_poll or not secrets.compare_digest(request_poll, expected_poll):
         return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
 
-    csv_text = await state.get_result_csv(task_id)
+    csv_text = await state.store.get_result_csv(task_id)
     if csv_text is None:
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=cors

@@ -1,6 +1,7 @@
 """Tests for Supabase JWT verification and EveryRowAuthProvider."""
 
 import asyncio
+import hashlib
 import secrets
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,18 +13,23 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding,
     PublicFormat,
 )
+from mcp.server.auth.provider import AccessToken, AuthorizationParams
 from mcp.shared.auth import OAuthClientInformationFull
 
 from everyrow_mcp.auth import (
-    AUTH_CODE_TTL,
     EveryRowAuthorizationCode,
     EveryRowAuthProvider,
     EveryRowRefreshToken,
+    SupabaseTokenResponse,
     SupabaseTokenVerifier,
 )
 
+# TTL/rate-limit defaults matching HttpSettings defaults.
+_AUTH_CODE_TTL = 300
+
 SUPABASE_URL = "https://test.supabase.co"
 ISSUER = SUPABASE_URL + "/auth/v1"
+MCP_SERVER_URL = "https://mcp.example.com"
 
 
 # ── Verifier fixtures ────────────────────────────────────────────────
@@ -44,8 +50,10 @@ def mock_redis():
 
     redis = AsyncMock()
 
-    async def _setex(key, _ttl, value):
-        store[key] = value
+    async def _setex(*args, name=None, time=None, value=None):  # noqa: ARG001
+        key = name if name is not None else args[0]
+        val = value if value is not None else args[2] if len(args) > 2 else None
+        store[key] = val
 
     async def _exists(key):
         return 1 if key in store else 0
@@ -161,9 +169,9 @@ class TestSupabaseTokenVerifier:
         assert await verifier.verify_token("not-a-jwt") is None
 
     @pytest.mark.asyncio
-    async def test_jwks_endpoint_url(self):
+    async def test_jwks_endpoint_url(self, mock_redis):
         with patch("everyrow_mcp.auth.PyJWKClient") as mock_jwk_cls:
-            SupabaseTokenVerifier("https://my-project.supabase.co")
+            SupabaseTokenVerifier("https://my-project.supabase.co", redis=mock_redis)
             mock_jwk_cls.assert_called_once_with(
                 "https://my-project.supabase.co/auth/v1/.well-known/jwks.json",
                 cache_keys=True,
@@ -172,9 +180,11 @@ class TestSupabaseTokenVerifier:
             )
 
     @pytest.mark.asyncio
-    async def test_trailing_slash_normalized(self):
+    async def test_trailing_slash_normalized(self, mock_redis):
         with patch("everyrow_mcp.auth.PyJWKClient") as mock_jwk_cls:
-            v = SupabaseTokenVerifier("https://my-project.supabase.co/")
+            v = SupabaseTokenVerifier(
+                "https://my-project.supabase.co/", redis=mock_redis
+            )
             mock_jwk_cls.assert_called_once_with(
                 "https://my-project.supabase.co/auth/v1/.well-known/jwks.json",
                 cache_keys=True,
@@ -184,12 +194,14 @@ class TestSupabaseTokenVerifier:
             assert v._issuer == "https://my-project.supabase.co/auth/v1"
 
     @pytest.mark.asyncio
-    async def test_algorithm_from_header_not_private_attr(self, rsa_keypair):
+    async def test_algorithm_from_header_not_private_attr(
+        self, rsa_keypair, mock_redis
+    ):
         """verify_token reads alg from the JWT header, not signing_key._algorithm."""
         private_key, public_key = rsa_keypair
         token = _make_jwt(private_key)
 
-        verifier = SupabaseTokenVerifier(SUPABASE_URL)
+        verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
 
         # Signing key with NO _algorithm attr
         mock_signing_key = MagicMock(spec=[])  # empty spec = no attributes
@@ -206,12 +218,12 @@ class TestSupabaseTokenVerifier:
         assert result.client_id == "user-123"
 
     @pytest.mark.asyncio
-    async def test_jwks_call_runs_in_thread(self, rsa_keypair):
+    async def test_jwks_call_runs_in_thread(self, rsa_keypair, mock_redis):
         """get_signing_key_from_jwt is called via asyncio.to_thread."""
         private_key, public_key = rsa_keypair
         token = _make_jwt(private_key)
 
-        verifier = SupabaseTokenVerifier(SUPABASE_URL)
+        verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
         mock_signing_key = MagicMock()
         mock_signing_key.key = public_key.public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
@@ -238,30 +250,21 @@ class TestSupabaseTokenVerifier:
 
 class TestTokenDenyList:
     @pytest.mark.asyncio
-    async def test_deny_adds_to_denylist(self, verifier, mock_redis):
-        """deny_token stores a fingerprint key in Redis."""
-        token = "some-token"
-        result = await verifier.deny_token(token)
-
-        assert result is True
-        assert len(mock_redis._store) == 1
-        key = next(iter(mock_redis._store))
-        assert key.startswith("mcp:revoked:")
-
-    @pytest.mark.asyncio
-    async def test_denied_token_rejected(self, verifier, rsa_keypair):
-        """A denied token is rejected by verify_token."""
+    async def test_revoked_token_rejected(self, verifier, rsa_keypair, mock_redis):
+        """A revoked token is rejected by verify_token."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
-        await verifier.deny_token(token)
-        result = await verifier.verify_token(token)
+        # Write revocation entry directly to Redis (same logic as revoke_token)
+        fingerprint = hashlib.sha256(token.encode()).hexdigest()
+        await mock_redis.setex(f"mcp:revoked:{fingerprint}", 3600, "1")
 
+        result = await verifier.verify_token(token)
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_non_denied_token_passes(self, verifier, rsa_keypair):
-        """A token that has not been denied passes verification."""
+    async def test_non_revoked_token_passes(self, verifier, rsa_keypair):
+        """A token that has not been revoked passes verification."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
@@ -271,24 +274,17 @@ class TestTokenDenyList:
         assert result.client_id == "user-123"
 
     @pytest.mark.asyncio
-    async def test_deny_without_redis_returns_false(self, rsa_keypair):
-        """deny_token returns False when no Redis is configured."""
-        _, _public_key = rsa_keypair
-        verifier = SupabaseTokenVerifier(SUPABASE_URL)  # no redis
-        result = await verifier.deny_token("some-token")
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_denylist_check_fails_open(self, verifier, rsa_keypair, mock_redis):
-        """If Redis raises during _is_denied, the token is NOT rejected."""
+    async def test_denylist_check_propagates_redis_error(
+        self, verifier, rsa_keypair, mock_redis
+    ):
+        """If Redis raises during deny-list check, the error propagates."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
         mock_redis.exists = AsyncMock(side_effect=ConnectionError("Redis down"))
 
-        result = await verifier.verify_token(token)
-        assert result is not None
-        assert result.client_id == "user-123"
+        with pytest.raises(ConnectionError):
+            await verifier.verify_token(token)
 
 
 # ── Required claims tests ───────────────────────────────────────────
@@ -363,8 +359,10 @@ def provider_redis():
     async def _set(key, value):
         store[key] = value
 
-    async def _setex(key, _ttl, value):
-        store[key] = value
+    async def _setex(*args, name=None, time=None, value=None):  # noqa: ARG001
+        key = name if name is not None else args[0]
+        val = value if value is not None else args[2] if len(args) > 2 else None
+        store[key] = val
 
     async def _get(key):
         return store.get(key)
@@ -402,13 +400,12 @@ def provider_redis():
 
 
 @pytest.fixture
-def provider(provider_redis):
+def provider(provider_redis, mock_redis):
     """Create an EveryRowAuthProvider with mocked Redis."""
+    verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
     return EveryRowAuthProvider(
-        supabase_url=SUPABASE_URL,
-        supabase_anon_key="test-anon-key",
-        mcp_server_url="https://mcp.example.com",
         redis=provider_redis,
+        token_verifier=verifier,
     )
 
 
@@ -423,9 +420,7 @@ def test_client():
 
 class TestAuthProvider:
     @pytest.mark.asyncio
-    async def test_auth_code_consumed_atomically(
-        self, provider, provider_redis, test_client
-    ):
+    async def test_auth_code_consumed_atomically(self, provider, test_client):
         """Loading an auth code via _redis_getdel deletes it; second load returns None."""
         # Store an auth code directly in Redis
         auth_code_str = secrets.token_urlsafe(32)
@@ -436,12 +431,14 @@ class TestAuthProvider:
             redirect_uri_provided_explicitly=True,
             code_challenge="test-challenge",
             scopes=["read"],
-            expires_at=time.time() + AUTH_CODE_TTL,
+            expires_at=time.time() + _AUTH_CODE_TTL,
             supabase_access_token="fake-supabase-jwt",
             supabase_refresh_token="fake-refresh",
         )
-        await provider._redis_set(
-            f"mcp:authcode:{auth_code_str}", auth_code_obj, ttl=AUTH_CODE_TTL
+        await provider._redis.setex(
+            f"mcp:authcode:{auth_code_str}",
+            _AUTH_CODE_TTL,
+            auth_code_obj.model_dump_json(),
         )
 
         # First load should succeed and consume the code
@@ -473,7 +470,9 @@ class TestAuthProvider:
             provider,
             "_refresh_supabase_token",
             new_callable=AsyncMock,
-            return_value=(fake_jwt, "new-supa-rt"),
+            return_value=SupabaseTokenResponse(
+                access_token=fake_jwt, refresh_token="new-supa-rt"
+            ),
         ):
             result = await provider.exchange_refresh_token(
                 test_client, refresh_token, scopes=["read", "write", "admin"]
@@ -484,11 +483,40 @@ class TestAuthProvider:
         # Load the new refresh token from Redis to check scopes
         new_rt_str = result.refresh_token
         assert new_rt_str is not None
-        new_rt = await provider._redis_get(
-            f"mcp:refresh:{new_rt_str}", EveryRowRefreshToken
-        )
-        assert new_rt is not None
+        raw = await provider._redis.get(f"mcp:refresh:{new_rt_str}")
+        assert raw is not None
+        new_rt = EveryRowRefreshToken.model_validate_json(raw)
         assert set(new_rt.scopes) == {"read", "write"}
+
+    @pytest.mark.asyncio
+    async def test_refresh_scope_no_overlap_rejected(self, provider, test_client):
+        """Requesting scopes with no overlap with original grant raises ValueError."""
+        refresh_token = EveryRowRefreshToken(
+            token="rt-789",
+            client_id="test-client-id",
+            scopes=["read", "write"],
+            supabase_refresh_token="supa-rt",
+        )
+
+        fake_jwt = jwt.encode(
+            {"sub": "user-1", "exp": int(time.time()) + 3600},
+            "secret",
+            algorithm="HS256",
+        )
+        with (
+            patch.object(
+                provider,
+                "_refresh_supabase_token",
+                new_callable=AsyncMock,
+                return_value=SupabaseTokenResponse(
+                    access_token=fake_jwt, refresh_token="new-supa-rt"
+                ),
+            ),
+            pytest.raises(ValueError, match="no overlap"),
+        ):
+            await provider.exchange_refresh_token(
+                test_client, refresh_token, scopes=["admin", "delete"]
+            )
 
     @pytest.mark.asyncio
     async def test_refresh_scope_preserved_when_empty(self, provider, test_client):
@@ -509,7 +537,9 @@ class TestAuthProvider:
             provider,
             "_refresh_supabase_token",
             new_callable=AsyncMock,
-            return_value=(fake_jwt, "new-supa-rt"),
+            return_value=SupabaseTokenResponse(
+                access_token=fake_jwt, refresh_token="new-supa-rt"
+            ),
         ):
             result = await provider.exchange_refresh_token(
                 test_client, refresh_token, scopes=[]
@@ -517,8 +547,171 @@ class TestAuthProvider:
 
         new_rt_str = result.refresh_token
         assert new_rt_str is not None
-        new_rt = await provider._redis_get(
-            f"mcp:refresh:{new_rt_str}", EveryRowRefreshToken
-        )
-        assert new_rt is not None
+        raw = await provider._redis.get(f"mcp:refresh:{new_rt_str}")
+        assert raw is not None
+        new_rt = EveryRowRefreshToken.model_validate_json(raw)
         assert set(new_rt.scopes) == {"read", "write"}
+
+
+# ── Redirect URI validation tests ────────────────────────────────────
+
+
+class TestRedirectUriValidation:
+    @pytest.mark.asyncio
+    async def test_redirect_uri_mismatch_rejected(self, provider, test_client):
+        """authorize rejects redirect_uri not in the client's registered list."""
+        params = AuthorizationParams(
+            state="s1",
+            scopes=["read"],
+            redirect_uri="https://evil.example.com/callback",
+            code_challenge="challenge",
+            redirect_uri_provided_explicitly=True,
+        )
+        with pytest.raises(ValueError, match="redirect_uri does not match"):
+            await provider.authorize(test_client, params)
+
+    @pytest.mark.asyncio
+    async def test_matching_redirect_uri_accepted(self, provider, test_client):
+        """authorize accepts a redirect_uri that matches a registered URI."""
+        params = AuthorizationParams(
+            state="s1",
+            scopes=["read"],
+            redirect_uri="https://example.com/callback",
+            code_challenge="challenge",
+            redirect_uri_provided_explicitly=True,
+        )
+        # Should not raise
+        result = await provider.authorize(test_client, params)
+        assert result.startswith("https://mcp.example.com/auth/start/")
+
+
+# ── Rate limiting tests ──────────────────────────────────────────────
+
+
+class TestRateLimiting:
+    @pytest.mark.asyncio
+    async def test_rate_limit_exceeded(self, provider, provider_redis):
+        """_check_rate_limit raises ValueError when the limit is exceeded."""
+        # Set the pipeline to return a count above the limit
+        pipe_mock = provider_redis.pipeline.return_value
+        pipe_mock.execute = AsyncMock(return_value=[11, True])
+
+        with pytest.raises(ValueError, match="rate limit exceeded"):
+            await provider._check_rate_limit("register", "1.2.3.4")
+
+
+# ── Revoke token tests ───────────────────────────────────────────────
+
+
+class TestRevokeToken:
+    @pytest.mark.asyncio
+    async def test_revoke_refresh_token(self, provider, provider_redis):
+        """Revoking a refresh token deletes it from Redis."""
+        rt = EveryRowRefreshToken(
+            token="rt-revoke",
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+        )
+        await provider._redis.setex("mcp:refresh:rt-revoke", 3600, rt.model_dump_json())
+
+        await provider.revoke_token(rt)
+        assert provider_redis._store.get("mcp:refresh:rt-revoke") is None
+
+    @pytest.mark.asyncio
+    async def test_revoke_access_token_calls_deny_list(self, mock_redis):
+        """Revoking an access token calls deny_token on the injected verifier."""
+        verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
+        provider = EveryRowAuthProvider(
+            redis=mock_redis,
+            token_verifier=verifier,
+        )
+
+        access_token = AccessToken(
+            token="at-revoke-me",
+            client_id="user-123",
+            scopes=["read"],
+        )
+        await provider.revoke_token(access_token)
+
+        # Token fingerprint should be in Redis deny list
+        fingerprint = hashlib.sha256(b"at-revoke-me").hexdigest()
+        assert mock_redis._store.get(f"mcp:revoked:{fingerprint}") == "1"
+
+
+# ── Client ID mismatch tests ─────────────────────────────────────────
+
+
+class TestClientIdMismatch:
+    @pytest.mark.asyncio
+    async def test_auth_code_client_id_mismatch(self, provider):
+        """load_authorization_code rejects when client_id doesn't match."""
+        auth_code_str = secrets.token_urlsafe(32)
+        auth_code_obj = EveryRowAuthorizationCode(
+            code=auth_code_str,
+            client_id="other-client-id",
+            redirect_uri="https://example.com/callback",
+            redirect_uri_provided_explicitly=True,
+            code_challenge="test-challenge",
+            scopes=["read"],
+            expires_at=time.time() + _AUTH_CODE_TTL,
+            supabase_access_token="fake-supabase-jwt",
+            supabase_refresh_token="fake-refresh",
+        )
+        await provider._redis.setex(
+            f"mcp:authcode:{auth_code_str}",
+            _AUTH_CODE_TTL,
+            auth_code_obj.model_dump_json(),
+        )
+
+        wrong_client = OAuthClientInformationFull(
+            client_id="wrong-client-id",
+            redirect_uris=["https://example.com/callback"],
+        )
+        result = await provider.load_authorization_code(wrong_client, auth_code_str)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_client_id_mismatch(self, provider):
+        """load_refresh_token rejects when client_id doesn't match."""
+        rt = EveryRowRefreshToken(
+            token="rt-mismatch",
+            client_id="correct-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+        )
+        await provider._redis.setex(
+            "mcp:refresh:rt-mismatch", 3600, rt.model_dump_json()
+        )
+
+        wrong_client = OAuthClientInformationFull(
+            client_id="wrong-client-id",
+            redirect_uris=["https://example.com/callback"],
+        )
+        result = await provider.load_refresh_token(wrong_client, "rt-mismatch")
+        assert result is None
+
+
+# ── Input length validation tests ─────────────────────────────────────
+
+
+class TestInputLengthValidation:
+    @pytest.mark.asyncio
+    async def test_auth_code_too_long_rejected(self, provider, test_client):
+        """load_authorization_code rejects inputs exceeding 256 chars."""
+        long_code = "A" * 257
+        result = await provider.load_authorization_code(test_client, long_code)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_too_long_rejected(self, provider, test_client):
+        """load_refresh_token rejects inputs exceeding 256 chars."""
+        long_token = "R" * 257
+        result = await provider.load_refresh_token(test_client, long_token)
+        assert result is None
+
+
+# ── Deny list fail-closed tests ───────────────────────────────────────
+
+
+# ── Two-phase refresh token tests ─────────────────────────────────────

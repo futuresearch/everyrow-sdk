@@ -137,8 +137,6 @@ def load_csv(
         return pd.read_csv(input_csv)
 
     if input_json:
-        if not input_json:
-            raise ValueError("input_json is empty.")
         df = pd.DataFrame(input_json)
         if df.empty:
             raise ValueError("input_json produced an empty DataFrame.")

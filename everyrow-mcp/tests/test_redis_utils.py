@@ -21,6 +21,8 @@ class TestBuildKey:
         )
 
     def test_empty_part(self):
+        # Double colons from empty parts are acceptable — keys are always
+        # constructed internally, never from user input
         assert build_key("access", "", "token") == "mcp:access::token"
 
 

@@ -34,7 +34,7 @@ from starlette.routing import Route
 from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.models import AgentInput, ProgressInput, ResultsInput, ScreenInput
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import state
+from everyrow_mcp.state import RedisStore, state
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
@@ -75,14 +75,14 @@ def _http_mode(real_redis):
     """Configure global state for HTTP mode with real Redis, restore after test."""
     orig = {
         "transport": state.transport,
-        "redis": state.redis,
+        "store": state.store,
         "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
         "client": state.client,
     }
 
     state.transport = "streamable-http"
-    state.redis = real_redis
+    state.store = RedisStore(real_redis)
     state.mcp_server_url = "http://testserver"
     state.settings = StdioSettings(
         everyrow_api_key=os.environ.get("EVERYROW_API_KEY", ""),
@@ -92,7 +92,7 @@ def _http_mode(real_redis):
     yield
 
     state.transport = orig["transport"]
-    state.redis = orig["redis"]
+    state.store = orig["store"]
     state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
     state.client = orig["client"]

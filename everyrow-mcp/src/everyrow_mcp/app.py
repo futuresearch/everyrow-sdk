@@ -54,7 +54,7 @@ async def _http_lifespan(_server: FastMCP):
     across sessions. Process exit handles cleanup.
     """
     log = logging.getLogger(__name__)
-    await state.redis_ping()
+    await state.store.ping()
     log.info("Redis health check passed")
     yield
 
@@ -62,7 +62,7 @@ async def _http_lifespan(_server: FastMCP):
 @asynccontextmanager
 async def _no_auth_http_lifespan(_server: FastMCP):
     """HTTP no-auth mode: singleton client from API key, verify Redis."""
-    await state.redis_ping()
+    await state.store.ping()
     with _create_sdk_client() as client:
         state.client = client
         response = await get_billing(client=client)

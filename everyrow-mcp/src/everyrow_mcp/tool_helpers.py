@@ -85,9 +85,10 @@ async def _submission_ui_json(
     token: str,
 ) -> str:
     """Build JSON for the session MCP App widget, and store the token for polling."""
-    await state.store_task_token(task_id, token)
     poll_token = secrets.token_urlsafe(32)
-    await state.store_poll_token(task_id, poll_token)
+    if state.store is not None:
+        await state.store.store_task_token(task_id, token)
+        await state.store.store_poll_token(task_id, poll_token)
     data: dict[str, Any] = {
         "session_url": session_url,
         "task_id": task_id,

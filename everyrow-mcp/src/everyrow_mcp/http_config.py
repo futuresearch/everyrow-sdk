@@ -21,7 +21,7 @@ from everyrow_mcp.config import DevHttpSettings, HttpSettings
 from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_download, api_progress
-from everyrow_mcp.state import state
+from everyrow_mcp.state import RedisStore, state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
 
@@ -74,7 +74,7 @@ def _configure_auth(
         sentinel_endpoints=settings.redis_sentinel_endpoints,
         sentinel_master_name=settings.redis_sentinel_master_name,
     )
-    state.redis = redis_client
+    state.store = RedisStore(redis_client)
 
     # Auth provider (handles registration + OAuth flow via Supabase)
     auth_provider = EveryRowAuthProvider(
@@ -146,7 +146,7 @@ def _configure_no_auth(
         db=settings.redis_db,
         password=settings.redis_password,
     )
-    state.redis = redis_client
+    state.store = RedisStore(redis_client)
 
     mcp_server_url = f"http://localhost:{port}"
 

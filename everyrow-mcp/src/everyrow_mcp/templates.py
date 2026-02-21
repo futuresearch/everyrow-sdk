@@ -457,7 +457,7 @@ function showPopover(td){
 }
 function hidePopover(){pop.classList.remove("visible");popVisible=false;popTarget=null;}
 
-document.addEventListener("mouseover",e=>{
+document.addEventListener("mouseenter",e=>{
   if(pop.contains(e.target)){clearTimeout(popTimer);return;}
   const td=e.target.closest?e.target.closest("td"):null;
   if(td&&tbl.contains(td)&&td.classList.contains("has-research")){

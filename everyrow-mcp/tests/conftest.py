@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# Set env vars for HttpSettings before any everyrow imports
+import os
+
+os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
+os.environ.setdefault("MCP_SERVER_URL", "https://mcp.example.com")
+os.environ.setdefault("REDIS_PORT", "6380")
+
 import socket
 import subprocess
 import time
@@ -12,8 +20,7 @@ import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
-from everyrow_mcp.config import StdioSettings
-from everyrow_mcp.state import state
+from everyrow_mcp import app
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
 
@@ -62,26 +69,19 @@ async def fake_redis(_redis_server) -> aioredis.Redis:
     await r.aclose()
 
 
-# Ensure state.settings is always available in tests
-state.settings = StdioSettings(
-    everyrow_api_key="test-key",
-    everyrow_api_url="https://everyrow.io/api/v0",
-)
-
-
 @pytest.fixture
 async def everyrow_client():
     """Initialize the everyrow client.
 
-    This fixture sets up the global client in the server state,
+    This fixture sets up the global _client in the server module,
     which is normally initialized by the MCP server's lifespan context.
     """
     try:
         with create_client() as client:
-            state.client = client
+            app._client = client
             yield client
     finally:
-        state.client = None
+        app._client = None
 
 
 @pytest.fixture
