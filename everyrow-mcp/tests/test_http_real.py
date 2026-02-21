@@ -76,7 +76,6 @@ def _http_mode(real_redis):
         "transport": state.transport,
         "store": state.store,
         "mcp_server_url": state.mcp_server_url,
-        "client": state.client,
     }
 
     state.transport = Transport.HTTP
@@ -88,7 +87,6 @@ def _http_mode(real_redis):
     state.transport = orig["transport"]
     state.store = orig["store"]
     state.mcp_server_url = orig["mcp_server_url"]
-    state.client = orig["client"]
 
 
 @pytest.fixture
@@ -117,17 +115,9 @@ async def client(app):
 
 @pytest.fixture
 async def everyrow_client(_http_mode):
-    """Create a real everyrow SDK client for MCP tools.
-
-    In HTTP mode, _get_client() uses the OAuth access token. For tests, we
-    patch it to use a direct client with the API key.
-    """
-    try:
-        with create_client() as sdk_client:
-            state.client = sdk_client
-            yield sdk_client
-    finally:
-        state.client = None
+    """Create a real everyrow SDK client for MCP tools."""
+    with create_client() as sdk_client:
+        yield sdk_client
 
 
 # ── Helpers ────────────────────────────────────────────────────

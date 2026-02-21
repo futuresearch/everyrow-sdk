@@ -14,13 +14,12 @@ import socket
 import subprocess
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
-
-from everyrow_mcp.state import state
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
 
@@ -69,19 +68,19 @@ async def fake_redis(_redis_server) -> aioredis.Redis:
     await r.aclose()
 
 
+def make_test_context(client):
+    """Create a mock MCP Context with a client factory for testing."""
+    factory = lambda: client  # noqa: E731
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = factory
+    return ctx
+
+
 @pytest.fixture
 async def everyrow_client():
-    """Initialize the everyrow client.
-
-    This fixture sets up the global _client in the server module,
-    which is normally initialized by the MCP server's lifespan context.
-    """
-    try:
-        with create_client() as client:
-            state.client = client
-            yield client
-    finally:
-        state.client = None
+    """Provide a real everyrow SDK client for integration tests."""
+    with create_client() as client:
+        yield client
 
 
 @pytest.fixture

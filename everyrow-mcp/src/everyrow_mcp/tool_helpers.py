@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -26,31 +27,46 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.fastmcp import Context
 from mcp.types import TextContent
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
+# A ClientFactory is a zero-arg callable that returns an AuthenticatedClient.
+# Lifespans yield one of these; tools retrieve it via Context.
+ClientFactory = Callable[[], AuthenticatedClient]
 
-def _get_client():
-    """Get an EveryRow API client for the current request.
 
-    In stdio mode or --no-auth HTTP mode, returns the singleton client
-    initialized at startup. In HTTP mode with auth, creates a per-request
-    client using the authenticated user's API key from the OAuth access token.
-    """
-    # Singleton client (stdio mode or --no-auth HTTP mode)
-    if state.client is not None:
-        return state.client
-    # HTTP mode: get JWT from authenticated request
-    access_token = get_access_token()
-    if access_token is None:
-        raise RuntimeError("Not authenticated")
-    return AuthenticatedClient(
-        base_url=state.everyrow_api_url,
-        token=access_token.token,
-        raise_on_unexpected_status=True,
-        follow_redirects=True,
-    )
+def make_singleton_client_factory(client: AuthenticatedClient) -> ClientFactory:
+    """Wrap a pre-built client in a factory (stdio / no-auth HTTP)."""
+
+    def factory() -> AuthenticatedClient:
+        return client
+
+    return factory
+
+
+def make_http_auth_client_factory() -> ClientFactory:
+    """Build a factory that creates per-request clients from the OAuth token."""
+
+    def factory() -> AuthenticatedClient:
+        access_token = get_access_token()
+        if access_token is None:
+            raise RuntimeError("Not authenticated")
+        return AuthenticatedClient(
+            base_url=state.everyrow_api_url,
+            token=access_token.token,
+            raise_on_unexpected_status=True,
+            follow_redirects=True,
+        )
+
+    return factory
+
+
+def _get_client(ctx: Context) -> AuthenticatedClient:
+    """Get an EveryRow API client from the FastMCP lifespan context."""
+    factory: ClientFactory = ctx.request_context.lifespan_context
+    return factory()
 
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:

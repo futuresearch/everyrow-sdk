@@ -51,6 +51,7 @@ from everyrow_mcp.models import (
 )
 from everyrow_mcp.state import Transport, state
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
+from everyrow_mcp.tool_helpers import make_singleton_client_factory
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_dedupe,
@@ -61,6 +62,7 @@ from everyrow_mcp.tools import (
     everyrow_screen,
     everyrow_single_agent,
 )
+from tests.conftest import make_test_context
 
 # ── Patterns that MUST NOT appear in stdio responses ──────────────────
 
@@ -196,13 +198,14 @@ def _submit_patches(mock_op_path: str):
     mock_task = _make_mock_task()
     mock_session = _make_mock_session()
     mock_client = _make_mock_client()
+    ctx = make_test_context(mock_client)
 
     return (
         mock_task,
         mock_session,
         mock_client,
+        ctx,
         patch(mock_op_path, new_callable=AsyncMock, return_value=mock_task),
-        patch.object(state, "client", mock_client),
         patch(
             "everyrow_mcp.tools.create_session",
             return_value=_make_async_cm(mock_session),
@@ -218,12 +221,12 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_agent_content(self, companies_csv: str):
-        task, _session, _client, *patches = _submit_patches(
+        task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.agent_map_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_agent(
-                AgentInput(task="Find HQ", input_csv=companies_csv)
+                AgentInput(task="Find HQ", input_csv=companies_csv), ctx
             )
 
         assert len(result) == 1
@@ -235,12 +238,12 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_single_agent_content(self):
-        task, _session, _client, *patches = _submit_patches(
+        task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.single_agent_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_single_agent(
-                SingleAgentInput(task="Find CEO of Apple")
+                SingleAgentInput(task="Find CEO of Apple"), ctx
             )
 
         assert len(result) == 1
@@ -251,16 +254,17 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_rank_content(self, companies_csv: str):
-        _task, _session, _client, *patches = _submit_patches(
+        _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.rank_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_rank(
                 RankInput(
                     task="Score by AI adoption",
                     input_csv=companies_csv,
                     field_name="ai_score",
-                )
+                ),
+                ctx,
             )
 
         assert len(result) == 1
@@ -268,12 +272,13 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_screen_content(self, companies_csv: str):
-        _task, _session, _client, *patches = _submit_patches(
+        _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.screen_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_screen(
-                ScreenInput(task="Is this a tech company?", input_csv=companies_csv)
+                ScreenInput(task="Is this a tech company?", input_csv=companies_csv),
+                ctx,
             )
 
         assert len(result) == 1
@@ -281,12 +286,13 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_dedupe_content(self, contacts_csv: str):
-        _task, _session, _client, *patches = _submit_patches(
+        _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.dedupe_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_dedupe(
-                DedupeInput(equivalence_relation="Same person", input_csv=contacts_csv)
+                DedupeInput(equivalence_relation="Same person", input_csv=contacts_csv),
+                ctx,
             )
 
         assert len(result) == 1
@@ -294,16 +300,17 @@ class TestStdioSubmissionContent:
 
     @pytest.mark.asyncio
     async def test_merge_content(self, products_csv: str, suppliers_csv: str):
-        _task, _session, _client, *patches = _submit_patches(
+        _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.merge_async"
         )
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1]:
             result = await everyrow_merge(
                 MergeInput(
                     task="Match products to suppliers",
                     left_csv=products_csv,
                     right_csv=suppliers_csv,
-                )
+                ),
+                ctx,
             )
 
         assert len(result) == 1
@@ -319,12 +326,13 @@ class TestStdioProgressContent:
     @pytest.mark.asyncio
     async def test_running_status(self):
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(
             status="running", completed=3, running=4, failed=1, total=10
         )
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -333,7 +341,7 @@ class TestStdioProgressContent:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (running)")
@@ -344,10 +352,11 @@ class TestStdioProgressContent:
     @pytest.mark.asyncio
     async def test_completed_status(self):
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(status="completed", completed=5, total=5)
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -356,7 +365,7 @@ class TestStdioProgressContent:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (completed)")
@@ -369,6 +378,8 @@ class TestStdioProgressContent:
     async def test_completed_screen_status(self):
         """Screen tasks have a different completion message."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(
             status="completed",
             task_type=PublicTaskType.SCREEN,
@@ -377,7 +388,6 @@ class TestStdioProgressContent:
         )
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -386,7 +396,7 @@ class TestStdioProgressContent:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (screen completed)")
@@ -396,6 +406,8 @@ class TestStdioProgressContent:
     async def test_running_screen_status(self):
         """Screen running uses simpler message (no completed/total counts)."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(
             status="running",
             task_type=PublicTaskType.SCREEN,
@@ -404,7 +416,6 @@ class TestStdioProgressContent:
         )
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -413,7 +424,7 @@ class TestStdioProgressContent:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (screen running)")
@@ -422,9 +433,10 @@ class TestStdioProgressContent:
     @pytest.mark.asyncio
     async def test_error_status(self):
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -432,7 +444,7 @@ class TestStdioProgressContent:
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (error)")
@@ -442,13 +454,14 @@ class TestStdioProgressContent:
     async def test_failed_task_with_error_message(self):
         """Failed tasks should report the error, not widget JSON."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(
             status="failed", completed=3, failed=2, total=5
         )
         status_resp.error = "Rate limit exceeded"
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -457,7 +470,7 @@ class TestStdioProgressContent:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_progress (failed)")
@@ -474,6 +487,8 @@ class TestStdioResultsContent:
     async def test_results_with_output_path(self, tmp_path: Path):
         task_id = str(uuid4())
         output_file = tmp_path / "output.csv"
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_resp = _make_status_response(status="completed")
         result_resp = _make_result_response(
@@ -481,7 +496,6 @@ class TestStdioResultsContent:
         )
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -494,7 +508,7 @@ class TestStdioResultsContent:
             ),
         ):
             result = await everyrow_results(
-                ResultsInput(task_id=task_id, output_path=str(output_file))
+                ResultsInput(task_id=task_id, output_path=str(output_file)), ctx
             )
 
         assert len(result) == 1
@@ -506,12 +520,13 @@ class TestStdioResultsContent:
     async def test_results_without_output_path(self):
         """Without output_path, stdio should prompt the model to provide one."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_resp = _make_status_response(status="completed")
         result_resp = _make_result_response([{"name": "Acme"}])
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -523,7 +538,7 @@ class TestStdioResultsContent:
                 return_value=result_resp,
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_results (no path)")
@@ -533,18 +548,19 @@ class TestStdioResultsContent:
     async def test_results_task_not_ready(self):
         """When task isn't completed yet, response is clean."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_resp = _make_status_response(status="running")
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 return_value=status_resp,
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_results (not ready)")
@@ -555,16 +571,17 @@ class TestStdioResultsContent:
     async def test_results_api_error(self):
         """API errors produce clean error text, not JSON."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
-            patch.object(state, "client", _make_mock_client()),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("Connection refused"),
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert_stdio_clean(result, tool_name="everyrow_results (error)")
@@ -612,17 +629,16 @@ class TestHttpModeIncludesWidgets:
     @pytest.mark.asyncio
     async def test_submit_http_has_widget_json(self, companies_csv: str):
         """HTTP mode must include widget JSON as the first TextContent."""
-        _task, _session, _client, *patches = _submit_patches(
+        _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.agent_map_async"
         )
         with (
             patches[0],
             patches[1],
-            patches[2],
             patch.object(state, "transport", Transport.HTTP),
         ):
             result = await everyrow_agent(
-                AgentInput(task="Find HQ", input_csv=companies_csv)
+                AgentInput(task="Find HQ", input_csv=companies_csv), ctx
             )
 
         assert len(result) == 2
@@ -636,10 +652,11 @@ class TestHttpModeIncludesWidgets:
     async def test_progress_http_has_widget_json(self):
         """HTTP mode progress includes JSON with counts for the widget."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(status="running", completed=3, total=10)
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=_make_mock_client()),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
@@ -649,7 +666,7 @@ class TestHttpModeIncludesWidgets:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 2
         widget = json.loads(result[0].text)
@@ -660,10 +677,11 @@ class TestHttpModeIncludesWidgets:
     async def test_progress_http_completed_no_output_path_hint(self):
         """HTTP completion message should NOT tell model to ask for output_path."""
         task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_resp = _make_status_response(status="completed", completed=5, total=5)
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=_make_mock_client()),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
@@ -673,7 +691,7 @@ class TestHttpModeIncludesWidgets:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         human_text = result[-1].text
         assert "output_path" not in human_text
@@ -689,16 +707,16 @@ _skip_unless_integration = pytest.mark.skipif(
 
 
 @asynccontextmanager
-async def _stdio_mcp_client():
+async def _stdio_mcp_client(sdk_client):
     """MCP ClientSession in stdio mode (no HTTP state, noop lifespan).
 
-    The real client is set up via state.client before entering this context.
+    The lifespan yields a singleton client factory wrapping ``sdk_client``.
     """
     orig_lifespan = mcp_app._mcp_server.lifespan
 
     @asynccontextmanager
     async def _noop_lifespan(_server):
-        yield
+        yield make_singleton_client_factory(sdk_client)
 
     mcp_app._mcp_server.lifespan = lifespan_wrapper(mcp_app, _noop_lifespan)
 
@@ -729,19 +747,17 @@ class TestStdioMcpIntegration:
 
     @pytest.fixture
     def _real_stdio_client(self):
-        """Set up a real EveryRow client in stdio mode (default transport)."""
+        """Provide a real EveryRow client in stdio mode (default transport)."""
         assert state.transport == "stdio", "State should default to stdio"
         with create_client() as sdk_client:
-            state.client = sdk_client
             yield sdk_client
-            state.client = None
 
     @pytest.mark.asyncio
     async def test_screen_pipeline_stdio_clean(
         self, _real_stdio_client, jobs_csv, tmp_path
     ):
         """Screen: submit → poll → results. Every response must be stdio-clean."""
-        async with _stdio_mcp_client() as session:
+        async with _stdio_mcp_client(_real_stdio_client) as session:
             # ── Submit ──
             submit = await session.call_tool(
                 "everyrow_screen",
@@ -815,7 +831,7 @@ class TestStdioMcpIntegration:
         input_csv = tmp_path / "input.csv"
         pd.DataFrame([{"name": "Anthropic"}]).to_csv(input_csv, index=False)
 
-        async with _stdio_mcp_client() as session:
+        async with _stdio_mcp_client(_real_stdio_client) as session:
             # ── Submit ──
             submit = await session.call_tool(
                 "everyrow_agent",
@@ -893,7 +909,7 @@ class TestStdioMcpIntegration:
         self, _real_stdio_client, tmp_path
     ):
         """Single agent: submit → poll → results. Every response must be stdio-clean."""
-        async with _stdio_mcp_client() as session:
+        async with _stdio_mcp_client(_real_stdio_client) as session:
             # ── Submit ──
             submit = await session.call_tool(
                 "everyrow_single_agent",

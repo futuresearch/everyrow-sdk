@@ -10,7 +10,6 @@ import logging
 from enum import StrEnum
 from pathlib import Path
 
-from everyrow.generated.client import AuthenticatedClient
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
@@ -165,16 +164,11 @@ class RedisStore:
 
 
 class ServerState(BaseModel):
-    """Mutable state shared across the MCP server.
+    """Immutable config shared across the MCP server.
 
-    Thin config/context holder — all Redis data operations are delegated
-    to RedisStore.
-
-    NOTE on ``client`` in no-auth HTTP mode: the singleton client is set
-    per MCP *session* (in ``_no_auth_http_lifespan``). If two sessions
-    overlap, the second overwrites the first's client.  This is acceptable
-    because --no-auth is a single-user dev/CI mode and concurrent sessions
-    are not expected.
+    Thin config holder — all Redis data operations are delegated
+    to RedisStore.  The per-request API client is managed via
+    FastMCP's lifespan context (see ``ClientFactory`` in tool_helpers).
     """
 
     model_config = ConfigDict(
@@ -182,7 +176,6 @@ class ServerState(BaseModel):
         validate_assignment=True,
     )
 
-    client: AuthenticatedClient | None = None
     transport: Transport = Transport.STDIO
     mcp_server_url: str = ""
     everyrow_api_url: str = "https://everyrow.io/api/v0"

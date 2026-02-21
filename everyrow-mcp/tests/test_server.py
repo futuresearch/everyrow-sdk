@@ -46,6 +46,7 @@ from everyrow_mcp.tools import (
     everyrow_results,
     everyrow_single_agent,
 )
+from tests.conftest import make_test_context
 
 # CSV fixtures are defined in conftest.py
 
@@ -325,12 +326,12 @@ class TestAgent:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -342,7 +343,7 @@ class TestAgent:
                 task="Find HQ for each company",
                 input_csv=companies_csv,
             )
-            result = await everyrow_agent(params)
+            result = await everyrow_agent(params, ctx)
 
             # In stdio mode, _with_ui returns only human-readable text
             assert len(result) == 1
@@ -361,12 +362,12 @@ class TestSingleAgent:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.single_agent_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -377,7 +378,7 @@ class TestSingleAgent:
             params = SingleAgentInput(
                 task="Find the current CEO of Apple",
             )
-            result = await everyrow_single_agent(params)
+            result = await everyrow_single_agent(params, ctx)
             text = result[0].text
 
             assert str(mock_task.task_id) in text
@@ -391,12 +392,12 @@ class TestSingleAgent:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.single_agent_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -408,7 +409,7 @@ class TestSingleAgent:
                 task="Research this company's funding",
                 input_data={"company": "Stripe", "url": "stripe.com"},
             )
-            result = await everyrow_single_agent(params)
+            result = await everyrow_single_agent(params, ctx)
             text = result[0].text
 
             assert str(mock_task.task_id) in text
@@ -426,12 +427,12 @@ class TestSingleAgent:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.single_agent_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -452,7 +453,7 @@ class TestSingleAgent:
                     "required": ["funding_round"],
                 },
             )
-            result = await everyrow_single_agent(params)
+            result = await everyrow_single_agent(params, ctx)
             text = result[0].text
 
             assert str(mock_task.task_id) in text
@@ -484,10 +485,10 @@ class TestProgress:
     async def test_progress_api_error(self):
         """Test progress with API error returns helpful message."""
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         task_id = str(uuid4())
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -496,7 +497,7 @@ class TestProgress:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
         ):
             params = ProgressInput(task_id=task_id)
-            result = await everyrow_progress(params)
+            result = await everyrow_progress(params, ctx)
 
         # In stdio mode, only human-readable text is returned
         assert len(result) == 1
@@ -508,6 +509,7 @@ class TestProgress:
         """Test progress returns status counts for a running task."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_response = _make_task_status_response(
             status="running",
             completed=4,
@@ -518,7 +520,6 @@ class TestProgress:
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -528,7 +529,7 @@ class TestProgress:
             patch("everyrow_mcp.tools._write_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
-            result = await everyrow_progress(params)
+            result = await everyrow_progress(params, ctx)
 
         # In stdio mode, only human-readable text is returned
         assert len(result) == 1
@@ -543,6 +544,7 @@ class TestProgress:
         """Test progress returns completion instructions when done."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         status_response = _make_task_status_response(
             status="completed",
             completed=5,
@@ -553,7 +555,6 @@ class TestProgress:
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -563,7 +564,7 @@ class TestProgress:
             patch("everyrow_mcp.tools._write_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
-            result = await everyrow_progress(params)
+            result = await everyrow_progress(params, ctx)
 
         # In stdio mode, only human-readable text is returned
         assert len(result) == 1
@@ -579,11 +580,11 @@ class TestResults:
     async def test_results_api_error(self, tmp_path: Path):
         """Test results with API error returns helpful message."""
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         task_id = str(uuid4())
         output_file = tmp_path / "output.csv"
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -591,7 +592,7 @@ class TestResults:
             ),
         ):
             params = ResultsInput(task_id=task_id, output_path=str(output_file))
-            result = await everyrow_results(params)
+            result = await everyrow_results(params, ctx)
 
         assert "Error retrieving results" in result[0].text
 
@@ -600,6 +601,7 @@ class TestResults:
         """Test results retrieves data and saves to CSV."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         output_file = tmp_path / "output.csv"
 
         status_response = _make_task_status_response(status="completed")
@@ -611,7 +613,6 @@ class TestResults:
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -624,7 +625,7 @@ class TestResults:
             ),
         ):
             params = ResultsInput(task_id=task_id, output_path=str(output_file))
-            result = await everyrow_results(params)
+            result = await everyrow_results(params, ctx)
         text = result[0].text
 
         assert "Saved 2 rows to" in text
@@ -640,6 +641,7 @@ class TestResults:
         """In stdio mode without output_path, returns hint to provide one."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(
@@ -650,7 +652,6 @@ class TestResults:
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -663,7 +664,7 @@ class TestResults:
             ),
         ):
             params = ResultsInput(task_id=task_id)
-            result = await everyrow_results(params)
+            result = await everyrow_results(params, ctx)
 
         assert len(result) == 1
         assert "2 rows" in result[0].text
@@ -674,6 +675,7 @@ class TestResults:
         """Test results handles scalar (single_agent) TaskResultResponseDataType1."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_response = _make_task_status_response(status="completed")
         scalar_data = TaskResultResponseDataType1.from_dict(
@@ -686,7 +688,6 @@ class TestResults:
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tool_helpers.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -699,7 +700,7 @@ class TestResults:
             ),
         ):
             params = ResultsInput(task_id=task_id)
-            result = await everyrow_results(params)
+            result = await everyrow_results(params, ctx)
 
         assert len(result) == 1
         assert "1 rows" in result[0].text
@@ -709,6 +710,7 @@ class TestResults:
         """In HTTP mode, results are stored in Redis and returned with download URL."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response(
@@ -736,7 +738,6 @@ class TestResults:
         ]
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
@@ -759,7 +760,7 @@ class TestResults:
                 return_value=store_response,
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(result) == 2
         widget_data = json.loads(result[0].text)
@@ -771,6 +772,7 @@ class TestResults:
         """In HTTP mode, cached results are returned directly."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         cached_response = [
             TextContent(
@@ -787,7 +789,6 @@ class TestResults:
         ]
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
@@ -795,7 +796,7 @@ class TestResults:
                 return_value=cached_response,
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert result == cached_response
 
@@ -804,12 +805,12 @@ class TestResults:
         """In HTTP mode, store failure falls back to inline results."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response([{"name": "A"}])
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
@@ -832,7 +833,7 @@ class TestResults:
                 return_value=None,
             ),
         ):
-            result = await everyrow_results(ResultsInput(task_id=task_id))
+            result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         # HTTP mode returns widget JSON + summary text
         assert len(result) == 2
@@ -849,12 +850,12 @@ class TestAgentInlineInput:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -866,7 +867,7 @@ class TestAgentInlineInput:
                 task="Find HQ for each company",
                 input_data="name,industry\nTechStart,Software\nAILabs,AI\n",
             )
-            result = await everyrow_agent(params)
+            result = await everyrow_agent(params, ctx)
 
             # In stdio mode, _with_ui returns only human-readable text
             assert len(result) == 1
@@ -1008,12 +1009,12 @@ class TestStdioVsHttpGating:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -1021,7 +1022,7 @@ class TestStdioVsHttpGating:
         ):
             mock_op.return_value = mock_task
             params = AgentInput(task="test", input_csv=companies_csv)
-            result = await everyrow_agent(params)
+            result = await everyrow_agent(params, ctx)
 
         assert len(result) == 1
         assert "Task ID:" in result[0].text
@@ -1032,12 +1033,12 @@ class TestStdioVsHttpGating:
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
 
         with (
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.create_session",
@@ -1046,7 +1047,7 @@ class TestStdioVsHttpGating:
         ):
             mock_op.return_value = mock_task
             params = AgentInput(task="test", input_csv=companies_csv)
-            result = await everyrow_agent(params)
+            result = await everyrow_agent(params, ctx)
 
         assert len(result) == 2
         ui_data = json.loads(result[0].text)
@@ -1058,13 +1059,13 @@ class TestStdioVsHttpGating:
     async def test_progress_stdio_returns_single_content(self):
         """In stdio mode, progress returns only human-readable text."""
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         task_id = str(uuid4())
         status_response = _make_task_status_response(
             status="running", completed=2, total=5
         )
 
         with (
-            patch.object(state, "client", mock_client),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -1073,7 +1074,7 @@ class TestStdioVsHttpGating:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 1
         assert "2/5 complete" in result[0].text
@@ -1082,13 +1083,13 @@ class TestStdioVsHttpGating:
     async def test_progress_http_returns_widget_and_text(self):
         """In HTTP mode, progress returns widget JSON + human text."""
         mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
         task_id = str(uuid4())
         status_response = _make_task_status_response(
             status="running", completed=2, total=5
         )
 
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=mock_client),
             patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
@@ -1098,7 +1099,7 @@ class TestStdioVsHttpGating:
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools._write_task_state"),
         ):
-            result = await everyrow_progress(ProgressInput(task_id=task_id))
+            result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
         assert len(result) == 2
         ui_data = json.loads(result[0].text)

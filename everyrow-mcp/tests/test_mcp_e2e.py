@@ -43,7 +43,6 @@ def _http_state(fake_redis):
         "transport": state.transport,
         "store": state.store,
         "mcp_server_url": state.mcp_server_url,
-        "client": state.client,
     }
 
     state.transport = Transport.HTTP
@@ -55,7 +54,6 @@ def _http_state(fake_redis):
     state.transport = orig["transport"]
     state.store = orig["store"]
     state.mcp_server_url = orig["mcp_server_url"]
-    state.client = orig["client"]
 
 
 @asynccontextmanager
@@ -352,7 +350,6 @@ class TestMcpE2ERealApi:
     def _real_client(self, _http_state):
         """Provide a real everyrow SDK client."""
         with create_client() as sdk_client:
-            state.client = sdk_client
             yield sdk_client
 
     @pytest.mark.asyncio
