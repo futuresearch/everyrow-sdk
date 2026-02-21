@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import lifespan_wrapper
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
+from redis.asyncio import Redis
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -33,12 +34,6 @@ def configure_http_mode(
     *,
     no_auth: bool = False,
 ) -> None:
-    """Configure the MCP server for HTTP transport.
-
-    When *no_auth* is True the server skips OAuth setup and uses a singleton
-    client from EVERYROW_API_KEY (like stdio mode).  Intended for local
-    development only.
-    """
     log = logging.getLogger(__name__)
     state.transport = "streamable-http"
 
@@ -143,7 +138,15 @@ def _configure_no_auth(
 
     mcp_server_url = f"http://localhost:{port}"
 
-    _configure_shared(mcp, http_lifespan, host, port, mcp_server_url, no_auth=True)
+    _configure_shared(
+        mcp,
+        http_lifespan,
+        host,
+        port,
+        mcp_server_url,
+        redis_client=redis_client,
+        no_auth=True,
+    )
 
 
 def _configure_shared(
@@ -153,7 +156,7 @@ def _configure_shared(
     port: int,
     mcp_server_url: str,
     *,
-    redis_client: Any | None = None,
+    redis_client: Redis,
     no_auth: bool = False,
     auth_provider: EveryRowAuthProvider | None = None,
 ) -> None:
@@ -250,7 +253,7 @@ def _configure_shared(
 
         app.add_middleware(RequestLoggingMiddleware)
 
-        if not no_auth and redis_client is not None:
+        if not no_auth:
             app.add_middleware(RateLimitMiddleware, redis=redis_client)
 
         return app
