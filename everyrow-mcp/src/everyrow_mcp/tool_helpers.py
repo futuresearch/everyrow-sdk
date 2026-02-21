@@ -26,7 +26,6 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.types import TextContent
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
@@ -51,13 +50,6 @@ def _get_client():
         raise_on_unexpected_status=True,
         follow_redirects=True,
     )
-
-
-def _with_ui(ui_text: str, *human: TextContent) -> list[TextContent]:
-    """Prepend a widget JSON TextContent in HTTP mode; skip it in stdio to save tokens."""
-    if state.is_http:
-        return [TextContent(type="text", text=ui_text), *human]
-    return list(human)
 
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
