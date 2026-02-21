@@ -7,15 +7,13 @@ from everyrow.api_utils import create_client as _create_sdk_client
 from everyrow.generated.api.billing.get_billing_balance_billing_get import (
     asyncio as get_billing,
 )
+from everyrow.generated.client import AuthenticatedClient
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 from everyrow_mcp.templates import PROGRESS_HTML, UI_CSP_META
-from everyrow_mcp.tool_helpers import (
-    SessionContext,
-    make_http_auth_client_factory,
-    make_singleton_client_factory,
-)
+from everyrow_mcp.tool_helpers import SessionContext
 
 
 def _clear_task_state() -> None:
@@ -35,7 +33,7 @@ async def _stdio_lifespan(_server: FastMCP):
             response = await get_billing(client=client)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
-            yield SessionContext(client_factory=make_singleton_client_factory(client))
+            yield SessionContext(client_factory=lambda: client)
     except Exception as e:
         logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
         raise
@@ -54,7 +52,19 @@ async def _http_lifespan(_server: FastMCP):
     log = logging.getLogger(__name__)
     await state.store.ping()
     log.info("Redis health check passed")
-    yield SessionContext(client_factory=make_http_auth_client_factory())
+
+    def _http_client_factory() -> AuthenticatedClient:
+        access_token = get_access_token()
+        if access_token is None:
+            raise RuntimeError("Not authenticated")
+        return AuthenticatedClient(
+            base_url=state.everyrow_api_url,
+            token=access_token.token,
+            raise_on_unexpected_status=True,
+            follow_redirects=True,
+        )
+
+    yield SessionContext(client_factory=_http_client_factory)
 
 
 @asynccontextmanager
@@ -65,7 +75,7 @@ async def _no_auth_http_lifespan(_server: FastMCP):
         response = await get_billing(client=client)
         if response is None:
             raise RuntimeError("Failed to authenticate with everyrow API")
-        yield SessionContext(client_factory=make_singleton_client_factory(client))
+        yield SessionContext(client_factory=lambda: client)
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)

@@ -168,7 +168,7 @@ class ServerState(BaseModel):
 
     Thin config holder — all Redis data operations are delegated
     to RedisStore.  The per-request API client is managed via
-    FastMCP's lifespan context (see ``ClientFactory`` in tool_helpers).
+    FastMCP's lifespan context (see ``SessionContext`` in tool_helpers).
     """
 
     model_config = ConfigDict(

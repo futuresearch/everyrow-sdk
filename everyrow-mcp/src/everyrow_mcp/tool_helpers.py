@@ -27,52 +27,22 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
     TaskResultResponseDataType1,
 )
 from everyrow.generated.models.task_status import TaskStatus
-from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from mcp.types import TextContent
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
-# A ClientFactory is a zero-arg callable that returns an AuthenticatedClient.
-ClientFactory = Callable[[], AuthenticatedClient]
-
 
 @dataclass
 class SessionContext:
     """Per-session lifespan context yielded by all lifespans."""
 
-    client_factory: ClientFactory
+    client_factory: Callable[[], AuthenticatedClient]
 
 
 # Typed Context alias — gives type checkers visibility into lifespan_context.
 EveryRowContext = Context[ServerSession, SessionContext]
-
-
-def make_singleton_client_factory(client: AuthenticatedClient) -> ClientFactory:
-    """Wrap a pre-built client in a factory (stdio / no-auth HTTP)."""
-
-    def factory() -> AuthenticatedClient:
-        return client
-
-    return factory
-
-
-def make_http_auth_client_factory() -> ClientFactory:
-    """Build a factory that creates per-request clients from the OAuth token."""
-
-    def factory() -> AuthenticatedClient:
-        access_token = get_access_token()
-        if access_token is None:
-            raise RuntimeError("Not authenticated")
-        return AuthenticatedClient(
-            base_url=state.everyrow_api_url,
-            token=access_token.token,
-            raise_on_unexpected_status=True,
-            follow_redirects=True,
-        )
-
-    return factory
 
 
 def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
