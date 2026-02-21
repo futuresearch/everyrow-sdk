@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import base64
 import hashlib
@@ -211,7 +213,8 @@ class EveryRowAuthProvider(
             value=client_info.model_dump_json(),
         )
 
-    def _supabase_redirect_url(self, supabase_verifier: str) -> str:
+    @staticmethod
+    def _supabase_redirect_url(supabase_verifier: str) -> str:
         challenge_bytes = hashlib.sha256(supabase_verifier.encode()).digest()
         supabase_challenge = (
             base64.urlsafe_b64encode(challenge_bytes).rstrip(b"=").decode()
@@ -230,8 +233,9 @@ class EveryRowAuthProvider(
 
     # ── Validators ─────────────────────────────────────────────
 
+    @staticmethod
     def _validate_redirect_url(
-        self, client: OAuthClientInformationFull, params: AuthorizationParams
+        client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> None:
         if client.redirect_uris:
             if str(params.redirect_uri) not in [str(u) for u in client.redirect_uris]:
@@ -349,17 +353,17 @@ class EveryRowAuthProvider(
             max_age=http_settings.pending_auth_ttl,
             httponly=True,
             samesite="lax",
-            secure=http_settings.mcp_server_url.startswith("https"),
+            secure=True,
             path="/auth/callback",
         )
         return response
 
-    async def handle_callback(self, request: Request) -> RedirectResponse:
-        pending, supa_tokens = await self._validate_callback_request(request)
-
-        auth_code_str = secrets.token_urlsafe(32)
-        auth_code_obj = EveryRowAuthorizationCode(
-            code=auth_code_str,
+    async def _create_authorisation_code(
+        self, pending: PendingAuth, supa_tokens: SupabaseTokenResponse
+    ) -> str:
+        code = secrets.token_urlsafe(32)
+        auth_code = EveryRowAuthorizationCode(
+            code=code,
             client_id=pending.client_id,
             redirect_uri=pending.params.redirect_uri,
             redirect_uri_provided_explicitly=pending.params.redirect_uri_provided_explicitly,
@@ -371,14 +375,16 @@ class EveryRowAuthProvider(
             supabase_refresh_token=supa_tokens.refresh_token,
         )
         await self._redis.setex(
-            name=build_key("authcode", auth_code_str),
+            name=build_key("authcode", code),
             time=http_settings.auth_code_ttl,
-            value=auth_code_obj.model_dump_json(),
+            value=auth_code.model_dump_json(),
         )
+        return code
 
-        redirect_params: dict[str, str] = {"code": auth_code_str}
-        if pending.params.state:
-            redirect_params["state"] = pending.params.state
+    def _create_callback_redirect_response(
+        self, auth_code_str: str, pending: PendingAuth
+    ) -> RedirectResponse:
+        redirect_params = {"code": auth_code_str, "state": pending.params.state}
         response = RedirectResponse(
             url=f"{pending.params.redirect_uri}?{urlencode(redirect_params)}",
             status_code=302,
@@ -388,9 +394,14 @@ class EveryRowAuthProvider(
             path="/auth/callback",
             httponly=True,
             samesite="lax",
-            secure=http_settings.mcp_server_url.startswith("https"),
+            secure=True,
         )
         return response
+
+    async def handle_callback(self, request: Request) -> RedirectResponse:
+        pending, supa_tokens = await self._validate_callback_request(request)
+        auth_code_str = await self._create_authorisation_code(pending, supa_tokens)
+        return self._create_callback_redirect_response(auth_code_str, pending)
 
     async def load_authorization_code(
         self,
@@ -400,8 +411,7 @@ class EveryRowAuthProvider(
         if len(authorization_code) > 256:
             return None
 
-        _key = build_key("authcode", authorization_code)
-        code_data = await self._redis.getdel(_key)
+        code_data = await self._redis.getdel(build_key("authcode", authorization_code))
         if code_data is None:
             return None
         code_obj = EveryRowAuthorizationCode.model_validate_json(code_data)
@@ -501,12 +511,12 @@ class EveryRowAuthProvider(
                 value="1",
             )
 
-    async def _exchange_supabase_code(
-        self, code: str, code_verifier: str
+    async def _supabase_token_request(
+        self, grant_type: str, payload: dict[str, str]
     ) -> SupabaseTokenResponse:
         resp = await self._http_client.post(
-            f"{http_settings.supabase_url}/auth/v1/token?grant_type=pkce",
-            json={"auth_code": code, "code_verifier": code_verifier},
+            f"{http_settings.supabase_url}/auth/v1/token?grant_type={grant_type}",
+            json=payload,
             headers={
                 "apikey": http_settings.supabase_anon_key,
                 "Content-Type": "application/json",
@@ -519,20 +529,16 @@ class EveryRowAuthProvider(
             refresh_token=data["refresh_token"],
         )
 
+    async def _exchange_supabase_code(
+        self, code: str, code_verifier: str
+    ) -> SupabaseTokenResponse:
+        return await self._supabase_token_request(
+            "pkce", {"auth_code": code, "code_verifier": code_verifier}
+        )
+
     async def _refresh_supabase_token(
         self, supabase_refresh_token: str
     ) -> SupabaseTokenResponse:
-        resp = await self._http_client.post(
-            f"{http_settings.supabase_url}/auth/v1/token?grant_type=refresh_token",
-            json={"refresh_token": supabase_refresh_token},
-            headers={
-                "apikey": http_settings.supabase_anon_key,
-                "Content-Type": "application/json",
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return SupabaseTokenResponse(
-            access_token=data["access_token"],
-            refresh_token=data["refresh_token"],
+        return await self._supabase_token_request(
+            "refresh_token", {"refresh_token": supabase_refresh_token}
         )
