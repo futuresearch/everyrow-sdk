@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import lifespan_wrapper
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
+from redis.asyncio import Redis
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -24,6 +25,8 @@ from everyrow_mcp.routes import api_download, api_progress
 from everyrow_mcp.state import RedisStore, state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
+logger = logging.getLogger(__name__)
+
 
 def configure_http_mode(
     mcp: FastMCP,
@@ -33,84 +36,26 @@ def configure_http_mode(
     *,
     no_auth: bool = False,
 ) -> None:
-    """Configure the MCP server for HTTP transport.
-
-    When *no_auth* is True the server skips OAuth setup and uses a singleton
-    client from EVERYROW_API_KEY (like stdio mode).  Intended for local
-    development only.
-    """
-    log = logging.getLogger(__name__)
+    """Configure the MCP server for HTTP transport."""
     state.transport = "streamable-http"
 
     if no_auth:
-        _configure_no_auth(mcp, http_lifespan, host, port, log)
+        logger.warning("Running in --no-auth mode (development only)")
+        settings, redis_client = _load_settings_and_redis(DevHttpSettings)
+        auth_provider = None
+        mcp_server_url = f"http://localhost:{port}"
     else:
-        _configure_auth(mcp, http_lifespan, host, port, log)
-
-
-# ── Internal helpers ─────────────────────────────────────────────────
-
-
-def _configure_auth(
-    mcp: FastMCP,
-    http_lifespan: Any,
-    host: str,
-    port: int,
-    _log: logging.Logger,
-) -> None:
-    """Full OAuth HTTP mode -- our server is the authorization server."""
-    try:
-        settings = HttpSettings()  # pyright: ignore[reportCallIssue]
-    except Exception as e:
-        logging.error(f"HTTP mode configuration error: {e}")
-        sys.exit(1)
-    state.settings = settings
-
-    redis_client = create_redis_client(
-        host=settings.redis_host,
-        port=settings.redis_port,
-        db=settings.redis_db,
-        password=settings.redis_password,
-        sentinel_endpoints=settings.redis_sentinel_endpoints,
-        sentinel_master_name=settings.redis_sentinel_master_name,
-    )
-    state.store = RedisStore(redis_client)
-
-    # Auth provider (handles registration + OAuth flow via Supabase)
-    auth_provider = EveryRowAuthProvider(
-        supabase_url=settings.supabase_url,
-        supabase_anon_key=settings.supabase_anon_key,
-        mcp_server_url=settings.mcp_server_url,
-        redis=redis_client,
-    )
-    state.auth_provider = auth_provider
-
-    # Token verifier validates Supabase JWTs via JWKS
-    verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
-
-    # Wire auth into FastMCP
-    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
-    mcp._token_verifier = verifier
-    mcp.settings.auth = AuthSettings(
-        issuer_url=AnyHttpUrl(settings.mcp_server_url),
-        resource_server_url=AnyHttpUrl(settings.mcp_server_url),
-        client_registration_options=ClientRegistrationOptions(enabled=True),
-    )
-    parsed = urlparse(settings.mcp_server_url)
-    allowed_host = parsed.hostname or "localhost"
-    mcp.settings.transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=[allowed_host],
-    )
-
-    mcp_server_url = settings.mcp_server_url
-
-    logging.warning(
-        "Auth configured: issuer=%s resource_server=%s allowed_hosts=%s",
-        mcp.settings.auth.issuer_url,
-        mcp.settings.auth.resource_server_url,
-        mcp.settings.transport_security.allowed_hosts,
-    )
+        settings, redis_client = _load_settings_and_redis(HttpSettings, sentinel=True)
+        auth_provider = EveryRowAuthProvider(
+            supabase_url=settings.supabase_url,
+            supabase_anon_key=settings.supabase_anon_key,
+            mcp_server_url=settings.mcp_server_url,
+            redis=redis_client,
+        )
+        state.auth_provider = auth_provider
+        verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
+        _configure_mcp_auth(mcp, settings, auth_provider, verifier)
+        mcp_server_url = settings.mcp_server_url
 
     _configure_shared(
         mcp,
@@ -119,38 +64,77 @@ def _configure_auth(
         port,
         mcp_server_url,
         redis_client=redis_client,
+        no_auth=no_auth,
         auth_provider=auth_provider,
     )
 
 
-def _configure_no_auth(
-    mcp: FastMCP,
-    http_lifespan: Any,
-    host: str,
-    port: int,
-    log: logging.Logger,
-) -> None:
-    """No-auth HTTP mode for local development."""
-    log.warning("Running in --no-auth mode (development only)")
+# ── Internal helpers ─────────────────────────────────────────────────
 
+
+def _load_settings_and_redis(
+    settings_cls: type,
+    *,
+    sentinel: bool = False,
+) -> tuple[Any, Redis]:
+    """Load settings from env and create a Redis client."""
     try:
-        settings = DevHttpSettings()  # pyright: ignore[reportCallIssue]
+        settings = settings_cls()  # pyright: ignore[reportCallIssue]
     except Exception as e:
-        logging.error(f"--no-auth configuration error: {e}")
+        logging.error(f"HTTP mode configuration error: {e}")
         sys.exit(1)
-    state.settings = settings
 
     redis_client = create_redis_client(
         host=settings.redis_host,
         port=settings.redis_port,
         db=settings.redis_db,
         password=settings.redis_password,
+        sentinel_endpoints=getattr(settings, "redis_sentinel_endpoints", None)
+        if sentinel
+        else None,
+        sentinel_master_name=getattr(settings, "redis_sentinel_master_name", None)
+        if sentinel
+        else None,
     )
+
+    state.settings = settings
     state.store = RedisStore(redis_client)
+    return settings, redis_client
 
-    mcp_server_url = f"http://localhost:{port}"
 
-    _configure_shared(mcp, http_lifespan, host, port, mcp_server_url, no_auth=True)
+def _configure_mcp_auth(
+    mcp: FastMCP,
+    settings: HttpSettings,
+    auth_provider: EveryRowAuthProvider,
+    verifier: SupabaseTokenVerifier,
+) -> None:
+    """Wire OAuth provider and JWT verifier into FastMCP."""
+    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
+    mcp._token_verifier = verifier
+    mcp.settings.auth = AuthSettings(
+        issuer_url=AnyHttpUrl(settings.mcp_server_url),
+        resource_server_url=AnyHttpUrl(settings.mcp_server_url),
+        client_registration_options=ClientRegistrationOptions(enabled=True),
+    )
+    hostname = urlparse(settings.mcp_server_url).hostname or "localhost"
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[hostname],
+    )
+    logger.warning(
+        "Auth configured: issuer=%s resource_server=%s allowed_hosts=%s",
+        mcp.settings.auth.issuer_url,
+        mcp.settings.auth.resource_server_url,
+        mcp.settings.transport_security.allowed_hosts,
+    )
+
+
+def _ui_csp(connect_domains: list[str]) -> dict:
+    """Build a CSP policy for MCP App widgets."""
+    return {
+        "resourceDomains": ["https://unpkg.com"],
+        "connectDomains": connect_domains,
+    }
 
 
 def _configure_shared(
@@ -160,7 +144,7 @@ def _configure_shared(
     port: int,
     mcp_server_url: str,
     *,
-    redis_client: Any | None = None,
+    redis_client: Redis,
     no_auth: bool = False,
     auth_provider: EveryRowAuthProvider | None = None,
 ) -> None:
@@ -168,17 +152,11 @@ def _configure_shared(
     mcp._mcp_server.lifespan = lifespan_wrapper(mcp, http_lifespan)
     mcp.settings.host = host
     mcp.settings.port = port
-
     state.mcp_server_url = mcp_server_url
 
-    # CSP: allow widgets to fetch from unpkg (SDK) and our server (API calls)
-    connect_domains: list[str] = [mcp_server_url]
-    widget_csp = {
-        "resourceDomains": ["https://unpkg.com"],
-        "connectDomains": connect_domains,
-    }
+    widget_csp = _ui_csp([mcp_server_url])
 
-    # Patch tool meta to include CSP (host may read CSP from tool, not resource)
+    # Patch tool meta to include CSP
     for tool_name in ("everyrow_progress", "everyrow_results"):
         tool = mcp._tool_manager._tools.get(tool_name)
         if tool and tool.meta and "ui" in tool.meta:
@@ -187,14 +165,7 @@ def _configure_shared(
     @mcp.resource(
         "ui://everyrow/session.html",
         mime_type="text/html;profile=mcp-app",
-        meta={
-            "ui": {
-                "csp": {
-                    "resourceDomains": ["https://unpkg.com"],
-                    "connectDomains": connect_domains,
-                }
-            }
-        },
+        meta={"ui": {"csp": widget_csp}},
     )
     def _session_ui_http() -> str:
         return SESSION_HTML
@@ -202,19 +173,12 @@ def _configure_shared(
     @mcp.resource(
         "ui://everyrow/results.html",
         mime_type="text/html;profile=mcp-app",
-        meta={
-            "ui": {
-                "csp": {
-                    "resourceDomains": ["https://unpkg.com"],
-                    "connectDomains": connect_domains,
-                }
-            }
-        },
+        meta={"ui": {"csp": widget_csp}},
     )
     def _results_ui_http() -> str:
         return RESULTS_HTML
 
-    # Progress, download + health routes
+    # REST routes
     mcp.custom_route("/api/progress/{task_id}", ["GET", "OPTIONS"])(api_progress)
     mcp.custom_route("/api/results/{task_id}/download", ["GET", "OPTIONS"])(
         api_download
@@ -225,16 +189,25 @@ def _configure_shared(
 
     mcp.custom_route("/health", ["GET"])(_health)
 
-    # Auth routes (only in auth mode)
     if auth_provider is not None:
         mcp.custom_route("/auth/start/{state}", ["GET"])(auth_provider.handle_start)
         mcp.custom_route("/auth/callback", ["GET"])(auth_provider.handle_callback)
 
-    # Request logging + rate-limit middleware
-    _original_streamable_http_app = mcp.streamable_http_app
+    # Middleware
+    _add_middleware(mcp, redis_client, rate_limit=not no_auth)
 
-    def _middleware_streamable_http_app():
-        app = _original_streamable_http_app()
+
+def _add_middleware(
+    mcp: FastMCP,
+    redis_client: Redis,
+    *,
+    rate_limit: bool = True,
+) -> None:
+    """Wrap the ASGI app with request logging and optional rate limiting."""
+    _original = mcp.streamable_http_app
+
+    def _wrapped():
+        app = _original()
 
         class RequestLoggingMiddleware(BaseHTTPMiddleware):
             async def dispatch(self, request, call_next):
@@ -257,9 +230,9 @@ def _configure_shared(
 
         app.add_middleware(RequestLoggingMiddleware)
 
-        if not no_auth and redis_client is not None:
+        if rate_limit:
             app.add_middleware(RateLimitMiddleware, redis=redis_client)
 
         return app
 
-    mcp.streamable_http_app = _middleware_streamable_http_app
+    mcp.streamable_http_app = _wrapped
