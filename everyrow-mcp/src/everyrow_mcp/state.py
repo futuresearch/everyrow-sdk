@@ -9,17 +9,11 @@ from __future__ import annotations
 import logging
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from everyrow.generated.client import AuthenticatedClient
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
-from everyrow_mcp.config import (
-    _get_dev_http_settings,
-    _get_http_settings,
-    _get_stdio_settings,
-)
 from everyrow_mcp.redis_utils import build_key
 
 logger = logging.getLogger(__name__)
@@ -175,9 +169,18 @@ class ServerState(BaseModel):
 
     Thin config/context holder — all Redis data operations are delegated
     to RedisStore.
+
+    NOTE on ``client`` in no-auth HTTP mode: the singleton client is set
+    per MCP *session* (in ``_no_auth_http_lifespan``). If two sessions
+    overlap, the second overwrites the first's client.  This is acceptable
+    because --no-auth is a single-user dev/CI mode and concurrent sessions
+    are not expected.
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+    )
 
     client: AuthenticatedClient | None = None
     transport: Transport = Transport.STDIO
@@ -185,8 +188,6 @@ class ServerState(BaseModel):
     everyrow_api_url: str = "https://everyrow.io/api/v0"
     preview_size: int = 5
     store: RedisStore | None = Field(default=None)
-    auth_provider: Any | None = Field(default=None)
-    dev_mode: bool = False
 
     @property
     def is_stdio(self) -> bool:
@@ -194,16 +195,7 @@ class ServerState(BaseModel):
 
     @property
     def is_http(self) -> bool:
-        return self.transport != Transport.STDIO
-
-    @property
-    def settings(self):
-        if self.transport == Transport.STDIO:
-            return _get_stdio_settings()
-        elif self.dev_mode:
-            return _get_dev_http_settings()
-        else:
-            return _get_http_settings()
+        return self.transport == Transport.HTTP
 
 
 state = ServerState()

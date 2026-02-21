@@ -235,7 +235,8 @@ class DedupeInput(_SingleSourceInput):
 
     equivalence_relation: str = Field(
         ...,
-        description="Natural language description of what makes two rows equivalent/duplicates.",
+        description="Natural language description of what makes two rows equivalent/duplicates. "
+        "The LLM will use this to identify which rows represent the same entity.",
         min_length=1,
     )
 
@@ -279,11 +280,23 @@ class MergeInput(BaseModel):
         description="Right table as JSON array of objects.",
     )
 
-    merge_on_left: str | None = Field(default=None)
-    merge_on_right: str | None = Field(default=None)
+    merge_on_left: str | None = Field(
+        default=None,
+        description="Column name in the left table to match on.",
+    )
+    merge_on_right: str | None = Field(
+        default=None,
+        description="Column name in the right table to match on.",
+    )
 
-    use_web_search: Literal["auto", "yes", "no"] | None = Field(default=None)
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(default=None)
+    use_web_search: Literal["auto", "yes", "no"] | None = Field(
+        default=None,
+        description='Control web search: "auto", "yes", or "no".',
+    )
+    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+        default=None,
+        description="Relationship type: many_to_one (default) or one_to_one.",
+    )
 
     @field_validator("left_csv", "right_csv")
     @classmethod
@@ -363,7 +376,7 @@ class ResultsInput(BaseModel):
     output_path: str | None = Field(
         default=None,
         description="Full absolute path to the output CSV file (must end in .csv). "
-        "If omitted, results are returned inline.",
+        "Required in stdio mode to save results locally.",
     )
     offset: int = Field(
         default=0,

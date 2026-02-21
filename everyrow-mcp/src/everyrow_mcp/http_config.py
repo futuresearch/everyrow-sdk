@@ -36,7 +36,6 @@ def configure_http_mode(
 ) -> None:
     """Configure the MCP server for HTTP transport."""
     state.transport = Transport.HTTP
-    state.dev_mode = no_auth
 
     if no_auth:
         settings = _get_dev_http_settings()
@@ -66,7 +65,6 @@ def configure_http_mode(
             redis=redis_client,
             token_verifier=verifier,
         )
-        state.auth_provider = auth_provider
         _configure_mcp_auth(mcp, auth_provider, verifier)
     else:
         auth_provider = None

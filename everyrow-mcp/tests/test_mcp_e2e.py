@@ -31,7 +31,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 # Import tools module to trigger @mcp.tool() registration on the FastMCP instance
 import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp.app import mcp as mcp_app
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import RedisStore, Transport, state
 
 # ── Fixtures / helpers ────────────────────────────────────────
 
@@ -46,7 +46,7 @@ def _http_state(fake_redis):
         "client": state.client,
     }
 
-    state.transport = "streamable-http"
+    state.transport = Transport.HTTP
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = "http://testserver"
 

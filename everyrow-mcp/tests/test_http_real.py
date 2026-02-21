@@ -33,7 +33,7 @@ from starlette.routing import Route
 
 from everyrow_mcp.models import AgentInput, ProgressInput, ResultsInput, ScreenInput
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import RedisStore, Transport, state
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
@@ -79,7 +79,7 @@ def _http_mode(real_redis):
         "client": state.client,
     }
 
-    state.transport = "streamable-http"
+    state.transport = Transport.HTTP
     state.store = RedisStore(real_redis)
     state.mcp_server_url = "http://testserver"
 

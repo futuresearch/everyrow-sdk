@@ -38,12 +38,6 @@ def _slice_preview(records: list[dict], offset: int, page_size: int) -> list[dic
     return records[clamped : clamped + page_size]
 
 
-def _build_csv_url(task_id: str) -> str:
-    """Build the internal download URL for a task's CSV."""
-    poll_token = ""  # Will be filled async; see callers
-    return f"{state.mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
-
-
 def _build_result_response(
     task_id: str,
     csv_url: str,

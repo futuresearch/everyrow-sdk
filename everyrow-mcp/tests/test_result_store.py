@@ -27,7 +27,7 @@ from everyrow_mcp.result_store import (
     try_store_result,
 )
 from everyrow_mcp.routes import api_download
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import RedisStore, Transport, state
 
 # ── Fixtures ───────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ def _http_state(fake_redis):
         "mcp_server_url": state.mcp_server_url,
     }
 
-    state.transport = "streamable-http"
+    state.transport = Transport.HTTP
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = FAKE_SERVER_URL
 

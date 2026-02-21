@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 
 import pandas as pd
 import pytest
+from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_result_response import TaskResultResponse
@@ -38,7 +39,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.state import state
+from everyrow_mcp.state import Transport, state
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
@@ -256,7 +257,7 @@ def _make_mock_session(session_id=None):
 
 def _make_mock_client():
     """Create a mock AuthenticatedClient."""
-    client = AsyncMock()
+    client = AsyncMock(spec=AuthenticatedClient)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
     return client
@@ -736,7 +737,7 @@ class TestResults:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -787,7 +788,7 @@ class TestResults:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -809,7 +810,7 @@ class TestResults:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -1037,7 +1038,7 @@ class TestStdioVsHttpGating:
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
@@ -1088,7 +1089,7 @@ class TestStdioVsHttpGating:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=mock_client),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,

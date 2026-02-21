@@ -24,6 +24,7 @@ from uuid import uuid4
 import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
+from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_result_response import TaskResultResponse
@@ -48,7 +49,7 @@ from everyrow_mcp.models import (
     ScreenInput,
     SingleAgentInput,
 )
-from everyrow_mcp.state import state
+from everyrow_mcp.state import Transport, state
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
 from everyrow_mcp.tools import (
     everyrow_agent,
@@ -140,7 +141,7 @@ def _make_mock_session(session_id=None):
 
 
 def _make_mock_client():
-    client = AsyncMock()
+    client = AsyncMock(spec=AuthenticatedClient)
     client.token = "fake-token"
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
@@ -618,7 +619,7 @@ class TestHttpModeIncludesWidgets:
             patches[0],
             patches[1],
             patches[2],
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
         ):
             result = await everyrow_agent(
                 AgentInput(task="Find HQ", input_csv=companies_csv)
@@ -639,7 +640,7 @@ class TestHttpModeIncludesWidgets:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=_make_mock_client()),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -663,7 +664,7 @@ class TestHttpModeIncludesWidgets:
 
         with (
             patch("everyrow_mcp.tools._get_client", return_value=_make_mock_client()),
-            patch.object(state, "transport", "streamable-http"),
+            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,

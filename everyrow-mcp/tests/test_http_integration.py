@@ -26,7 +26,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import RedisStore, Transport, state
 
 # ── Fixtures ───────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ def _http_state(fake_redis):
         "mcp_server_url": state.mcp_server_url,
     }
 
-    state.transport = "streamable-http"
+    state.transport = Transport.HTTP
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = "http://testserver"
 
