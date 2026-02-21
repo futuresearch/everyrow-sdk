@@ -567,6 +567,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
         openWorldHint=False,
     ),
 )
+# NOTE: This docstring is overridden at startup by set_tool_descriptions().
 async def everyrow_progress(  # noqa: PLR0912
     params: ProgressInput,
 ) -> list[TextContent]:
@@ -731,8 +732,9 @@ async def everyrow_progress(  # noqa: PLR0912
     ),
     meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
+# NOTE: This docstring is overridden at startup by set_tool_descriptions().
 async def everyrow_results(params: ResultsInput) -> list[TextContent]:  # noqa: PLR0911
-    """Retrieve results from a completed everyrow task.
+    """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.
     """

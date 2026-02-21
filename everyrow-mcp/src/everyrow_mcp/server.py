@@ -22,7 +22,7 @@ from everyrow_mcp.models import (  # noqa: F401
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.state import state
+from everyrow_mcp.state import Transport, state
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
 from everyrow_mcp.tool_helpers import _write_task_state  # noqa: F401
 from everyrow_mcp.tools import (  # noqa: F401
@@ -90,7 +90,7 @@ def main():
             force=True,
         )
 
-        state.transport = "stdio"
+        state.transport = Transport.STDIO
         set_tool_descriptions("stdio")
 
         # Validate EVERYROW_API_KEY is set (used by SDK client in lifespan)

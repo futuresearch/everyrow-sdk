@@ -10,12 +10,7 @@ from everyrow.generated.api.billing.get_billing_balance_billing_get import (
 from mcp.server.fastmcp import FastMCP
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
-from everyrow_mcp.templates import (
-    PROGRESS_HTML,
-    RESULTS_HTML,
-    SESSION_HTML,
-    UI_CSP_META,
-)
+from everyrow_mcp.templates import PROGRESS_HTML, UI_CSP_META
 
 
 def _clear_task_state() -> None:
@@ -86,19 +81,6 @@ def _progress_ui() -> str:
     return PROGRESS_HTML
 
 
-@mcp.resource(
-    "ui://everyrow/results.html",
-    mime_type="text/html;profile=mcp-app",
-    meta=UI_CSP_META,
-)
-def _results_ui() -> str:
-    return RESULTS_HTML
-
-
-@mcp.resource(
-    "ui://everyrow/session.html",
-    mime_type="text/html;profile=mcp-app",
-    meta=UI_CSP_META,
-)
-def _session_ui() -> str:
-    return SESSION_HTML
+# NOTE: results.html and session.html are registered in http_config.py
+# (with HTTP-aware CSP) when running in HTTP mode. Only progress.html
+# is registered here because it's used in both transport modes.

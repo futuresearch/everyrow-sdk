@@ -12,14 +12,7 @@ from everyrow_mcp.app import mcp
 
 # ── everyrow_progress ──────────────────────────────────────────────────
 
-_PROGRESS_STDIO = """\
-Check progress of a running task. Blocks briefly to limit the polling rate.
-
-After receiving a status update, immediately call everyrow_progress again
-unless the task is completed or failed. The tool handles pacing internally.
-Do not add commentary between progress calls, just call again immediately."""
-
-_PROGRESS_HTTP = """\
+_PROGRESS_DESC = """\
 Check progress of a running task. Blocks briefly to limit the polling rate.
 
 After receiving a status update, immediately call everyrow_progress again
@@ -44,7 +37,7 @@ Do NOT pass output_path — it has no effect in this mode."""
 # ── Registry ───────────────────────────────────────────────────────────
 
 _DESCRIPTIONS: dict[str, dict[str, str]] = {
-    "everyrow_progress": {"stdio": _PROGRESS_STDIO, "http": _PROGRESS_HTTP},
+    "everyrow_progress": {"stdio": _PROGRESS_DESC, "http": _PROGRESS_DESC},
     "everyrow_results": {"stdio": _RESULTS_STDIO, "http": _RESULTS_HTTP},
 }
 

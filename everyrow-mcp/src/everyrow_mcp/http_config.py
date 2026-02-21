@@ -21,7 +21,7 @@ from everyrow_mcp.config import _get_dev_http_settings, _get_http_settings
 from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_download, api_progress
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import RedisStore, Transport, state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def configure_http_mode(
     no_auth: bool = False,
 ) -> None:
     """Configure the MCP server for HTTP transport."""
-    state.transport = "http"
+    state.transport = Transport.HTTP
     state.dev_mode = no_auth
 
     if no_auth:
@@ -61,14 +61,12 @@ def configure_http_mode(
     state.mcp_server_url = mcp_server_url
 
     if not no_auth:
+        verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
         auth_provider = EveryRowAuthProvider(
-            supabase_url=settings.supabase_url,
-            supabase_anon_key=settings.supabase_anon_key,
-            mcp_server_url=settings.mcp_server_url,
             redis=redis_client,
+            token_verifier=verifier,
         )
         state.auth_provider = auth_provider
-        verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
         _configure_mcp_auth(mcp, auth_provider, verifier)
     else:
         auth_provider = None
@@ -189,10 +187,10 @@ def _add_middleware(
                 )
                 return response
 
-        app.add_middleware(RequestLoggingMiddleware)
-
         if rate_limit:
             app.add_middleware(RateLimitMiddleware, redis=redis_client)
+
+        app.add_middleware(RequestLoggingMiddleware)
 
         return app
 
