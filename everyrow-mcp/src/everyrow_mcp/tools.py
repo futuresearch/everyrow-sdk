@@ -42,9 +42,8 @@ from everyrow_mcp.tool_helpers import (
     TaskNotReady,
     _fetch_task_result,
     _get_client,
-    _submission_text,
-    _submission_ui_json,
     _write_task_state,
+    create_tool_response,
 )
 from everyrow_mcp.utils import load_csv, save_result_to_csv
 
@@ -109,25 +108,13 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    result = [
-        TextContent(
-            type="text",
-            text=_submission_text(
-                f"Submitted: {len(df)} agents starting.", session_url, task_id
-            ),
-        )
-    ]
-    if state.is_http:
-        result.insert(
-            0,
-            TextContent(
-                type="text",
-                text=await _submission_ui_json(
-                    session_url, task_id, len(df), client.token
-                ),
-            ),
-        )
-    return result
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {len(df)} agents starting.",
+        token=client.token,
+        total=len(df),
+    )
 
 
 @mcp.tool(
@@ -194,17 +181,13 @@ async def everyrow_single_agent(params: SingleAgentInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    return [
-        TextContent(
-            type="text",
-            text=(
-                f"Submitted: single agent starting.\n"
-                f"Session: {session_url}\n"
-                f"Task ID: {task_id}\n\n"
-                f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
-            ),
-        )
-    ]
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label="Submitted: single agent starting.",
+        token=client.token,
+        total=1,
+    )
 
 
 @mcp.tool(
@@ -279,25 +262,13 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    result = [
-        TextContent(
-            type="text",
-            text=_submission_text(
-                f"Submitted: {len(df)} rows for ranking.", session_url, task_id
-            ),
-        )
-    ]
-    if state.is_http:
-        result.insert(
-            0,
-            TextContent(
-                type="text",
-                text=await _submission_ui_json(
-                    session_url, task_id, len(df), client.token
-                ),
-            ),
-        )
-    return result
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {len(df)} rows for ranking.",
+        token=client.token,
+        total=len(df),
+    )
 
 
 @mcp.tool(
@@ -374,25 +345,13 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    result = [
-        TextContent(
-            type="text",
-            text=_submission_text(
-                f"Submitted: {len(df)} rows for screening.", session_url, task_id
-            ),
-        )
-    ]
-    if state.is_http:
-        result.insert(
-            0,
-            TextContent(
-                type="text",
-                text=await _submission_ui_json(
-                    session_url, task_id, len(df), client.token
-                ),
-            ),
-        )
-    return result
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {len(df)} rows for screening.",
+        token=client.token,
+        total=len(df),
+    )
 
 
 @mcp.tool(
@@ -461,30 +420,13 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    result = [
-        TextContent(
-            type="text",
-            text=_submission_text(
-                f"Submitted: {len(df)} rows for deduplication.",
-                session_url,
-                task_id,
-            ),
-        )
-    ]
-    if state.is_http:
-        result.insert(
-            0,
-            TextContent(
-                type="text",
-                text=await _submission_ui_json(
-                    session_url=session_url,
-                    task_id=task_id,
-                    total=len(df),
-                    token=client.token,
-                ),
-            ),
-        )
-    return result
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {len(df)} rows for deduplication.",
+        token=client.token,
+        total=len(df),
+    )
 
 
 @mcp.tool(
@@ -575,30 +517,13 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
-    result = [
-        TextContent(
-            type="text",
-            text=_submission_text(
-                f"Submitted: {len(left_df)} left rows for merging.",
-                session_url,
-                task_id,
-            ),
-        )
-    ]
-    if state.is_http:
-        result.insert(
-            0,
-            TextContent(
-                type="text",
-                text=await _submission_ui_json(
-                    session_url=session_url,
-                    task_id=task_id,
-                    total=len(left_df),
-                    token=client.token,
-                ),
-            ),
-        )
-    return result
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {len(left_df)} left rows for merging.",
+        token=client.token,
+        total=len(left_df),
+    )
 
 
 @mcp.tool(

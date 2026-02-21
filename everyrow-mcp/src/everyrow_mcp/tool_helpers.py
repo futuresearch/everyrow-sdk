@@ -26,6 +26,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.types import TextContent
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
@@ -90,6 +91,27 @@ async def _submission_ui_json(
             f"{state.mcp_server_url}/api/progress/{task_id}?token={poll_token}"
         )
     return json.dumps(data)
+
+
+async def create_tool_response(
+    *,
+    task_id: str,
+    session_url: str,
+    label: str,
+    token: str,
+    total: int,
+) -> list[TextContent]:
+    """Build the standard submission response for a tool.
+
+    Returns human-readable text in all modes, plus a widget JSON
+    prepended in HTTP mode.
+    """
+    text = _submission_text(label, session_url, task_id)
+    main_content = TextContent(type="text", text=text)
+    if state.is_http:
+        ui_json = await _submission_ui_json(session_url, task_id, total, token)
+        return [TextContent(type="text", text=ui_json), main_content]
+    return [main_content]
 
 
 def _write_task_state(
