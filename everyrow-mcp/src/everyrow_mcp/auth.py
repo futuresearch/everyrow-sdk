@@ -179,6 +179,9 @@ class EveryRowAuthProvider(
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
 
+    async def aclose(self) -> None:
+        await self._http_client.aclose()
+
     @staticmethod
     def _UNSAFE_decode_server_jwt(token: str) -> dict[str, Any]:
         """Decode a Supabase JWT received from a trusted server-to-server exchange.
@@ -386,14 +389,12 @@ class EveryRowAuthProvider(
         )
         return code
 
-    def _create_callback_redirect_response(
-        self, auth_code_str: str, pending: PendingAuth
-    ) -> RedirectResponse:
+    async def handle_callback(self, request: Request) -> RedirectResponse:
+        pending, supa_tokens = await self._validate_callback_request(request)
+        auth_code_str = await self._create_authorisation_code(pending, supa_tokens)
         redirect_params = {"code": auth_code_str, "state": pending.params.state}
-        response = RedirectResponse(
-            url=f"{pending.params.redirect_uri}?{urlencode(redirect_params)}",
-            status_code=302,
-        )
+        url = f"{pending.params.redirect_uri}?{urlencode(redirect_params)}"
+        response = RedirectResponse(url=url, status_code=302)
         response.delete_cookie(
             "mcp_auth_state",
             path="/auth/callback",
@@ -402,11 +403,6 @@ class EveryRowAuthProvider(
             secure=True,
         )
         return response
-
-    async def handle_callback(self, request: Request) -> RedirectResponse:
-        pending, supa_tokens = await self._validate_callback_request(request)
-        auth_code_str = await self._create_authorisation_code(pending, supa_tokens)
-        return self._create_callback_redirect_response(auth_code_str, pending)
 
     async def load_authorization_code(
         self,
