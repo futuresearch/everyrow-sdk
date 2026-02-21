@@ -1,4 +1,4 @@
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,51 @@ class HttpSettings(BaseSettings):
         default=20000,
         description="Target token budget per page of inline results",
     )
+
+    registration_rate_limit: int = Field(
+        default=10,
+        description="Max registrations/authorizations per IP per rate window",
+    )
+    registration_rate_window: int = Field(
+        default=60,
+        description="Rate limit sliding window in seconds",
+    )
+
+    access_token_ttl: int = Field(
+        default=3300,
+        description="Access token TTL in seconds (55 min, before Supabase JWT 1h expiry)",
+    )
+    auth_code_ttl: int = Field(
+        default=300,
+        description="Authorization code TTL in seconds",
+    )
+    pending_auth_ttl: int = Field(
+        default=600,
+        description="Pending authorization TTL in seconds",
+    )
+    client_registration_ttl: int = Field(
+        default=2_592_000,
+        description="Client registration TTL in seconds (30 days)",
+    )
+    refresh_token_ttl: int = Field(
+        default=604_800,
+        description="Refresh token TTL in seconds (7 days)",
+    )
+
+    @field_validator(
+        "registration_rate_limit",
+        "registration_rate_window",
+        "access_token_ttl",
+        "auth_code_ttl",
+        "pending_auth_ttl",
+        "client_registration_ttl",
+        "refresh_token_ttl",
+    )
+    @classmethod
+    def _positive_int(cls, v: int, info) -> int:
+        if v <= 0:
+            raise ValueError(f"{info.field_name} must be > 0, got {v}")
+        return v
 
     @model_validator(mode="after")
     def _validate_redis(self):

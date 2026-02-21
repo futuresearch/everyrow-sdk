@@ -350,11 +350,13 @@ version = "0.3.4"
 source = { editable = "everyrow-mcp" }
 dependencies = [
     { name = "everyrow" },
+    { name = "httpx" },
     { name = "jsonschema" },
     { name = "mcp", extra = ["cli"] },
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "redis" },
 ]
 
@@ -369,11 +371,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "everyrow", editable = "." },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "jsonschema", specifier = ">=4.0.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
     { name = "redis", specifier = ">=5.0.0" },
 ]
 
