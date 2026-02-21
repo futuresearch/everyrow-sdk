@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 from everyrow.generated.client import AuthenticatedClient
 
-from everyrow_mcp.server import (
+from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
     MergeInput,
@@ -24,6 +24,8 @@ from everyrow_mcp.server import (
     ResultsInput,
     ScreenInput,
     SingleAgentInput,
+)
+from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_dedupe,
     everyrow_merge,
@@ -46,11 +48,12 @@ pytestmark = pytest.mark.skipif(
 async def poll_until_complete(task_id: str, max_polls: int = 30) -> str:
     """Poll everyrow_progress until task completes or fails.
 
-    Returns the final status text from everyrow_progress.
+    Returns the final human-readable status text from everyrow_progress.
     """
     for _ in range(max_polls):
         result = await everyrow_progress(ProgressInput(task_id=task_id))
-        text = result[0].text
+        # Second TextContent is human-readable (first is JSON for MCP App)
+        text = result[-1].text
         print(f"  Progress: {text.splitlines()[0]}")
 
         if "Completed:" in text or "everyrow_results" in text:
@@ -63,7 +66,7 @@ async def poll_until_complete(task_id: str, max_polls: int = 30) -> str:
 
 
 def extract_task_id(submit_text: str) -> str:
-    """Extract task_id from submit tool response."""
+    """Extract task_id from submit tool response (human-readable TextContent)."""
     match = re.search(r"Task ID: ([a-f0-9-]+)", submit_text)
     if not match:
         raise ValueError(f"Could not extract task_id from: {submit_text}")
@@ -76,7 +79,7 @@ class TestScreenIntegration:
     @pytest.mark.asyncio
     async def test_screen_jobs(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         jobs_csv: Path,
         tmp_path: Path,
     ):
@@ -93,7 +96,7 @@ class TestScreenIntegration:
         )
 
         result = await everyrow_screen(params)
-        submit_text = result[0].text
+        submit_text = result[-1].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -125,7 +128,7 @@ class TestRankIntegration:
     @pytest.mark.asyncio
     async def test_rank_companies(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         companies_csv: Path,
         tmp_path: Path,
     ):
@@ -140,7 +143,7 @@ class TestRankIntegration:
         )
 
         result = await everyrow_rank(params)
-        submit_text = result[0].text
+        submit_text = result[-1].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -171,7 +174,7 @@ class TestDedupeIntegration:
     @pytest.mark.asyncio
     async def test_dedupe_contacts(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         contacts_csv: Path,
         tmp_path: Path,
     ):
@@ -187,7 +190,7 @@ class TestDedupeIntegration:
         )
 
         result = await everyrow_dedupe(params)
-        submit_text = result[0].text
+        submit_text = result[-1].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -225,7 +228,7 @@ class TestMergeIntegration:
     @pytest.mark.asyncio
     async def test_merge_products_suppliers(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         products_csv: Path,
         suppliers_csv: Path,
         tmp_path: Path,
@@ -242,7 +245,7 @@ class TestMergeIntegration:
         )
 
         result = await everyrow_merge(params)
-        submit_text = result[0].text
+        submit_text = result[-1].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -273,7 +276,7 @@ class TestAgentIntegration:
     @pytest.mark.asyncio
     async def test_agent_company_research(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         tmp_path: Path,
     ):
         """Test agent researching companies."""
@@ -307,7 +310,7 @@ class TestAgentIntegration:
         )
 
         result = await everyrow_agent(params)
-        submit_text = result[0].text
+        submit_text = result[-1].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -339,7 +342,7 @@ class TestSingleAgentIntegration:
     @pytest.mark.asyncio
     async def test_single_agent_basic(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         tmp_path: Path,
     ):
         """Test single agent researching one question."""
@@ -390,7 +393,7 @@ class TestSingleAgentIntegration:
     @pytest.mark.asyncio
     async def test_single_agent_no_input_data(
         self,
-        everyrow_client: AuthenticatedClient,  # noqa: ARG002
+        everyrow_client: AuthenticatedClient,
         tmp_path: Path,
     ):
         """Test single agent with no input_data (pure question)."""
