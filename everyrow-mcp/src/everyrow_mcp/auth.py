@@ -98,10 +98,12 @@ class SupabaseTokenVerifier(TokenVerifier):
         self,
         supabase_url: str,
         *,
+        audience: str = "authenticated",
         redis: Redis | None = None,
         revocation_ttl: int = 3600,
     ) -> None:
         self._issuer = supabase_url.rstrip("/") + "/auth/v1"
+        self._audience = audience
         self._jwks_client = PyJWKClient(
             f"{self._issuer}/.well-known/jwks.json",
             cache_keys=True,
@@ -117,8 +119,12 @@ class SupabaseTokenVerifier(TokenVerifier):
         """SHA-256 fingerprint of the raw token (Supabase JWTs lack ``jti``)."""
         return hashlib.sha256(token.encode()).hexdigest()
 
-    async def revoke_token(self, token: str) -> bool:
-        """Add *token* to the Redis deny-list. Returns False if Redis is unavailable."""
+    async def deny_token(self, token: str) -> bool:
+        """Add *token* to the local Redis deny-list.
+
+        Does NOT revoke the token at Supabase. Returns False if Redis is
+        unavailable.
+        """
         if self._redis is None:
             return False
         try:
@@ -126,10 +132,10 @@ class SupabaseTokenVerifier(TokenVerifier):
             await self._redis.setex(key, self._revocation_ttl, "1")
             return True
         except Exception:
-            logger.warning("Failed to revoke token (Redis unavailable)", exc_info=True)
+            logger.warning("Failed to deny token (Redis unavailable)", exc_info=True)
             return False
 
-    async def _is_revoked(self, token: str) -> bool:
+    async def _is_denied(self, token: str) -> bool:
         """Check whether *token* is in the deny-list. Fails open on Redis errors."""
         if self._redis is None:
             return False
@@ -137,7 +143,7 @@ class SupabaseTokenVerifier(TokenVerifier):
             key = build_key("revoked", self._token_fingerprint(token))
             return await self._redis.exists(key) > 0
         except Exception:
-            logger.warning("Revocation check failed (Redis unavailable)", exc_info=True)
+            logger.warning("Deny-list check failed (Redis unavailable)", exc_info=True)
             return False
 
     async def verify_token(self, token: str) -> AccessToken | None:
@@ -151,18 +157,24 @@ class SupabaseTokenVerifier(TokenVerifier):
                 signing_key.key,
                 algorithms=["RS256", "ES256"],
                 issuer=self._issuer,
-                audience="authenticated",
+                audience=self._audience,
                 options={"require": ["exp", "sub", "iss", "aud"]},
             )
 
-            if await self._is_revoked(token):
-                logger.debug("Token is revoked")
+            if await self._is_denied(token):
+                logger.debug("Token is denied")
                 return None
 
             sub = payload.get("sub")
             if not sub:
                 logger.debug("JWT missing required 'sub' claim")
                 return None
+            # client_id=sub: The MCP SDK requires a non-nullable str for
+            # AccessToken.client_id, which it uses to build AuthenticatedUser.
+            # At JWKS verification time the only principal identifier available
+            # is the JWT `sub` (Supabase user UUID) — the OAuth client_id from
+            # /register is not embedded in the Supabase JWT. The user UUID is
+            # the correct principal for downstream authorization decisions.
             return AccessToken(
                 token=token,
                 client_id=sub,
@@ -174,13 +186,13 @@ class SupabaseTokenVerifier(TokenVerifier):
             return None
 
 
-# ── Auth code with embedded Supabase JWT ──────────────────────────────
+# ── Auth code with embedded Supabase access token ─────────────────────
 
 
 class EveryRowAuthorizationCode(AuthorizationCode):
-    """Extends AuthorizationCode with the user's Supabase JWT."""
+    """Extends AuthorizationCode with the user's Supabase access token."""
 
-    supabase_jwt: str
+    supabase_access_token: str
     supabase_refresh_token: str = ""
 
 
@@ -200,6 +212,26 @@ class PendingAuth(BaseModel):
 
 
 # ── OAuth provider ────────────────────────────────────────────────────
+#
+# Auth flow:
+#
+#   Claude MCP client            EveryRowAuthProvider          Supabase
+#   ──────────────────           ────────────────────          ────────
+#   1. POST /register  ──────►  store client_id in Redis
+#   2. GET  /authorize ──────►  generate PKCE pair
+#                                save PendingAuth ─────────►  redirect to
+#                                                             Google OAuth
+#   3.                 ◄─────────────────────────────────────  callback with
+#                                                             auth code
+#   4. GET /auth/callback ───►  exchange code for tokens ──►  POST /token
+#                                issue auth code (Redis)       (PKCE)
+#                                redirect with ?code=…
+#   5. POST /token     ──────►  load+consume code (GETDEL)
+#                                return Supabase JWT as
+#                                MCP access_token
+#   6. (refresh)       ──────►  rotate refresh token (GETDEL)
+#                                refresh via Supabase ──────►  POST /token
+#                                return new JWT                (refresh)
 
 
 class EveryRowAuthProvider(
@@ -237,7 +269,7 @@ class EveryRowAuthProvider(
     # ── Helpers ─────────────────────────────────────────────────
 
     @staticmethod
-    def _decode_trusted_supabase_jwt(token: str) -> dict[str, Any]:
+    def _decode_server_issued_supabase_jwt(token: str) -> dict[str, Any]:
         """Decode a JWT that was *just* received from Supabase's token endpoint.
 
         This skips signature verification because the token came from a
@@ -259,6 +291,13 @@ class EveryRowAuthProvider(
 
     async def _redis_get(self, key: str, model_class: type[_M]) -> _M | None:
         data = await self._redis.get(key)
+        if data is None:
+            return None
+        return model_class.model_validate_json(data)  # type: ignore[return-value]
+
+    async def _redis_getdel(self, key: str, model_class: type[_M]) -> _M | None:
+        """Atomically GET and DELETE a key (mirrors refresh-token pattern)."""
+        data = await self._redis.getdel(key)
         if data is None:
             return None
         return model_class.model_validate_json(data)  # type: ignore[return-value]
@@ -384,7 +423,7 @@ class EveryRowAuthProvider(
             (
                 _user_id,
                 _email,
-                supabase_jwt,
+                supabase_access_token,
                 supabase_refresh,
             ) = await self._exchange_supabase_code(
                 code, code_verifier=pending.supabase_code_verifier
@@ -404,7 +443,7 @@ class EveryRowAuthProvider(
             scopes=pending.params.scopes or [],
             expires_at=time.time() + AUTH_CODE_TTL,
             resource=pending.params.resource,
-            supabase_jwt=supabase_jwt,
+            supabase_access_token=supabase_access_token,
             supabase_refresh_token=supabase_refresh,
         )
         await self._redis_set(
@@ -435,7 +474,9 @@ class EveryRowAuthProvider(
         client: OAuthClientInformationFull,
         authorization_code: str,
     ) -> EveryRowAuthorizationCode | None:
-        code_obj = await self._redis_get(
+        # Atomic GETDEL: prevents replay where two concurrent /token requests
+        # both load the same auth code before either deletes it.
+        code_obj = await self._redis_getdel(
             build_key("authcode", authorization_code), EveryRowAuthorizationCode
         )
         if code_obj is None or code_obj.client_id != client.client_id:
@@ -447,9 +488,11 @@ class EveryRowAuthProvider(
         client: OAuthClientInformationFull,
         authorization_code: EveryRowAuthorizationCode,
     ) -> OAuthToken:
-        await self._redis.delete(build_key("authcode", authorization_code.code))
+        # Auth code already consumed atomically in load_authorization_code (GETDEL)
 
-        jwt_claims = self._decode_trusted_supabase_jwt(authorization_code.supabase_jwt)
+        jwt_claims = self._decode_server_issued_supabase_jwt(
+            authorization_code.supabase_access_token
+        )
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
         # Store refresh token in Redis if available
@@ -467,7 +510,7 @@ class EveryRowAuthProvider(
             )
 
         return OAuthToken(
-            access_token=authorization_code.supabase_jwt,
+            access_token=authorization_code.supabase_access_token,
             token_type="Bearer",
             expires_in=expires_in,
             refresh_token=refresh_token_str,
@@ -506,7 +549,7 @@ class EveryRowAuthProvider(
             refresh_token.supabase_refresh_token
         )
 
-        jwt_claims = self._decode_trusted_supabase_jwt(new_jwt)
+        jwt_claims = self._decode_server_issued_supabase_jwt(new_jwt)
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
         # Issue new refresh token
@@ -514,7 +557,11 @@ class EveryRowAuthProvider(
         new_rt = EveryRowRefreshToken(
             token=new_rt_str,
             client_id=client.client_id or "",
-            scopes=scopes or refresh_token.scopes,
+            # OAuth 2.1 §6.3: requested scopes must not exceed original grant.
+            # Intersect to prevent scope widening; fall back to original if empty.
+            scopes=list(set(scopes) & set(refresh_token.scopes))
+            if scopes
+            else refresh_token.scopes,
             supabase_refresh_token=new_supabase_refresh,
         )
         await self._redis_set(

@@ -1,6 +1,7 @@
-"""Tests for Supabase JWT verification."""
+"""Tests for Supabase JWT verification and EveryRowAuthProvider."""
 
 import asyncio
+import secrets
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,8 +12,15 @@ from cryptography.hazmat.primitives.serialization import (
     Encoding,
     PublicFormat,
 )
+from mcp.shared.auth import OAuthClientInformationFull
 
-from everyrow_mcp.auth import SupabaseTokenVerifier
+from everyrow_mcp.auth import (
+    AUTH_CODE_TTL,
+    EveryRowAuthorizationCode,
+    EveryRowAuthProvider,
+    EveryRowRefreshToken,
+    SupabaseTokenVerifier,
+)
 
 SUPABASE_URL = "https://test.supabase.co"
 ISSUER = SUPABASE_URL + "/auth/v1"
@@ -225,15 +233,15 @@ class TestSupabaseTokenVerifier:
             assert result is not None
 
 
-# ── Token revocation tests ──────────────────────────────────────────
+# ── Token deny-list tests ──────────────────────────────────────────
 
 
-class TestTokenRevocation:
+class TestTokenDenyList:
     @pytest.mark.asyncio
-    async def test_revoke_adds_to_denylist(self, verifier, mock_redis):
-        """revoke_token stores a fingerprint key in Redis."""
+    async def test_deny_adds_to_denylist(self, verifier, mock_redis):
+        """deny_token stores a fingerprint key in Redis."""
         token = "some-token"
-        result = await verifier.revoke_token(token)
+        result = await verifier.deny_token(token)
 
         assert result is True
         assert len(mock_redis._store) == 1
@@ -241,19 +249,19 @@ class TestTokenRevocation:
         assert key.startswith("mcp:revoked:")
 
     @pytest.mark.asyncio
-    async def test_revoked_token_rejected(self, verifier, rsa_keypair):
-        """A revoked token is rejected by verify_token."""
+    async def test_denied_token_rejected(self, verifier, rsa_keypair):
+        """A denied token is rejected by verify_token."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
-        await verifier.revoke_token(token)
+        await verifier.deny_token(token)
         result = await verifier.verify_token(token)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_unrevoked_token_passes(self, verifier, rsa_keypair):
-        """A token that has not been revoked passes verification."""
+    async def test_non_denied_token_passes(self, verifier, rsa_keypair):
+        """A token that has not been denied passes verification."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
@@ -263,16 +271,16 @@ class TestTokenRevocation:
         assert result.client_id == "user-123"
 
     @pytest.mark.asyncio
-    async def test_revoke_without_redis_returns_false(self, rsa_keypair):
-        """revoke_token returns False when no Redis is configured."""
+    async def test_deny_without_redis_returns_false(self, rsa_keypair):
+        """deny_token returns False when no Redis is configured."""
         _, _public_key = rsa_keypair
         verifier = SupabaseTokenVerifier(SUPABASE_URL)  # no redis
-        result = await verifier.revoke_token("some-token")
+        result = await verifier.deny_token("some-token")
         assert result is False
 
     @pytest.mark.asyncio
     async def test_denylist_check_fails_open(self, verifier, rsa_keypair, mock_redis):
-        """If Redis raises during _is_revoked, the token is NOT rejected."""
+        """If Redis raises during _is_denied, the token is NOT rejected."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
@@ -340,3 +348,177 @@ class TestJwksLock:
         for i in range(0, len(call_order), 2):
             assert call_order[i] == "start"
             assert call_order[i + 1] == "end"
+
+
+# ── Auth provider tests ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def provider_redis():
+    """In-memory dict-backed async Redis mock with get/set/getdel/delete."""
+    store: dict[str, str] = {}
+
+    redis = AsyncMock()
+
+    async def _set(key, value):
+        store[key] = value
+
+    async def _setex(key, _ttl, value):
+        store[key] = value
+
+    async def _get(key):
+        return store.get(key)
+
+    async def _getdel(key):
+        return store.pop(key, None)
+
+    async def _delete(key):
+        store.pop(key, None)
+
+    async def _incr(key):
+        store[key] = str(int(store.get(key, "0")) + 1)
+        return int(store[key])
+
+    async def _expire(key, _ttl):
+        pass
+
+    redis.set = AsyncMock(side_effect=_set)
+    redis.setex = AsyncMock(side_effect=_setex)
+    redis.get = AsyncMock(side_effect=_get)
+    redis.getdel = AsyncMock(side_effect=_getdel)
+    redis.delete = AsyncMock(side_effect=_delete)
+    redis.incr = AsyncMock(side_effect=_incr)
+    redis.expire = AsyncMock(side_effect=_expire)
+    redis._store = store
+
+    # Pipeline mock for register_client rate limiting
+    pipe_mock = MagicMock()
+    pipe_mock.incr = MagicMock()
+    pipe_mock.expire = MagicMock()
+    pipe_mock.execute = AsyncMock(return_value=[1, True])
+    redis.pipeline = MagicMock(return_value=pipe_mock)
+
+    return redis
+
+
+@pytest.fixture
+def provider(provider_redis):
+    """Create an EveryRowAuthProvider with mocked Redis."""
+    return EveryRowAuthProvider(
+        supabase_url=SUPABASE_URL,
+        supabase_anon_key="test-anon-key",
+        mcp_server_url="https://mcp.example.com",
+        redis=provider_redis,
+    )
+
+
+@pytest.fixture
+def test_client():
+    """A minimal OAuthClientInformationFull for tests."""
+    return OAuthClientInformationFull(
+        client_id="test-client-id",
+        redirect_uris=["https://example.com/callback"],
+    )
+
+
+class TestAuthProvider:
+    @pytest.mark.asyncio
+    async def test_auth_code_consumed_atomically(
+        self, provider, provider_redis, test_client
+    ):
+        """Loading an auth code via _redis_getdel deletes it; second load returns None."""
+        # Store an auth code directly in Redis
+        auth_code_str = secrets.token_urlsafe(32)
+        auth_code_obj = EveryRowAuthorizationCode(
+            code=auth_code_str,
+            client_id="test-client-id",
+            redirect_uri="https://example.com/callback",
+            redirect_uri_provided_explicitly=True,
+            code_challenge="test-challenge",
+            scopes=["read"],
+            expires_at=time.time() + AUTH_CODE_TTL,
+            supabase_access_token="fake-supabase-jwt",
+            supabase_refresh_token="fake-refresh",
+        )
+        await provider._redis_set(
+            f"mcp:authcode:{auth_code_str}", auth_code_obj, ttl=AUTH_CODE_TTL
+        )
+
+        # First load should succeed and consume the code
+        result1 = await provider.load_authorization_code(test_client, auth_code_str)
+        assert result1 is not None
+        assert result1.code == auth_code_str
+
+        # Second load should return None (code was atomically deleted)
+        result2 = await provider.load_authorization_code(test_client, auth_code_str)
+        assert result2 is None
+
+    @pytest.mark.asyncio
+    async def test_refresh_scope_narrowing(self, provider, test_client):
+        """Refresh with broader scopes only gets the intersection."""
+        refresh_token = EveryRowRefreshToken(
+            token="rt-123",
+            client_id="test-client-id",
+            scopes=["read", "write"],
+            supabase_refresh_token="supa-rt",
+        )
+
+        # Mock the Supabase refresh call
+        fake_jwt = jwt.encode(
+            {"sub": "user-1", "exp": int(time.time()) + 3600},
+            "secret",
+            algorithm="HS256",
+        )
+        with patch.object(
+            provider,
+            "_refresh_supabase_token",
+            new_callable=AsyncMock,
+            return_value=(fake_jwt, "new-supa-rt"),
+        ):
+            result = await provider.exchange_refresh_token(
+                test_client, refresh_token, scopes=["read", "write", "admin"]
+            )
+
+        assert result.access_token == fake_jwt
+        # Should only get the intersection: ["read", "write"] & ["read", "write", "admin"]
+        # Load the new refresh token from Redis to check scopes
+        new_rt_str = result.refresh_token
+        assert new_rt_str is not None
+        new_rt = await provider._redis_get(
+            f"mcp:refresh:{new_rt_str}", EveryRowRefreshToken
+        )
+        assert new_rt is not None
+        assert set(new_rt.scopes) == {"read", "write"}
+
+    @pytest.mark.asyncio
+    async def test_refresh_scope_preserved_when_empty(self, provider, test_client):
+        """Empty scopes list preserves original scopes from the refresh token."""
+        refresh_token = EveryRowRefreshToken(
+            token="rt-456",
+            client_id="test-client-id",
+            scopes=["read", "write"],
+            supabase_refresh_token="supa-rt",
+        )
+
+        fake_jwt = jwt.encode(
+            {"sub": "user-1", "exp": int(time.time()) + 3600},
+            "secret",
+            algorithm="HS256",
+        )
+        with patch.object(
+            provider,
+            "_refresh_supabase_token",
+            new_callable=AsyncMock,
+            return_value=(fake_jwt, "new-supa-rt"),
+        ):
+            result = await provider.exchange_refresh_token(
+                test_client, refresh_token, scopes=[]
+            )
+
+        new_rt_str = result.refresh_token
+        assert new_rt_str is not None
+        new_rt = await provider._redis_get(
+            f"mcp:refresh:{new_rt_str}", EveryRowRefreshToken
+        )
+        assert new_rt is not None
+        assert set(new_rt.scopes) == {"read", "write"}
