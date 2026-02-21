@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import lru_cache
 
 from pydantic import Field, field_validator, model_validator
@@ -11,30 +13,37 @@ class StdioSettings(BaseSettings):
     everyrow_api_key: str
 
 
-class HttpSettings(BaseSettings):
+class _BaseHttpSettings(BaseSettings):
+    """Common settings for HTTP transport modes (auth and no-auth)."""
+
     model_config = SettingsConfigDict(extra="ignore")
 
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
-    mcp_server_url: str
-    supabase_url: str
-    supabase_anon_key: str
-
     redis_host: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
     redis_db: int = Field(default=13)
     redis_password: str | None = Field(default=None)
-    redis_sentinel_endpoints: str | None = Field(
-        default=None, description="Comma-separated host:port pairs"
-    )
-    redis_sentinel_master_name: str | None = Field(default=None)
-
-    preview_size: int = Field(
-        default=5, description="Number of rows in the initial results preview"
-    )
+    preview_size: int = Field(default=5)
     token_budget: int = Field(
         default=20000,
         description="Target token budget per page of inline results",
     )
+
+    @field_validator("everyrow_api_url")
+    @classmethod
+    def _strip_api_url_slash(cls, v: str) -> str:
+        return v.rstrip("/")
+
+
+class HttpSettings(_BaseHttpSettings):
+    mcp_server_url: str
+    supabase_url: str
+    supabase_anon_key: str
+
+    redis_sentinel_endpoints: str | None = Field(
+        default=None, description="Comma-separated host:port pairs"
+    )
+    redis_sentinel_master_name: str | None = Field(default=None)
 
     registration_rate_limit: int = Field(
         default=10,
@@ -66,9 +75,9 @@ class HttpSettings(BaseSettings):
         description="Refresh token TTL in seconds (7 days)",
     )
 
-    @field_validator("everyrow_api_url", "mcp_server_url", "supabase_url")
+    @field_validator("mcp_server_url", "supabase_url")
     @classmethod
-    def _strip_trailing_slash(cls, v: str) -> str:
+    def _strip_url_slashes(cls, v: str) -> str:
         return v.rstrip("/")
 
     @field_validator(
@@ -98,33 +107,25 @@ class HttpSettings(BaseSettings):
         return self
 
 
-class DevHttpSettings(BaseSettings):
+class DevHttpSettings(_BaseHttpSettings):
     """Settings for --no-auth HTTP mode (local development only).
 
     Only requires EVERYROW_API_KEY. Redis defaults to localhost:6379:13.
     """
 
-    model_config = SettingsConfigDict(extra="ignore")
-
-    everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
     everyrow_api_key: str
-
-    redis_host: str = Field(default="localhost")
-    redis_port: int = Field(default=6379)
-    redis_db: int = Field(default=13)
-    redis_password: str | None = Field(default=None)
-
-    preview_size: int = Field(default=5)
-    token_budget: int = Field(
-        default=20000,
-        description="Target token budget per page of inline results",
-    )
 
 
 @lru_cache
-def _get_http_settings():
-    settings_instance = HttpSettings()  # pyright: ignore[reportCallIssue]
-    return settings_instance
+def _get_http_settings() -> HttpSettings:
+    return HttpSettings()
 
 
-http_settings = _get_http_settings()
+@lru_cache
+def _get_dev_http_settings() -> DevHttpSettings:
+    return DevHttpSettings()
+
+
+@lru_cache
+def _get_stdio_settings() -> StdioSettings:
+    return StdioSettings()

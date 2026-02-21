@@ -15,7 +15,11 @@ from everyrow.generated.client import AuthenticatedClient
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
-from everyrow_mcp.config import DevHttpSettings, HttpSettings, StdioSettings
+from everyrow_mcp.config import (
+    _get_dev_http_settings,
+    _get_http_settings,
+    _get_stdio_settings,
+)
 from everyrow_mcp.redis_utils import build_key
 
 logger = logging.getLogger(__name__)
@@ -178,9 +182,11 @@ class ServerState(BaseModel):
     client: AuthenticatedClient | None = None
     transport: Transport = Transport.STDIO
     mcp_server_url: str = ""
-    settings: StdioSettings | HttpSettings | DevHttpSettings | None = None
+    everyrow_api_url: str = "https://everyrow.io/api/v0"
+    preview_size: int = 5
     store: RedisStore | None = Field(default=None)
     auth_provider: Any | None = Field(default=None)
+    dev_mode: bool = False
 
     @property
     def is_stdio(self) -> bool:
@@ -189,6 +195,15 @@ class ServerState(BaseModel):
     @property
     def is_http(self) -> bool:
         return self.transport != Transport.STDIO
+
+    @property
+    def settings(self):
+        if self.transport == Transport.STDIO:
+            return _get_stdio_settings()
+        elif self.dev_mode:
+            return _get_dev_http_settings()
+        else:
+            return _get_http_settings()
 
 
 state = ServerState()

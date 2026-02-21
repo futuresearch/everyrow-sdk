@@ -19,7 +19,6 @@ import pytest
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.result_store import (
     _build_result_response,
     _format_columns,
@@ -46,23 +45,17 @@ def _http_state(fake_redis):
     orig = {
         "transport": state.transport,
         "store": state.store,
-        "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
     }
 
     state.transport = "streamable-http"
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = FAKE_SERVER_URL
-    state.settings = StdioSettings(
-        everyrow_api_key="test-key",
-        everyrow_api_url="https://everyrow.io/api/v0",
-    )
 
     yield
 
     state.transport = orig["transport"]
     state.store = orig["store"]
-    state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
 
 

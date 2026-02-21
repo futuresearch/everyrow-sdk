@@ -31,7 +31,6 @@ from mcp.shared.memory import create_connected_server_and_client_session
 # Import tools module to trigger @mcp.tool() registration on the FastMCP instance
 import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp.app import mcp as mcp_app
-from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.state import RedisStore, state
 
 # ── Fixtures / helpers ────────────────────────────────────────
@@ -43,7 +42,6 @@ def _http_state(fake_redis):
     orig = {
         "transport": state.transport,
         "store": state.store,
-        "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
         "client": state.client,
     }
@@ -51,16 +49,11 @@ def _http_state(fake_redis):
     state.transport = "streamable-http"
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = "http://testserver"
-    state.settings = StdioSettings(
-        everyrow_api_key="test-key",
-        everyrow_api_url="https://everyrow.io/api/v0",
-    )
 
     yield
 
     state.transport = orig["transport"]
     state.store = orig["store"]
-    state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
     state.client = orig["client"]
 

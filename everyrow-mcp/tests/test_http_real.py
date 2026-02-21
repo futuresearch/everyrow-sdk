@@ -31,7 +31,6 @@ from mcp.types import TextContent
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.models import AgentInput, ProgressInput, ResultsInput, ScreenInput
 from everyrow_mcp.routes import api_progress
 from everyrow_mcp.state import RedisStore, state
@@ -76,7 +75,6 @@ def _http_mode(real_redis):
     orig = {
         "transport": state.transport,
         "store": state.store,
-        "settings": state.settings,
         "mcp_server_url": state.mcp_server_url,
         "client": state.client,
     }
@@ -84,16 +82,11 @@ def _http_mode(real_redis):
     state.transport = "streamable-http"
     state.store = RedisStore(real_redis)
     state.mcp_server_url = "http://testserver"
-    state.settings = StdioSettings(
-        everyrow_api_key=os.environ.get("EVERYROW_API_KEY", ""),
-        everyrow_api_url="https://everyrow.io/api/v0",
-    )
 
     yield
 
     state.transport = orig["transport"]
     state.store = orig["store"]
-    state.settings = orig["settings"]
     state.mcp_server_url = orig["mcp_server_url"]
     state.client = orig["client"]
 

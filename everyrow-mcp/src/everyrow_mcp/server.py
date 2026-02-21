@@ -6,12 +6,7 @@ import os
 import sys
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
-from everyrow_mcp.app import (
-    _http_lifespan,
-    _no_auth_http_lifespan,
-    mcp,
-)
-from everyrow_mcp.config import StdioSettings
+from everyrow_mcp.app import mcp
 from everyrow_mcp.http_config import configure_http_mode
 
 # Re-export models, helpers, and tools so existing imports from
@@ -82,30 +77,25 @@ def main():
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
 
-    # Configure logging to use stderr only (stdout is reserved for JSON-RPC)
-    logging.basicConfig(
-        level=logging.WARNING,
-        stream=sys.stderr,
-        format="%(levelname)s: %(message)s",
-        force=True,
-    )
-
     if args.http:
         set_tool_descriptions("http")
-        lifespan = _no_auth_http_lifespan if args.no_auth else _http_lifespan
-        configure_http_mode(
-            mcp, lifespan, host=args.host, port=args.port, no_auth=args.no_auth
-        )
+        configure_http_mode(mcp, host=args.host, port=args.port, no_auth=args.no_auth)
         mcp.run(transport="streamable-http")
     else:
+        # Configure logging to use stderr only (stdout is reserved for JSON-RPC)
+        logging.basicConfig(
+            level=logging.WARNING,
+            stream=sys.stderr,
+            format="%(levelname)s: %(message)s",
+            force=True,
+        )
+
         state.transport = "stdio"
         set_tool_descriptions("stdio")
 
-        # Validate required env vars for stdio mode
-        try:
-            state.settings = StdioSettings()  # pyright: ignore[reportCallIssue]
-        except Exception as e:
-            logging.error(f"Configuration error: {e}")
+        # Validate EVERYROW_API_KEY is set (used by SDK client in lifespan)
+        if not os.environ.get("EVERYROW_API_KEY"):
+            logging.error("Configuration error: EVERYROW_API_KEY is required")
             logging.error("Get an API key at https://everyrow.io/api-key")
             sys.exit(1)
 

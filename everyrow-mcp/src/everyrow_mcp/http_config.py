@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sys
-from typing import Any
 from urllib.parse import urlparse
 
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -17,8 +15,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from everyrow_mcp.app import _http_lifespan, _no_auth_http_lifespan
 from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
-from everyrow_mcp.config import DevHttpSettings, HttpSettings
+from everyrow_mcp.config import _get_dev_http_settings, _get_http_settings
 from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_download, api_progress
@@ -30,22 +29,38 @@ logger = logging.getLogger(__name__)
 
 def configure_http_mode(
     mcp: FastMCP,
-    http_lifespan: Any,
     host: str,
     port: int,
     *,
     no_auth: bool = False,
 ) -> None:
     """Configure the MCP server for HTTP transport."""
-    state.transport = "streamable-http"
+    state.transport = "http"
+    state.dev_mode = no_auth
 
     if no_auth:
-        logger.warning("Running in --no-auth mode (development only)")
-        settings, redis_client = _load_settings_and_redis(DevHttpSettings)
-        auth_provider = None
+        settings = _get_dev_http_settings()
         mcp_server_url = f"http://localhost:{port}"
+        lifespan = _no_auth_http_lifespan
     else:
-        settings, redis_client = _load_settings_and_redis(HttpSettings, sentinel=True)
+        settings = _get_http_settings()
+        mcp_server_url = settings.mcp_server_url
+        lifespan = _http_lifespan
+
+    redis_client = create_redis_client(
+        host=settings.redis_host,
+        port=settings.redis_port,
+        db=settings.redis_db,
+        password=settings.redis_password,
+        sentinel_endpoints=getattr(settings, "redis_sentinel_endpoints", None),
+        sentinel_master_name=getattr(settings, "redis_sentinel_master_name", None),
+    )
+    state.store = RedisStore(redis_client)
+    state.everyrow_api_url = settings.everyrow_api_url
+    state.preview_size = settings.preview_size
+    state.mcp_server_url = mcp_server_url
+
+    if not no_auth:
         auth_provider = EveryRowAuthProvider(
             supabase_url=settings.supabase_url,
             supabase_anon_key=settings.supabase_anon_key,
@@ -54,113 +69,16 @@ def configure_http_mode(
         )
         state.auth_provider = auth_provider
         verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
-        _configure_mcp_auth(mcp, settings, auth_provider, verifier)
-        mcp_server_url = settings.mcp_server_url
+        _configure_mcp_auth(mcp, auth_provider, verifier)
+    else:
+        auth_provider = None
 
-    _configure_shared(
-        mcp,
-        http_lifespan,
-        host,
-        port,
-        mcp_server_url,
-        redis_client=redis_client,
-        no_auth=no_auth,
-        auth_provider=auth_provider,
-    )
-
-
-# ── Internal helpers ─────────────────────────────────────────────────
-
-
-def _load_settings_and_redis(
-    settings_cls: type,
-    *,
-    sentinel: bool = False,
-) -> tuple[Any, Redis]:
-    """Load settings from env and create a Redis client."""
-    try:
-        settings = settings_cls()  # pyright: ignore[reportCallIssue]
-    except Exception as e:
-        logging.error(f"HTTP mode configuration error: {e}")
-        sys.exit(1)
-
-    redis_client = create_redis_client(
-        host=settings.redis_host,
-        port=settings.redis_port,
-        db=settings.redis_db,
-        password=settings.redis_password,
-        sentinel_endpoints=getattr(settings, "redis_sentinel_endpoints", None)
-        if sentinel
-        else None,
-        sentinel_master_name=getattr(settings, "redis_sentinel_master_name", None)
-        if sentinel
-        else None,
-    )
-
-    state.settings = settings
-    state.store = RedisStore(redis_client)
-    return settings, redis_client
-
-
-def _configure_mcp_auth(
-    mcp: FastMCP,
-    settings: HttpSettings,
-    auth_provider: EveryRowAuthProvider,
-    verifier: SupabaseTokenVerifier,
-) -> None:
-    """Wire OAuth provider and JWT verifier into FastMCP."""
-    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
-    mcp._token_verifier = verifier
-    mcp.settings.auth = AuthSettings(
-        issuer_url=AnyHttpUrl(settings.mcp_server_url),
-        resource_server_url=AnyHttpUrl(settings.mcp_server_url),
-        client_registration_options=ClientRegistrationOptions(enabled=True),
-    )
-    hostname = urlparse(settings.mcp_server_url).hostname or "localhost"
-    mcp.settings.transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=[hostname],
-    )
-    logger.warning(
-        "Auth configured: issuer=%s resource_server=%s allowed_hosts=%s",
-        mcp.settings.auth.issuer_url,
-        mcp.settings.auth.resource_server_url,
-        mcp.settings.transport_security.allowed_hosts,
-    )
-
-
-def _ui_csp(connect_domains: list[str]) -> dict:
-    """Build a CSP policy for MCP App widgets."""
-    return {
-        "resourceDomains": ["https://unpkg.com"],
-        "connectDomains": connect_domains,
-    }
-
-
-def _configure_shared(
-    mcp: FastMCP,
-    http_lifespan: Any,
-    host: str,
-    port: int,
-    mcp_server_url: str,
-    *,
-    redis_client: Redis,
-    no_auth: bool = False,
-    auth_provider: EveryRowAuthProvider | None = None,
-) -> None:
-    """Configuration shared between auth and no-auth HTTP modes."""
-    mcp._mcp_server.lifespan = lifespan_wrapper(mcp, http_lifespan)
+    mcp._mcp_server.lifespan = lifespan_wrapper(mcp, lifespan)
     mcp.settings.host = host
     mcp.settings.port = port
-    state.mcp_server_url = mcp_server_url
 
     widget_csp = _ui_csp([mcp_server_url])
-
-    # Patch tool meta to include CSP
-    for tool_name in ("everyrow_progress", "everyrow_results"):
-        tool = mcp._tool_manager._tools.get(tool_name)
-        if tool and tool.meta and "ui" in tool.meta:
-            tool.meta["ui"]["csp"] = widget_csp
+    _patch_tool_csp(mcp, widget_csp)
 
     @mcp.resource(
         "ui://everyrow/session.html",
@@ -195,6 +113,49 @@ def _configure_shared(
 
     # Middleware
     _add_middleware(mcp, redis_client, rate_limit=not no_auth)
+
+
+def _configure_mcp_auth(
+    mcp: FastMCP,
+    auth_provider: EveryRowAuthProvider,
+    verifier: SupabaseTokenVerifier,
+) -> None:
+    """Wire OAuth provider and JWT verifier into FastMCP."""
+    settings = _get_http_settings()
+    mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
+    mcp._token_verifier = verifier
+    mcp.settings.auth = AuthSettings(
+        issuer_url=AnyHttpUrl(settings.mcp_server_url),
+        resource_server_url=AnyHttpUrl(settings.mcp_server_url),
+        client_registration_options=ClientRegistrationOptions(enabled=True),
+    )
+    hostname = urlparse(settings.mcp_server_url).hostname or "localhost"
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[hostname],
+    )
+    logger.warning(
+        "Auth configured: issuer=%s resource_server=%s allowed_hosts=%s",
+        mcp.settings.auth.issuer_url,
+        mcp.settings.auth.resource_server_url,
+        mcp.settings.transport_security.allowed_hosts,
+    )
+
+
+def _patch_tool_csp(mcp: FastMCP, csp: dict) -> None:
+    """Patch CSP policy onto tool metadata for MCP App widgets."""
+    for tool_name in ("everyrow_progress", "everyrow_results"):
+        tool = mcp._tool_manager._tools.get(tool_name)
+        if tool and tool.meta and "ui" in tool.meta:
+            tool.meta["ui"]["csp"] = csp
+
+
+def _ui_csp(connect_domains: list[str]) -> dict:
+    """Build a CSP policy for MCP App widgets."""
+    return {
+        "resourceDomains": ["https://unpkg.com"],
+        "connectDomains": connect_domains,
+    }
 
 
 def _add_middleware(

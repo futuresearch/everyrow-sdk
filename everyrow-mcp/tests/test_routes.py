@@ -14,7 +14,6 @@ from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 
-from everyrow_mcp.config import StdioSettings
 from everyrow_mcp.routes import api_progress
 from everyrow_mcp.state import RedisStore, state
 
@@ -72,15 +71,9 @@ def _make_status_response(
 async def setup_state(fake_redis):
     """Temporarily wire state to mock Redis and restore after test."""
     original_store = state.store
-    original_settings = state.settings
     state.store = RedisStore(fake_redis)
-    state.settings = StdioSettings(
-        everyrow_api_key="test-key",
-        everyrow_api_url="https://everyrow.io/api/v0",
-    )
     yield
     state.store = original_store
-    state.settings = original_settings
 
 
 # ── api_progress tests ─────────────────────────────────────────
