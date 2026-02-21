@@ -10,6 +10,7 @@ import json
 import logging
 import secrets
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -28,13 +29,24 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 from everyrow.generated.models.task_status import TaskStatus
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context
+from mcp.server.session import ServerSession
 from mcp.types import TextContent
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
 # A ClientFactory is a zero-arg callable that returns an AuthenticatedClient.
-# Lifespans yield one of these; tools retrieve it via Context.
 ClientFactory = Callable[[], AuthenticatedClient]
+
+
+@dataclass
+class SessionContext:
+    """Per-session lifespan context yielded by all lifespans."""
+
+    client_factory: ClientFactory
+
+
+# Typed Context alias — gives type checkers visibility into lifespan_context.
+EveryRowContext = Context[ServerSession, SessionContext]
 
 
 def make_singleton_client_factory(client: AuthenticatedClient) -> ClientFactory:
@@ -63,10 +75,9 @@ def make_http_auth_client_factory() -> ClientFactory:
     return factory
 
 
-def _get_client(ctx: Context) -> AuthenticatedClient:
+def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
     """Get an EveryRow API client from the FastMCP lifespan context."""
-    factory: ClientFactory = ctx.request_context.lifespan_context
-    return factory()
+    return ctx.request_context.lifespan_context.client_factory()
 
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:

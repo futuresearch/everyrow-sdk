@@ -51,7 +51,7 @@ from everyrow_mcp.models import (
 )
 from everyrow_mcp.state import Transport, state
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
-from everyrow_mcp.tool_helpers import make_singleton_client_factory
+from everyrow_mcp.tool_helpers import SessionContext, make_singleton_client_factory
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_dedupe,
@@ -716,7 +716,7 @@ async def _stdio_mcp_client(sdk_client):
 
     @asynccontextmanager
     async def _noop_lifespan(_server):
-        yield make_singleton_client_factory(sdk_client)
+        yield SessionContext(client_factory=make_singleton_client_factory(sdk_client))
 
     mcp_app._mcp_server.lifespan = lifespan_wrapper(mcp_app, _noop_lifespan)
 

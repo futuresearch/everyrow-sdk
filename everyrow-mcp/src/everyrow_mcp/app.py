@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from everyrow_mcp.state import TASK_STATE_FILE, state
 from everyrow_mcp.templates import PROGRESS_HTML, UI_CSP_META
 from everyrow_mcp.tool_helpers import (
+    SessionContext,
     make_http_auth_client_factory,
     make_singleton_client_factory,
 )
@@ -34,7 +35,7 @@ async def _stdio_lifespan(_server: FastMCP):
             response = await get_billing(client=client)
             if response is None:
                 raise RuntimeError("Failed to authenticate with everyrow API")
-            yield make_singleton_client_factory(client)
+            yield SessionContext(client_factory=make_singleton_client_factory(client))
     except Exception as e:
         logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
         raise
@@ -53,7 +54,7 @@ async def _http_lifespan(_server: FastMCP):
     log = logging.getLogger(__name__)
     await state.store.ping()
     log.info("Redis health check passed")
-    yield make_http_auth_client_factory()
+    yield SessionContext(client_factory=make_http_auth_client_factory())
 
 
 @asynccontextmanager
@@ -64,7 +65,7 @@ async def _no_auth_http_lifespan(_server: FastMCP):
         response = await get_billing(client=client)
         if response is None:
             raise RuntimeError("Failed to authenticate with everyrow API")
-        yield make_singleton_client_factory(client)
+        yield SessionContext(client_factory=make_singleton_client_factory(client))
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)

@@ -21,7 +21,6 @@ from everyrow.ops import (
     single_agent_async,
 )
 from everyrow.session import create_session, get_session_url
-from mcp.server.fastmcp import Context
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
@@ -40,6 +39,7 @@ from everyrow_mcp.models import (
 from everyrow_mcp.result_store import try_cached_result, try_store_result
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
+    EveryRowContext,
     TaskNotReady,
     _fetch_task_result,
     _get_client,
@@ -60,7 +60,7 @@ from everyrow_mcp.utils import load_csv, save_result_to_csv
         openWorldHint=True,
     ),
 )
-async def everyrow_agent(params: AgentInput, ctx: Context) -> list[TextContent]:
+async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextContent]:
     """Run web research agents on each row of a CSV file.
 
     The dispatched agents will search the web, read pages, and return the
@@ -130,7 +130,7 @@ async def everyrow_agent(params: AgentInput, ctx: Context) -> list[TextContent]:
     ),
 )
 async def everyrow_single_agent(
-    params: SingleAgentInput, ctx: Context
+    params: SingleAgentInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Run a single web research agent on a task, optionally with context data.
 
@@ -204,7 +204,7 @@ async def everyrow_single_agent(
         openWorldHint=True,
     ),
 )
-async def everyrow_rank(params: RankInput, ctx: Context) -> list[TextContent]:
+async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextContent]:
     """Score and sort rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to rank the entities in the
@@ -285,7 +285,9 @@ async def everyrow_rank(params: RankInput, ctx: Context) -> list[TextContent]:
         openWorldHint=True,
     ),
 )
-async def everyrow_screen(params: ScreenInput, ctx: Context) -> list[TextContent]:
+async def everyrow_screen(
+    params: ScreenInput, ctx: EveryRowContext
+) -> list[TextContent]:
     """Filter rows in a CSV file based on any criteria.
 
     Dispatches web agents to research the criteria to filter the entities in the
@@ -368,7 +370,9 @@ async def everyrow_screen(params: ScreenInput, ctx: Context) -> list[TextContent
         openWorldHint=True,
     ),
 )
-async def everyrow_dedupe(params: DedupeInput, ctx: Context) -> list[TextContent]:
+async def everyrow_dedupe(
+    params: DedupeInput, ctx: EveryRowContext
+) -> list[TextContent]:
     """Remove duplicate rows from a CSV file using semantic equivalence.
 
     Dedupe identifies rows that represent the same entity even when they
@@ -443,7 +447,7 @@ async def everyrow_dedupe(params: DedupeInput, ctx: Context) -> list[TextContent
         openWorldHint=True,
     ),
 )
-async def everyrow_merge(params: MergeInput, ctx: Context) -> list[TextContent]:
+async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextContent]:
     """Join two CSV files using intelligent entity matching.
 
     Merge combines two tables even when keys don't match exactly. Uses LLM web
@@ -543,7 +547,7 @@ async def everyrow_merge(params: MergeInput, ctx: Context) -> list[TextContent]:
 # NOTE: This docstring is overridden at startup by set_tool_descriptions().
 async def everyrow_progress(  # noqa: PLR0912, PLR0915
     params: ProgressInput,
-    ctx: Context,
+    ctx: EveryRowContext,
 ) -> list[TextContent]:
     """Check progress of a running task. Blocks for a time to limit the polling rate.
 
@@ -692,7 +696,9 @@ async def everyrow_progress(  # noqa: PLR0912, PLR0915
     meta={"ui": {"resourceUri": "ui://everyrow/results.html"}},
 )
 # NOTE: This docstring is overridden at startup by set_tool_descriptions().
-async def everyrow_results(params: ResultsInput, ctx: Context) -> list[TextContent]:  # noqa: PLR0911
+async def everyrow_results(  # noqa: PLR0911
+    params: ResultsInput, ctx: EveryRowContext
+) -> list[TextContent]:
     """Retrieve results from a completed everyrow task and save them to a CSV.
 
     Only call this after everyrow_progress reports status 'completed'.

@@ -21,6 +21,8 @@ import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
+from everyrow_mcp.tool_helpers import SessionContext
+
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
 
 
@@ -69,10 +71,9 @@ async def fake_redis(_redis_server) -> aioredis.Redis:
 
 
 def make_test_context(client):
-    """Create a mock MCP Context with a client factory for testing."""
-    factory = lambda: client  # noqa: E731
+    """Create a mock MCP Context with a SessionContext for testing."""
     ctx = MagicMock()
-    ctx.request_context.lifespan_context = factory
+    ctx.request_context.lifespan_context = SessionContext(client_factory=lambda: client)
     return ctx
 
 
