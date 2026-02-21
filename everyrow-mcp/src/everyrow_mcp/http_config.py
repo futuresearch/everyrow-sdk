@@ -60,7 +60,8 @@ def _configure_auth(
 ) -> None:
     """Full OAuth HTTP mode -- our server is the authorization server."""
     settings = http_settings
-    state.settings = settings
+    state.everyrow_api_url = settings.everyrow_api_url
+    state.preview_size = settings.preview_size
 
     redis_client = create_redis_client(
         host=settings.redis_host,
@@ -129,7 +130,8 @@ def _configure_no_auth(
     except Exception as e:
         logging.error(f"--no-auth configuration error: {e}")
         sys.exit(1)
-    state.settings = settings
+    state.everyrow_api_url = settings.everyrow_api_url
+    state.preview_size = settings.preview_size
 
     redis_client = create_redis_client(
         host=settings.redis_host,

@@ -41,10 +41,8 @@ async def api_progress(request: Request) -> Any:
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
 
     try:
-        if state.settings is None:
-            raise RuntimeError("MCP server not initialized")
         client = AuthenticatedClient(
-            base_url=state.settings.everyrow_api_url,
+            base_url=state.everyrow_api_url,
             token=api_key,
             raise_on_unexpected_status=True,
             follow_redirects=True,

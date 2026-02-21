@@ -71,9 +71,7 @@ def _build_result_response(
 
     if has_more:
         page_size_arg = (
-            f", page_size={page_size}"
-            if page_size != getattr(state.settings, "preview_size", 5)
-            else ""
+            f", page_size={page_size}" if page_size != state.preview_size else ""
         )
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
