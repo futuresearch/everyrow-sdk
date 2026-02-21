@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -64,6 +66,11 @@ class HttpSettings(BaseSettings):
         description="Refresh token TTL in seconds (7 days)",
     )
 
+    @field_validator("everyrow_api_url", "mcp_server_url", "supabase_url")
+    @classmethod
+    def _strip_trailing_slash(cls, v: str) -> str:
+        return v.rstrip("/")
+
     @field_validator(
         "registration_rate_limit",
         "registration_rate_window",
@@ -112,3 +119,12 @@ class DevHttpSettings(BaseSettings):
         default=20000,
         description="Target token budget per page of inline results",
     )
+
+
+@lru_cache
+def _get_http_settings():
+    settings_instance = HttpSettings()  # pyright: ignore[reportCallIssue]
+    return settings_instance
+
+
+http_settings = _get_http_settings()

@@ -1,7 +1,3 @@
-"""OAuth 2.1 authorization provider for the EveryRow MCP server."""
-
-from __future__ import annotations
-
 import asyncio
 import base64
 import hashlib
@@ -24,9 +20,11 @@ from mcp.server.auth.provider import (
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import RedirectResponse, Response
+from starlette.responses import RedirectResponse
 
+from everyrow_mcp.config import http_settings
 from everyrow_mcp.redis_utils import build_key
 
 if TYPE_CHECKING:
@@ -61,15 +59,6 @@ class SupabaseTokenVerifier(TokenVerifier):
     @staticmethod
     def _token_fingerprint(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
-
-    async def deny_token(self, token: str) -> bool:
-        try:
-            key = build_key("revoked", self._token_fingerprint(token))
-            await self._redis.setex(key, self._revocation_ttl, "1")
-            return True
-        except Exception:
-            logger.warning("Failed to deny token (Redis unavailable)", exc_info=True)
-            return False
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
@@ -116,7 +105,7 @@ class EveryRowAuthorizationCode(AuthorizationCode):
     """Extends AuthorizationCode with the user's Supabase access token."""
 
     supabase_access_token: str
-    supabase_refresh_token: str = ""
+    supabase_refresh_token: str
 
 
 class EveryRowRefreshToken(RefreshToken):
@@ -125,13 +114,20 @@ class EveryRowRefreshToken(RefreshToken):
     supabase_refresh_token: str
 
 
+class SupabaseTokenResponse(BaseModel):
+    """Response from Supabase token exchange."""
+
+    access_token: str
+    refresh_token: str
+
+
 class PendingAuth(BaseModel):
     """Saved between /authorize and /auth/callback."""
 
     client_id: str
     params: AuthorizationParams
-    supabase_code_verifier: str = ""
-    supabase_redirect_url: str = ""
+    supabase_code_verifier: str
+    supabase_redirect_url: str
 
 
 # ── OAuth provider ────────────────────────────────────────────────────
@@ -162,54 +158,18 @@ class EveryRowAuthProvider(
         EveryRowAuthorizationCode, EveryRowRefreshToken, AccessToken
     ]
 ):
-    """OAuth provider: handles registration + auth flow, delegates login to Supabase.
-
-    Issues the Supabase JWT directly as the MCP access token.
-    Token verification is handled by SupabaseTokenVerifier (JWKS), not by
-    load_access_token.
-    """
-
     def __init__(
         self,
-        supabase_url: str,
-        supabase_anon_key: str,
-        mcp_server_url: str,
         redis: Redis,
-        *,
-        token_verifier: SupabaseTokenVerifier | None = None,
-        rate_limit: int = 10,
-        rate_window: int = 60,
-        access_token_ttl: int = 3300,
-        auth_code_ttl: int = 300,
-        pending_auth_ttl: int = 600,
-        client_registration_ttl: int = 2_592_000,
-        refresh_token_ttl: int = 604_800,
+        token_verifier: SupabaseTokenVerifier,
     ) -> None:
-        self.supabase_url = supabase_url.rstrip("/")
-        self.supabase_anon_key = supabase_anon_key
-        self.mcp_server_url = mcp_server_url.rstrip("/")
         self._redis = redis
         self._token_verifier = token_verifier
-        self._rate_limit = rate_limit
-        self._rate_window = rate_window
-        self._access_token_ttl = access_token_ttl
-        self._auth_code_ttl = auth_code_ttl
-        self._pending_auth_ttl = pending_auth_ttl
-        self._client_registration_ttl = client_registration_ttl
-        self._refresh_token_ttl = refresh_token_ttl
-        self._http = httpx.AsyncClient(
+        self._http_client = httpx.AsyncClient(
             timeout=httpx.Timeout(10.0),
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
 
-    async def close(self) -> None:
-        await self._http.aclose()
-
-    # ── Helpers ─────────────────────────────────────────────────
-
-    # SECURITY: This method skips signature verification. It MUST only be
-    # called on tokens received directly from Supabase's token endpoint via
-    # server-to-server HTTPS exchange. NEVER pass user-supplied tokens here.
     @staticmethod
     def _UNSAFE_decode_server_jwt(token: str) -> dict[str, Any]:
         """Decode a Supabase JWT received from a trusted server-to-server exchange.
@@ -220,13 +180,19 @@ class EveryRowAuthProvider(
         """
         return pyjwt.decode(token, options={"verify_signature": False})
 
+    @staticmethod
+    def _client_ip(request: Request) -> str:
+        if request.client is None:
+            raise HTTPException(status_code=400, detail="Missing client IP")
+        return request.client.host
+
     async def _check_rate_limit(self, action: str, client_ip: str) -> None:
-        rl_key = build_key("ratelimit", action, client_ip or "global")
+        rl_key = build_key("ratelimit", action, client_ip)
         pipe = self._redis.pipeline()
         pipe.incr(rl_key)
-        pipe.expire(rl_key, self._rate_window)
+        pipe.expire(rl_key, http_settings.registration_rate_window)
         count, _ = await pipe.execute()
-        if count > self._rate_limit:
+        if count > http_settings.registration_rate_limit:
             raise ValueError(f"{action.title()} rate limit exceeded")
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
@@ -237,104 +203,61 @@ class EveryRowAuthProvider(
         return OAuthClientInformationFull.model_validate_json(client_data)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        cid = client_info.client_id
-        if cid is None:
+        if not client_info.client_id:
             raise ValueError("client_id is required")
         await self._redis.setex(
-            name=build_key("client", cid),
-            time=self._client_registration_ttl,
+            name=build_key("client", client_info.client_id),
+            time=http_settings.client_registration_ttl,
             value=client_info.model_dump_json(),
         )
 
-    async def authorize(
-        self,
-        client: OAuthClientInformationFull,
-        params: AuthorizationParams,
-    ) -> str:
-        if client.redirect_uris:
-            if str(params.redirect_uri) not in [str(u) for u in client.redirect_uris]:
-                raise ValueError("redirect_uri does not match any registered URI")
-
-        state = secrets.token_urlsafe(32)
-
-        # Generate PKCE pair for the Supabase leg
-        supabase_verifier = secrets.token_urlsafe(32)
+    def _supabase_redirect_url(self, supabase_verifier: str) -> str:
         challenge_bytes = hashlib.sha256(supabase_verifier.encode()).digest()
         supabase_challenge = (
             base64.urlsafe_b64encode(challenge_bytes).rstrip(b"=").decode()
         )
+        return f"{http_settings.supabase_url}/auth/v1/authorize?{
+            urlencode(
+                {
+                    'provider': 'google',
+                    'redirect_to': f'{http_settings.mcp_server_url}/auth/callback',
+                    'flow_type': 'pkce',
+                    'code_challenge': supabase_challenge,
+                    'code_challenge_method': 's256',
+                }
+            )
+        }"
 
-        supabase_params = {
-            "provider": "google",
-            "redirect_to": f"{self.mcp_server_url}/auth/callback",
-            "flow_type": "pkce",
-            "code_challenge": supabase_challenge,
-            "code_challenge_method": "s256",
-        }
-        supabase_redirect_url = (
-            f"{self.supabase_url}/auth/v1/authorize?{urlencode(supabase_params)}"
-        )
+    # ── Validators ─────────────────────────────────────────────
 
-        pending = PendingAuth(
-            client_id=client.client_id or "",
-            params=params,
-            supabase_code_verifier=supabase_verifier,
-            supabase_redirect_url=supabase_redirect_url,
-        )
-        await self._redis.setex(
-            name=build_key("pending", state),
-            time=self._pending_auth_ttl,
-            value=pending.model_dump_json(),
-        )
-        return f"{self.mcp_server_url}/auth/start/{state}"
+    def _validate_redirect_url(
+        self, client: OAuthClientInformationFull, params: AuthorizationParams
+    ) -> None:
+        if client.redirect_uris:
+            if str(params.redirect_uri) not in [str(u) for u in client.redirect_uris]:
+                raise ValueError("redirect_uri does not match any registered URI")
 
-    async def handle_start(self, request: Request) -> Response:
-        client_ip = request.client.host if request.client else "unknown"
+    async def _validate_auth_request(
+        self, request: Request, action: str, state: str | None, *, consume: bool = False
+    ) -> PendingAuth:
+        """Rate-limit, validate state, load PendingAuth. Raises HTTPException on error."""
         try:
-            await self._check_rate_limit("start", client_ip)
+            await self._check_rate_limit(action, self._client_ip(request))
         except ValueError:
-            return Response("Rate limit exceeded", status_code=429)
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-        state = request.path_params.get("state")
         if not state:
-            return Response("Missing state", status_code=400)
+            raise HTTPException(status_code=400, detail="Missing state")
 
-        _key = build_key("pending", state)
-        pending_data = await self._redis.get(_key)
-        if pending_data is None:
-            return Response("Invalid state", status_code=400)
-        pending = PendingAuth.model_validate_json(pending_data)
-
-        response = RedirectResponse(url=pending.supabase_redirect_url, status_code=302)
-        response.set_cookie(
-            key="mcp_auth_state",
-            value=state,
-            max_age=self._pending_auth_ttl,
-            httponly=True,
-            samesite="lax",
-            secure=self.mcp_server_url.startswith("https"),
-            path="/auth/callback",
+        key = build_key("pending", state)
+        pending_data = (
+            await self._redis.getdel(key) if consume else await self._redis.get(key)
         )
-        return response
-
-    async def handle_callback(self, request: Request) -> Response:
-        client_ip = request.client.host if request.client else "unknown"
-        try:
-            await self._check_rate_limit("callback", client_ip)
-        except ValueError:
-            return Response("Rate limit exceeded", status_code=429)
-
-        code = request.query_params.get("code")
-        state = request.cookies.get("mcp_auth_state")
-        if not code or not state:
-            return Response("Missing code or state cookie", status_code=400)
-
-        _key = build_key("pending", state)
-        pending_data = await self._redis.getdel(_key)
         if pending_data is None:
-            return Response("No pending authorization found", status_code=400)
-        pending = PendingAuth.model_validate_json(pending_data)
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+        return PendingAuth.model_validate_json(pending_data)
 
+    async def _validate_client(self, pending: PendingAuth) -> None:
         client_info = await self.get_client(pending.client_id)
         if client_info is None or (
             pending.params.redirect_uri
@@ -342,25 +265,97 @@ class EveryRowAuthProvider(
             and str(pending.params.redirect_uri)
             not in [str(u) for u in client_info.redirect_uris]
         ):
-            if client_info is not None:
-                logger.warning(
-                    "redirect_uri mismatch for client %s in callback",
-                    pending.client_id,
-                )
-            return Response("Invalid client or redirect_uri", status_code=400)
+            raise HTTPException(
+                status_code=400, detail="Invalid client or redirect_uri"
+            )
 
+    async def _validate_supabase_code(
+        self, code: str, supabase_code_verifier: str
+    ) -> SupabaseTokenResponse:
         try:
-            (
-                _user_id,
-                _email,
-                supabase_access_token,
-                supabase_refresh,
-            ) = await self._exchange_supabase_code(
-                code, code_verifier=pending.supabase_code_verifier
+            return await self._exchange_supabase_code(
+                code=code, code_verifier=supabase_code_verifier
             )
         except Exception:
             logger.exception("Failed to exchange Supabase code")
-            return Response("Failed to authenticate with Supabase", status_code=500)
+            raise HTTPException(
+                status_code=500, detail="Failed to authenticate with Supabase"
+            )
+
+    async def _validate_callback_request(
+        self, request: Request
+    ) -> tuple[PendingAuth, SupabaseTokenResponse]:
+        code = request.query_params.get("code")
+        state = request.cookies.get("mcp_auth_state")
+        if not code:
+            raise HTTPException(status_code=400, detail="Missing code")
+        pending = await self._validate_auth_request(
+            request, "callback", state, consume=True
+        )
+
+        await self._validate_client(pending)
+        supa_tokens = await self._validate_supabase_code(
+            code, pending.supabase_code_verifier
+        )
+        return pending, supa_tokens
+
+    @staticmethod
+    def _validate_scopes(
+        scopes: list[str], refresh_token: EveryRowRefreshToken
+    ) -> list[str]:
+        if scopes:
+            narrowed = list(set(scopes) & set(refresh_token.scopes))
+            if not narrowed:
+                raise ValueError(
+                    "Requested scopes have no overlap with the original grant"
+                )
+            return narrowed
+        return refresh_token.scopes
+
+    # ── Handlers ───────────────────────────────────────────────
+
+    async def authorize(
+        self,
+        client: OAuthClientInformationFull,
+        params: AuthorizationParams,
+    ) -> str:
+        self._validate_redirect_url(client, params)
+
+        state = secrets.token_urlsafe(32)
+        supabase_verifier = secrets.token_urlsafe(32)
+
+        pending = PendingAuth(
+            client_id=client.client_id,
+            params=params,
+            supabase_code_verifier=supabase_verifier,
+            supabase_redirect_url=self._supabase_redirect_url(supabase_verifier),
+        )
+        await self._redis.setex(
+            name=build_key("pending", state),
+            time=http_settings.pending_auth_ttl,
+            value=pending.model_dump_json(),
+        )
+        return f"{http_settings.mcp_server_url}/auth/start/{state}"
+
+    async def handle_start(self, request: Request) -> RedirectResponse:
+        pending = await self._validate_auth_request(
+            request, "start", request.path_params.get("state")
+        )
+
+        response = RedirectResponse(url=pending.supabase_redirect_url, status_code=302)
+        response.set_cookie(
+            key="mcp_auth_state",
+            value=request.path_params.get("state"),
+            max_age=http_settings.pending_auth_ttl,
+            httponly=True,
+            samesite="lax",
+            secure=http_settings.mcp_server_url.startswith("https"),
+            path="/auth/callback",
+        )
+        return response
+
+    async def handle_callback(self, request: Request) -> RedirectResponse:
+        pending, supa_tokens = await self._validate_callback_request(request)
 
         auth_code_str = secrets.token_urlsafe(32)
         auth_code_obj = EveryRowAuthorizationCode(
@@ -370,14 +365,14 @@ class EveryRowAuthProvider(
             redirect_uri_provided_explicitly=pending.params.redirect_uri_provided_explicitly,
             code_challenge=pending.params.code_challenge,
             scopes=pending.params.scopes or [],
-            expires_at=time.time() + self._auth_code_ttl,
+            expires_at=time.time() + http_settings.auth_code_ttl,
             resource=pending.params.resource,
-            supabase_access_token=supabase_access_token,
-            supabase_refresh_token=supabase_refresh,
+            supabase_access_token=supa_tokens.access_token,
+            supabase_refresh_token=supa_tokens.refresh_token,
         )
         await self._redis.setex(
             name=build_key("authcode", auth_code_str),
-            time=self._auth_code_ttl,
+            time=http_settings.auth_code_ttl,
             value=auth_code_obj.model_dump_json(),
         )
 
@@ -393,7 +388,7 @@ class EveryRowAuthProvider(
             path="/auth/callback",
             httponly=True,
             samesite="lax",
-            secure=self.mcp_server_url.startswith("https"),
+            secure=http_settings.mcp_server_url.startswith("https"),
         )
         return response
 
@@ -424,20 +419,18 @@ class EveryRowAuthProvider(
         )
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
-        refresh_token_str: str | None = None
-        if authorization_code.supabase_refresh_token:
-            refresh_token_str = secrets.token_urlsafe(32)
-            rt = EveryRowRefreshToken(
-                token=refresh_token_str,
-                client_id=client.client_id or "",
-                scopes=authorization_code.scopes,
-                supabase_refresh_token=authorization_code.supabase_refresh_token,
-            )
-            await self._redis.setex(
-                name=build_key("refresh", refresh_token_str),
-                time=self._refresh_token_ttl,
-                value=rt.model_dump_json(),
-            )
+        refresh_token_str = secrets.token_urlsafe(32)
+        rt = EveryRowRefreshToken(
+            token=refresh_token_str,
+            client_id=client.client_id,
+            scopes=authorization_code.scopes,
+            supabase_refresh_token=authorization_code.supabase_refresh_token,
+        )
+        await self._redis.setex(
+            name=build_key("refresh", refresh_token_str),
+            time=http_settings.refresh_token_ttl,
+            value=rt.model_dump_json(),
+        )
 
         return OAuthToken(
             access_token=authorization_code.supabase_access_token,
@@ -455,10 +448,7 @@ class EveryRowAuthProvider(
         if len(refresh_token) > 256:
             return None
 
-        # Atomic GETDEL: prevents race condition where two concurrent refresh
-        # requests both succeed with the same token, defeating rotation.
-        key = build_key("refresh", refresh_token)
-        data = await self._redis.getdel(key)
+        data = await self._redis.getdel(build_key("refresh", refresh_token))
         if data is None:
             return None
         rt = EveryRowRefreshToken.model_validate_json(data)
@@ -472,41 +462,29 @@ class EveryRowAuthProvider(
         refresh_token: EveryRowRefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        # Old refresh token already consumed atomically in load_refresh_token (GETDEL)
-        new_jwt, new_supabase_refresh = await self._refresh_supabase_token(
+        final_scopes = self._validate_scopes(scopes, refresh_token)
+        supa_tokens = await self._refresh_supabase_token(
             refresh_token.supabase_refresh_token
         )
 
-        jwt_claims = self._UNSAFE_decode_server_jwt(new_jwt)
+        jwt_claims = self._UNSAFE_decode_server_jwt(supa_tokens.access_token)
         expires_in = max(0, jwt_claims.get("exp", 0) - int(time.time()))
 
-        # OAuth 2.1 §6.3: requested scopes must not exceed original grant.
-        if scopes:
-            narrowed = list(set(scopes) & set(refresh_token.scopes))
-            if not narrowed:
-                raise ValueError(
-                    "Requested scopes have no overlap with the original grant"
-                )
-            final_scopes = narrowed
-        else:
-            final_scopes = refresh_token.scopes
-
-        # Issue new refresh token
         new_rt_str = secrets.token_urlsafe(32)
         new_rt = EveryRowRefreshToken(
             token=new_rt_str,
-            client_id=client.client_id or "",
+            client_id=client.client_id,
             scopes=final_scopes,
-            supabase_refresh_token=new_supabase_refresh,
+            supabase_refresh_token=supa_tokens.refresh_token,
         )
         await self._redis.setex(
             name=build_key("refresh", new_rt_str),
-            time=self._refresh_token_ttl,
+            time=http_settings.refresh_token_ttl,
             value=new_rt.model_dump_json(),
         )
 
         return OAuthToken(
-            access_token=new_jwt,
+            access_token=supa_tokens.access_token,
             token_type="Bearer",
             expires_in=expires_in,
             refresh_token=new_rt_str,
@@ -515,41 +493,46 @@ class EveryRowAuthProvider(
     async def revoke_token(self, token: AccessToken | EveryRowRefreshToken) -> None:
         if isinstance(token, EveryRowRefreshToken):
             await self._redis.delete(build_key("refresh", token.token))
-        elif isinstance(token, AccessToken) and self._token_verifier is not None:
-            await self._token_verifier.deny_token(token.token)
+        elif isinstance(token, AccessToken):
+            fp = SupabaseTokenVerifier._token_fingerprint(token.token)
+            await self._redis.setex(
+                name=build_key("revoked", fp),
+                time=self._token_verifier._revocation_ttl,
+                value="1",
+            )
 
     async def _exchange_supabase_code(
-        self, code: str, code_verifier: str = ""
-    ) -> tuple[str, str, str, str]:
-        resp = await self._http.post(
-            f"{self.supabase_url}/auth/v1/token?grant_type=pkce",
+        self, code: str, code_verifier: str
+    ) -> SupabaseTokenResponse:
+        resp = await self._http_client.post(
+            f"{http_settings.supabase_url}/auth/v1/token?grant_type=pkce",
             json={"auth_code": code, "code_verifier": code_verifier},
             headers={
-                "apikey": self.supabase_anon_key,
+                "apikey": http_settings.supabase_anon_key,
                 "Content-Type": "application/json",
             },
         )
         resp.raise_for_status()
         data = resp.json()
-        user = data["user"]
-        return (
-            user["id"],
-            user.get("email", ""),
-            data["access_token"],
-            data["refresh_token"],
+        return SupabaseTokenResponse(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
         )
 
     async def _refresh_supabase_token(
         self, supabase_refresh_token: str
-    ) -> tuple[str, str]:
-        resp = await self._http.post(
-            f"{self.supabase_url}/auth/v1/token?grant_type=refresh_token",
+    ) -> SupabaseTokenResponse:
+        resp = await self._http_client.post(
+            f"{http_settings.supabase_url}/auth/v1/token?grant_type=refresh_token",
             json={"refresh_token": supabase_refresh_token},
             headers={
-                "apikey": self.supabase_anon_key,
+                "apikey": http_settings.supabase_anon_key,
                 "Content-Type": "application/json",
             },
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["access_token"], data["refresh_token"]
+        return SupabaseTokenResponse(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
+        )

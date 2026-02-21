@@ -1,6 +1,7 @@
 """Tests for Supabase JWT verification and EveryRowAuthProvider."""
 
 import asyncio
+import hashlib
 import secrets
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -19,15 +20,16 @@ from everyrow_mcp.auth import (
     EveryRowAuthorizationCode,
     EveryRowAuthProvider,
     EveryRowRefreshToken,
+    SupabaseTokenResponse,
     SupabaseTokenVerifier,
 )
 
-# TTL/rate-limit defaults matching EveryRowAuthProvider's __init__ defaults.
-# These are now configurable via HttpSettings; tests use the defaults.
+# TTL/rate-limit defaults matching HttpSettings defaults.
 _AUTH_CODE_TTL = 300
 
 SUPABASE_URL = "https://test.supabase.co"
 ISSUER = SUPABASE_URL + "/auth/v1"
+MCP_SERVER_URL = "https://mcp.example.com"
 
 
 # ── Verifier fixtures ────────────────────────────────────────────────
@@ -248,30 +250,21 @@ class TestSupabaseTokenVerifier:
 
 class TestTokenDenyList:
     @pytest.mark.asyncio
-    async def test_deny_adds_to_denylist(self, verifier, mock_redis):
-        """deny_token stores a fingerprint key in Redis."""
-        token = "some-token"
-        result = await verifier.deny_token(token)
-
-        assert result is True
-        assert len(mock_redis._store) == 1
-        key = next(iter(mock_redis._store))
-        assert key.startswith("mcp:revoked:")
-
-    @pytest.mark.asyncio
-    async def test_denied_token_rejected(self, verifier, rsa_keypair):
-        """A denied token is rejected by verify_token."""
+    async def test_revoked_token_rejected(self, verifier, rsa_keypair, mock_redis):
+        """A revoked token is rejected by verify_token."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
-        await verifier.deny_token(token)
-        result = await verifier.verify_token(token)
+        # Write revocation entry directly to Redis (same logic as revoke_token)
+        fingerprint = hashlib.sha256(token.encode()).hexdigest()
+        await mock_redis.setex(f"mcp:revoked:{fingerprint}", 3600, "1")
 
+        result = await verifier.verify_token(token)
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_non_denied_token_passes(self, verifier, rsa_keypair):
-        """A token that has not been denied passes verification."""
+    async def test_non_revoked_token_passes(self, verifier, rsa_keypair):
+        """A token that has not been revoked passes verification."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
@@ -281,16 +274,17 @@ class TestTokenDenyList:
         assert result.client_id == "user-123"
 
     @pytest.mark.asyncio
-    async def test_denylist_check_fails_open(self, verifier, rsa_keypair, mock_redis):
-        """If Redis raises during _is_denied, the token is NOT rejected."""
+    async def test_denylist_check_propagates_redis_error(
+        self, verifier, rsa_keypair, mock_redis
+    ):
+        """If Redis raises during deny-list check, the error propagates."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
         mock_redis.exists = AsyncMock(side_effect=ConnectionError("Redis down"))
 
-        result = await verifier.verify_token(token)
-        assert result is not None
-        assert result.client_id == "user-123"
+        with pytest.raises(ConnectionError):
+            await verifier.verify_token(token)
 
 
 # ── Required claims tests ───────────────────────────────────────────
@@ -406,13 +400,12 @@ def provider_redis():
 
 
 @pytest.fixture
-def provider(provider_redis):
+def provider(provider_redis, mock_redis):
     """Create an EveryRowAuthProvider with mocked Redis."""
+    verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
     return EveryRowAuthProvider(
-        supabase_url=SUPABASE_URL,
-        supabase_anon_key="test-anon-key",
-        mcp_server_url="https://mcp.example.com",
         redis=provider_redis,
+        token_verifier=verifier,
     )
 
 
@@ -477,7 +470,9 @@ class TestAuthProvider:
             provider,
             "_refresh_supabase_token",
             new_callable=AsyncMock,
-            return_value=(fake_jwt, "new-supa-rt"),
+            return_value=SupabaseTokenResponse(
+                access_token=fake_jwt, refresh_token="new-supa-rt"
+            ),
         ):
             result = await provider.exchange_refresh_token(
                 test_client, refresh_token, scopes=["read", "write", "admin"]
@@ -513,7 +508,9 @@ class TestAuthProvider:
                 provider,
                 "_refresh_supabase_token",
                 new_callable=AsyncMock,
-                return_value=(fake_jwt, "new-supa-rt"),
+                return_value=SupabaseTokenResponse(
+                    access_token=fake_jwt, refresh_token="new-supa-rt"
+                ),
             ),
             pytest.raises(ValueError, match="no overlap"),
         ):
@@ -540,7 +537,9 @@ class TestAuthProvider:
             provider,
             "_refresh_supabase_token",
             new_callable=AsyncMock,
-            return_value=(fake_jwt, "new-supa-rt"),
+            return_value=SupabaseTokenResponse(
+                access_token=fake_jwt, refresh_token="new-supa-rt"
+            ),
         ):
             result = await provider.exchange_refresh_token(
                 test_client, refresh_token, scopes=[]
@@ -624,9 +623,6 @@ class TestRevokeToken:
         """Revoking an access token calls deny_token on the injected verifier."""
         verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
         provider = EveryRowAuthProvider(
-            supabase_url=SUPABASE_URL,
-            supabase_anon_key="test-anon-key",
-            mcp_server_url="https://mcp.example.com",
             redis=mock_redis,
             token_verifier=verifier,
         )
@@ -638,25 +634,9 @@ class TestRevokeToken:
         )
         await provider.revoke_token(access_token)
 
-        # Token should be in the deny list
-        assert await verifier._is_denied("at-revoke-me") is True
-
-    @pytest.mark.asyncio
-    async def test_revoke_access_token_noop_without_verifier(self, provider_redis):
-        """Revoking an access token is a no-op when no verifier is injected."""
-        provider = EveryRowAuthProvider(
-            supabase_url=SUPABASE_URL,
-            supabase_anon_key="test-anon-key",
-            mcp_server_url="https://mcp.example.com",
-            redis=provider_redis,
-        )
-        access_token = AccessToken(
-            token="at-noop",
-            client_id="user-123",
-            scopes=["read"],
-        )
-        # Should not raise
-        await provider.revoke_token(access_token)
+        # Token fingerprint should be in Redis deny list
+        fingerprint = hashlib.sha256(b"at-revoke-me").hexdigest()
+        assert mock_redis._store.get(f"mcp:revoked:{fingerprint}") == "1"
 
 
 # ── Client ID mismatch tests ─────────────────────────────────────────
