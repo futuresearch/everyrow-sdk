@@ -35,6 +35,7 @@ from everyrow_mcp.tools import (
     everyrow_screen,
     everyrow_single_agent,
 )
+from tests.test_stdio_content import assert_stdio_clean
 
 # Skip all tests in this module unless environment variable is set
 pytestmark = pytest.mark.skipif(
@@ -52,8 +53,9 @@ async def poll_until_complete(task_id: str, max_polls: int = 30) -> str:
     """
     for _ in range(max_polls):
         result = await everyrow_progress(ProgressInput(task_id=task_id))
-        # Second TextContent is human-readable (first is JSON for MCP App)
-        text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_progress")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        text = result[0].text
         print(f"  Progress: {text.splitlines()[0]}")
 
         if "Completed:" in text or "everyrow_results" in text:
@@ -96,7 +98,9 @@ class TestScreenIntegration:
         )
 
         result = await everyrow_screen(params)
-        submit_text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_screen")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -109,6 +113,7 @@ class TestScreenIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -143,7 +148,9 @@ class TestRankIntegration:
         )
 
         result = await everyrow_rank(params)
-        submit_text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_rank")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -156,6 +163,7 @@ class TestRankIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -190,7 +198,9 @@ class TestDedupeIntegration:
         )
 
         result = await everyrow_dedupe(params)
-        submit_text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_dedupe")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -203,6 +213,7 @@ class TestDedupeIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -245,7 +256,9 @@ class TestMergeIntegration:
         )
 
         result = await everyrow_merge(params)
-        submit_text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_merge")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -258,6 +271,7 @@ class TestMergeIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -310,7 +324,9 @@ class TestAgentIntegration:
         )
 
         result = await everyrow_agent(params)
-        submit_text = result[-1].text
+        assert_stdio_clean(result, tool_name="everyrow_agent")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
+        submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
         task_id = extract_task_id(submit_text)
@@ -323,6 +339,7 @@ class TestAgentIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -366,6 +383,8 @@ class TestSingleAgentIntegration:
         )
 
         result = await everyrow_single_agent(params)
+        assert_stdio_clean(result, tool_name="everyrow_single_agent")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -379,6 +398,7 @@ class TestSingleAgentIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output
@@ -402,6 +422,8 @@ class TestSingleAgentIntegration:
         )
 
         result = await everyrow_single_agent(params)
+        assert_stdio_clean(result, tool_name="everyrow_single_agent")
+        assert len(result) == 1, f"Stdio should return 1 item, got {len(result)}"
         submit_text = result[0].text
         print(f"\nSubmit result: {submit_text}")
 
@@ -415,6 +437,7 @@ class TestSingleAgentIntegration:
         results = await everyrow_results(
             ResultsInput(task_id=task_id, output_path=str(output_file))
         )
+        assert_stdio_clean(results, tool_name="everyrow_results")
         print(f"Results: {results[0].text}")
 
         # 4. Verify output

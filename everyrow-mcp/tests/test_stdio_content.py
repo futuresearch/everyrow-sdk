@@ -65,10 +65,10 @@ from everyrow_mcp.tools import (
 # ── Patterns that MUST NOT appear in stdio responses ──────────────────
 
 # JSON widget payloads (start with { and contain widget keys)
-_WIDGET_KEYS = ("progress_url", "csv_url", "preview", "poll_token")
+WIDGET_KEYS = ("progress_url", "csv_url", "preview", "poll_token")
 
 # Internal/HTTP-only URL patterns
-_FORBIDDEN_PATTERNS = [
+FORBIDDEN_PATTERNS = [
     re.compile(r"/api/progress/"),  # HTTP polling endpoint
     re.compile(r"/api/results/.*/download"),  # HTTP download endpoint
     re.compile(r"\?token="),  # Auth tokens in URLs
@@ -80,14 +80,14 @@ _FORBIDDEN_PATTERNS = [
 ]
 
 
-def _assert_text_clean(text: str, *, tool_name: str, index: int) -> None:
+def assert_text_clean(text: str, *, tool_name: str, index: int) -> None:
     """Assert that a single text string is model-appropriate."""
     stripped = text.strip()
     if stripped.startswith("{"):
         try:
             parsed = json.loads(stripped)
             if isinstance(parsed, dict):
-                leaked_keys = [k for k in _WIDGET_KEYS if k in parsed]
+                leaked_keys = [k for k in WIDGET_KEYS if k in parsed]
                 assert not leaked_keys, (
                     f"{tool_name} result[{index}] is a JSON widget payload "
                     f"containing HTTP-only keys: {leaked_keys}\n"
@@ -96,14 +96,14 @@ def _assert_text_clean(text: str, *, tool_name: str, index: int) -> None:
         except json.JSONDecodeError:
             pass  # Not JSON — that's fine for stdio
 
-    for pattern in _FORBIDDEN_PATTERNS:
+    for pattern in FORBIDDEN_PATTERNS:
         assert not pattern.search(text), (
             f"{tool_name} result[{index}] contains forbidden pattern "
             f"'{pattern.pattern}'\nContent: {text[:300]}"
         )
 
 
-def _assert_stdio_clean(result: list[TextContent], *, tool_name: str) -> None:
+def assert_stdio_clean(result: list[TextContent], *, tool_name: str) -> None:
     """Assert that every TextContent in a stdio response is model-appropriate.
 
     Checks:
@@ -112,16 +112,16 @@ def _assert_stdio_clean(result: list[TextContent], *, tool_name: str) -> None:
     3. Every item is plain human-readable text
     """
     for i, item in enumerate(result):
-        _assert_text_clean(item.text, tool_name=tool_name, index=i)
+        assert_text_clean(item.text, tool_name=tool_name, index=i)
 
 
 def _assert_mcp_result_clean(result, *, tool_name: str) -> None:
     """Assert that a CallToolResult from MCP protocol is model-appropriate.
 
-    Same checks as _assert_stdio_clean but works with MCP ContentBlock objects.
+    Same checks as assert_stdio_clean but works with MCP ContentBlock objects.
     """
     for i, block in enumerate(result.content):
-        _assert_text_clean(block.text, tool_name=tool_name, index=i)
+        assert_text_clean(block.text, tool_name=tool_name, index=i)
 
 
 # ── Shared test helpers ───────────────────────────────────────────────
@@ -227,7 +227,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_agent")
+        assert_stdio_clean(result, tool_name="everyrow_agent")
         text = result[0].text
         assert str(task.task_id) in text
         assert "Session:" in text
@@ -244,7 +244,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_single_agent")
+        assert_stdio_clean(result, tool_name="everyrow_single_agent")
         text = result[0].text
         assert str(task.task_id) in text
         assert "Session:" in text
@@ -264,7 +264,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_rank")
+        assert_stdio_clean(result, tool_name="everyrow_rank")
 
     @pytest.mark.asyncio
     async def test_screen_content(self, companies_csv: str):
@@ -277,7 +277,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_screen")
+        assert_stdio_clean(result, tool_name="everyrow_screen")
 
     @pytest.mark.asyncio
     async def test_dedupe_content(self, contacts_csv: str):
@@ -290,7 +290,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_dedupe")
+        assert_stdio_clean(result, tool_name="everyrow_dedupe")
 
     @pytest.mark.asyncio
     async def test_merge_content(self, products_csv: str, suppliers_csv: str):
@@ -307,7 +307,7 @@ class TestStdioSubmissionContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_merge")
+        assert_stdio_clean(result, tool_name="everyrow_merge")
 
 
 # ── Progress tool ─────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (running)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (running)")
         text = result[0].text
         assert "3/10" in text
         assert "everyrow_progress" in text
@@ -359,7 +359,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (completed)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (completed)")
         text = result[0].text
         assert "everyrow_results" in text
         # Stdio completion message should instruct model to provide output_path
@@ -389,7 +389,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (screen completed)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (screen completed)")
         assert "Screening complete" in result[0].text
 
     @pytest.mark.asyncio
@@ -416,7 +416,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (screen running)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (screen running)")
         assert "Screen running" in result[0].text
 
     @pytest.mark.asyncio
@@ -435,7 +435,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (error)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (error)")
         assert "Error polling task" in result[0].text
 
     @pytest.mark.asyncio
@@ -460,7 +460,7 @@ class TestStdioProgressContent:
             result = await everyrow_progress(ProgressInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_progress (failed)")
+        assert_stdio_clean(result, tool_name="everyrow_progress (failed)")
         assert "Rate limit exceeded" in result[0].text
 
 
@@ -498,7 +498,7 @@ class TestStdioResultsContent:
             )
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_results (save)")
+        assert_stdio_clean(result, tool_name="everyrow_results (save)")
         assert "Saved 2 rows" in result[0].text
         assert output_file.exists()
 
@@ -526,7 +526,7 @@ class TestStdioResultsContent:
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_results (no path)")
+        assert_stdio_clean(result, tool_name="everyrow_results (no path)")
         assert "output_path" in result[0].text
 
     @pytest.mark.asyncio
@@ -547,7 +547,7 @@ class TestStdioResultsContent:
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_results (not ready)")
+        assert_stdio_clean(result, tool_name="everyrow_results (not ready)")
         assert "running" in result[0].text
         assert "everyrow_progress" in result[0].text
 
@@ -567,7 +567,7 @@ class TestStdioResultsContent:
             result = await everyrow_results(ResultsInput(task_id=task_id))
 
         assert len(result) == 1
-        _assert_stdio_clean(result, tool_name="everyrow_results (error)")
+        assert_stdio_clean(result, tool_name="everyrow_results (error)")
         assert "Error" in result[0].text
 
 
