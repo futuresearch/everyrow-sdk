@@ -129,7 +129,7 @@ def load_csv(
     Raises:
         ValueError: If no source or multiple sources are provided, or if data is empty.
     """
-    sources = sum(1 for s in (input_csv, input_data, input_json) if s)
+    sources = sum(1 for s in (input_csv, input_data, input_json) if s is not None)
     if sources != 1:
         raise ValueError("Provide exactly one of input_csv, input_data, or input_json.")
 

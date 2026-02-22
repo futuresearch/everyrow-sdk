@@ -204,13 +204,14 @@ class TestMcpHttpBasics:
         assert r.json() == {"status": "ok"}
 
     async def test_list_tools(self, mcp_server: str):
-        """session.list_tools() returns all 7 registered tools."""
+        """session.list_tools() returns all 8 registered tools."""
         async with open_mcp_session(mcp_server) as session:
             resp = await session.list_tools()
             tool_names = sorted(t.name for t in resp.tools)
             expected = sorted(
                 [
                     "everyrow_agent",
+                    "everyrow_single_agent",
                     "everyrow_rank",
                     "everyrow_screen",
                     "everyrow_dedupe",

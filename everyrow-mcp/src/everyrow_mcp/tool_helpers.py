@@ -361,6 +361,12 @@ async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, s
     ):
         raise TaskNotReady(status_response.status.value)
 
+    if status_response.status != TaskStatus.COMPLETED:
+        raise ValueError(
+            f"Task {task_id} ended with status {status_response.status.value}; "
+            "no results available."
+        )
+
     session_id = str(status_response.session_id) if status_response.session_id else ""
 
     result_response = handle_response(

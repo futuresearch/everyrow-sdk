@@ -17,11 +17,10 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.app import http_lifespan, no_auth_http_lifespan
 from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
-from everyrow_mcp.config import _get_dev_http_settings, _get_http_settings
+from everyrow_mcp.config import _get_http_settings
 from everyrow_mcp.middleware import RateLimitMiddleware
-from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.routes import api_download, api_progress
-from everyrow_mcp.state import RedisStore, state
+from everyrow_mcp.state import state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
 logger = logging.getLogger(__name__)
@@ -29,31 +28,20 @@ logger = logging.getLogger(__name__)
 
 def configure_http_mode(
     mcp: FastMCP,
+    redis_client: Redis,
     host: str,
     port: int,
 ) -> None:
-    """Configure the MCP server for HTTP transport."""
+    """Configure the MCP server for HTTP transport.
+
+    State (``state.transport``, ``state.store``, ``state.mcp_server_url``)
+    must already be set by the caller before this function is invoked.
+    """
     if state.no_auth:
-        settings = _get_dev_http_settings()
-        state.mcp_server_url = f"http://localhost:{port}"
         lifespan = no_auth_http_lifespan
     else:
-        settings = _get_http_settings()
-        state.mcp_server_url = settings.mcp_server_url
         lifespan = http_lifespan
-
-    redis_client = create_redis_client(
-        host=settings.redis_host,
-        port=settings.redis_port,
-        db=settings.redis_db,
-        password=settings.redis_password,
-        sentinel_endpoints=settings.redis_sentinel_endpoints,
-        sentinel_master_name=settings.redis_sentinel_master_name,
-    )
-    state.store = RedisStore(redis_client)
-
-    auth_provider = None
-    if not state.no_auth:
+        settings = _get_http_settings()
         verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
         auth_provider = EveryRowAuthProvider(
             redis=redis_client,
@@ -66,7 +54,7 @@ def configure_http_mode(
     mcp.settings.port = port
 
     _register_widgets(mcp)
-    _register_routes(mcp, auth_provider)
+    _register_routes(mcp, auth_provider if not state.no_auth else None)
     _add_middleware(mcp, redis_client, rate_limit=not state.no_auth)
 
 
@@ -136,7 +124,7 @@ def _configure_mcp_auth(
 def _patch_tool_csp(mcp: FastMCP, csp: dict) -> None:
     """Patch CSP policy onto tool metadata for MCP App widgets."""
     for tool_name in ("everyrow_progress", "everyrow_results"):
-        tool = mcp._tool_manager._tools.get(tool_name)
+        tool = mcp._tool_manager.get_tool(tool_name)
         if tool and tool.meta and "ui" in tool.meta:
             tool.meta["ui"]["csp"] = csp
 

@@ -31,7 +31,8 @@ from mcp.shared.memory import create_connected_server_and_client_session
 # Import tools module to trigger @mcp.tool() registration on the FastMCP instance
 import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp.app import mcp as mcp_app
-from everyrow_mcp.state import RedisStore, Transport, state
+from everyrow_mcp.state import RedisStore, Transport
+from tests.conftest import override_state
 
 # ── Fixtures / helpers ────────────────────────────────────────
 
@@ -39,24 +40,13 @@ from everyrow_mcp.state import RedisStore, Transport, state
 @pytest.fixture
 def _http_state(fake_redis):
     """Configure global state for HTTP mode, restore after test."""
-    orig = {
-        "transport": state.transport,
-        "store": state.store,
-        "mcp_server_url": state.mcp_server_url,
-        "no_auth": state.no_auth,
-    }
-
-    state.transport = Transport.HTTP
-    state.no_auth = True
-    state.store = RedisStore(fake_redis)
-    state.mcp_server_url = "http://testserver"
-
-    yield
-
-    state.transport = orig["transport"]
-    state.store = orig["store"]
-    state.mcp_server_url = orig["mcp_server_url"]
-    state.no_auth = orig["no_auth"]
+    with override_state(
+        transport=Transport.HTTP,
+        no_auth=True,
+        store=RedisStore(fake_redis),
+        mcp_server_url="http://testserver",
+    ):
+        yield
 
 
 @asynccontextmanager

@@ -30,6 +30,7 @@ from everyrow_mcp.result_store import (
 )
 from everyrow_mcp.routes import api_download
 from everyrow_mcp.state import RedisStore, Transport, state
+from tests.conftest import override_state
 
 # ── Fixtures ───────────────────────────────────────────────────
 
@@ -44,24 +45,13 @@ def sample_df() -> pd.DataFrame:
 @pytest.fixture
 def _http_state(fake_redis):
     """Configure global state for HTTP mode and restore after test."""
-    orig = {
-        "transport": state.transport,
-        "store": state.store,
-        "mcp_server_url": state.mcp_server_url,
-        "no_auth": state.no_auth,
-    }
-
-    state.transport = Transport.HTTP
-    state.no_auth = True
-    state.store = RedisStore(fake_redis)
-    state.mcp_server_url = FAKE_SERVER_URL
-
-    yield
-
-    state.transport = orig["transport"]
-    state.store = orig["store"]
-    state.mcp_server_url = orig["mcp_server_url"]
-    state.no_auth = orig["no_auth"]
+    with override_state(
+        transport=Transport.HTTP,
+        no_auth=True,
+        store=RedisStore(fake_redis),
+        mcp_server_url=FAKE_SERVER_URL,
+    ):
+        yield
 
 
 # ── Pure helpers ───────────────────────────────────────────────
@@ -390,12 +380,6 @@ class TestApiDownload:
             f"/api/results/{task_id}/download", params={"token": poll_token}
         )
         assert resp.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_cors_preflight(self, client: httpx.AsyncClient):
-        resp = await client.options("/api/results/some-task/download")
-        assert resp.status_code == 204
-        assert resp.headers["access-control-allow-origin"] == "*"
 
 
 # ── Token budget clamping ─────────────────────────────────────

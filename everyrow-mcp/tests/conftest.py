@@ -14,6 +14,7 @@ os.environ.setdefault("REDIS_PORT", "6380")
 import socket
 import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -22,6 +23,7 @@ import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
+from everyrow_mcp.state import state
 from everyrow_mcp.tool_helpers import SessionContext
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
@@ -76,6 +78,25 @@ def make_test_context(client):
     ctx = MagicMock()
     ctx.request_context.lifespan_context = SessionContext(client_factory=lambda: client)
     return ctx
+
+
+@contextmanager
+def override_state(**overrides):
+    """Temporarily override ServerState fields and restore after the block.
+
+    Usage::
+
+        with override_state(transport=Transport.HTTP, no_auth=True, store=store):
+            ...
+    """
+    orig = {k: getattr(state, k) for k in overrides}
+    for k, v in overrides.items():
+        setattr(state, k, v)
+    try:
+        yield
+    finally:
+        for k, v in orig.items():
+            setattr(state, k, v)
 
 
 @pytest.fixture

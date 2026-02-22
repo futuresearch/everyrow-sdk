@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -95,17 +95,6 @@ class HttpSettings(_BaseHttpSettings):
         if v <= 0:
             raise ValueError(f"{info.field_name} must be > 0, got {v}")
         return v
-
-    @model_validator(mode="after")
-    def _validate_redis(self):
-        has_sentinel = self.redis_sentinel_endpoints and self.redis_sentinel_master_name
-        has_direct = self.redis_host != "localhost" or self.redis_port != 6379
-        if not has_sentinel and not has_direct:
-            raise ValueError(
-                "Redis: set REDIS_SENTINEL_ENDPOINTS + REDIS_SENTINEL_MASTER_NAME "
-                "or REDIS_HOST + REDIS_PORT"
-            )
-        return self
 
 
 class DevHttpSettings(_BaseHttpSettings):

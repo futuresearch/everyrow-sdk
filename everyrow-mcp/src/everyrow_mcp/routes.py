@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import secrets
-from typing import Any
 from uuid import UUID
 
 from everyrow.api_utils import handle_response
@@ -21,10 +20,6 @@ logger = logging.getLogger(__name__)
 _CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET"}
 
 
-def _cors_preflight() -> Response:
-    return Response(status_code=204, headers=_CORS)
-
-
 async def _validate_poll_token(task_id: str, request: Request) -> JSONResponse | None:
     """Return an error response if the poll token is missing/invalid, else None."""
     expected = await state.store.get_poll_token(task_id)
@@ -34,10 +29,10 @@ async def _validate_poll_token(task_id: str, request: Request) -> JSONResponse |
     return None
 
 
-async def api_progress(request: Request) -> Any:
+async def api_progress(request: Request) -> Response:
     """REST endpoint for the session widget to poll task progress."""
     if request.method == "OPTIONS":
-        return _cors_preflight()
+        return Response(status_code=204, headers=_CORS)
 
     task_id = request.path_params["task_id"]
 
@@ -77,10 +72,10 @@ async def api_progress(request: Request) -> Any:
         )
 
 
-async def api_download(request: Request) -> Any:
+async def api_download(request: Request) -> Response:
     """REST endpoint to download task results as CSV."""
     if request.method == "OPTIONS":
-        return _cors_preflight()
+        return Response(status_code=204, headers=_CORS)
 
     task_id = request.path_params["task_id"]
 

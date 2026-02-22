@@ -33,13 +33,14 @@ from starlette.routing import Route
 
 from everyrow_mcp.models import AgentInput, ProgressInput, ResultsInput, ScreenInput
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, Transport, state
+from everyrow_mcp.state import RedisStore, Transport
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
     everyrow_screen,
 )
+from tests.conftest import make_test_context, override_state
 
 # Skip unless explicitly enabled
 pytestmark = pytest.mark.skipif(
@@ -72,21 +73,12 @@ async def real_redis():
 @pytest.fixture
 def _http_mode(real_redis):
     """Configure global state for HTTP mode with real Redis, restore after test."""
-    orig = {
-        "transport": state.transport,
-        "store": state.store,
-        "mcp_server_url": state.mcp_server_url,
-    }
-
-    state.transport = Transport.HTTP
-    state.store = RedisStore(real_redis)
-    state.mcp_server_url = "http://testserver"
-
-    yield
-
-    state.transport = orig["transport"]
-    state.store = orig["store"]
-    state.mcp_server_url = orig["mcp_server_url"]
+    with override_state(
+        transport=Transport.HTTP,
+        store=RedisStore(real_redis),
+        mcp_server_url="http://testserver",
+    ):
+        yield
 
 
 @pytest.fixture
@@ -141,10 +133,10 @@ def extract_poll_token(widget_json: str) -> str:
     return match.group(1)
 
 
-async def poll_via_tool(task_id: str, max_polls: int = 30) -> str:
+async def poll_via_tool(task_id: str, ctx, max_polls: int = 30) -> str:
     """Poll everyrow_progress via MCP tool until complete."""
     for _ in range(max_polls):
-        result = await everyrow_progress(ProgressInput(task_id=task_id))
+        result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
         text = result[-1].text
         print(f"  Progress: {text.splitlines()[0]}")
 
@@ -199,13 +191,14 @@ class TestHttpScreenPipeline:
     ):
         """Submit a screen task, poll via REST, fetch results via MCP tool."""
         # 1. Submit via MCP tool (in HTTP mode)
-        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
-            result = await everyrow_screen(
-                ScreenInput(
-                    task="Filter for remote positions with salary > $100k",
-                    input_csv=jobs_csv,
-                )
-            )
+        ctx = make_test_context(everyrow_client)
+        result = await everyrow_screen(
+            ScreenInput(
+                task="Filter for remote positions with salary > $100k",
+                input_csv=jobs_csv,
+            ),
+            ctx,
+        )
 
         # HTTP mode: widget JSON + human text
         assert len(result) == 2
@@ -235,7 +228,6 @@ class TestHttpScreenPipeline:
 
         # 4. Fetch results via MCP tool (mock store)
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -253,7 +245,7 @@ class TestHttpScreenPipeline:
                 ),
                 TextContent(type="text", text="Results ready."),
             ]
-            results = await everyrow_results(ResultsInput(task_id=task_id))
+            results = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(results) == 2
         print(f"  Results: {results[1].text}")
@@ -276,22 +268,23 @@ class TestHttpAgentPipeline:
         df.to_csv(input_csv, index=False)
 
         # 1. Submit via MCP tool
-        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
-            result = await everyrow_agent(
-                AgentInput(
-                    task="Find the company's headquarters city.",
-                    input_csv=str(input_csv),
-                    response_schema={
-                        "properties": {
-                            "headquarters": {
-                                "type": "string",
-                                "description": "City where HQ is located",
-                            },
+        ctx = make_test_context(everyrow_client)
+        result = await everyrow_agent(
+            AgentInput(
+                task="Find the company's headquarters city.",
+                input_csv=str(input_csv),
+                response_schema={
+                    "properties": {
+                        "headquarters": {
+                            "type": "string",
+                            "description": "City where HQ is located",
                         },
-                        "required": ["headquarters"],
                     },
-                )
-            )
+                    "required": ["headquarters"],
+                },
+            ),
+            ctx,
+        )
 
         assert len(result) == 2
         widget = json.loads(result[0].text)
@@ -308,7 +301,6 @@ class TestHttpAgentPipeline:
 
         # 3. Fetch results via MCP tool (mock store)
         with (
-            patch("everyrow_mcp.tools._get_client", return_value=everyrow_client),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -326,7 +318,7 @@ class TestHttpAgentPipeline:
                 ),
                 TextContent(type="text", text="Results: 2 rows."),
             ]
-            results = await everyrow_results(ResultsInput(task_id=task_id))
+            results = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
         assert len(results) == 2
         print(f"  Results: {results[1].text}")
@@ -343,13 +335,14 @@ class TestProgressPollingModes:
         jobs_csv: str,
     ):
         """Submit a task and poll using both REST endpoint and MCP tool."""
-        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
-            result = await everyrow_screen(
-                ScreenInput(
-                    task="Filter for engineering roles",
-                    input_csv=jobs_csv,
-                )
-            )
+        ctx = make_test_context(everyrow_client)
+        result = await everyrow_screen(
+            ScreenInput(
+                task="Filter for engineering roles",
+                input_csv=jobs_csv,
+            ),
+            ctx,
+        )
 
         widget = json.loads(result[0].text)
         task_id = widget["task_id"]
@@ -366,7 +359,6 @@ class TestProgressPollingModes:
         )
 
         # Continue polling via MCP tool until complete
-        with patch("everyrow_mcp.tools._get_client", return_value=everyrow_client):
-            final_text = await poll_via_tool(task_id)
+        final_text = await poll_via_tool(task_id, ctx)
 
         assert "everyrow_results" in final_text or "Completed:" in final_text

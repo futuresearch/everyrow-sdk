@@ -511,6 +511,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         idempotentHint=True,
         openWorldHint=False,
     ),
+    meta={"ui": {"resourceUri": "ui://everyrow/progress.html"}},
 )
 # NOTE: This docstring is overridden at startup by set_tool_descriptions().
 async def everyrow_progress(
@@ -635,6 +636,7 @@ async def everyrow_results(  # noqa: PLR0911
 
     return [
         TextContent(
-            type="text", text=f"Error: failed to store results for task {task_id}."
+            type="text",
+            text=f"Error: failed to store results for task {task_id}.",
         )
     ]
