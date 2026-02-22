@@ -48,9 +48,11 @@ def _http_state(fake_redis):
         "transport": state.transport,
         "store": state.store,
         "mcp_server_url": state.mcp_server_url,
+        "no_auth": state.no_auth,
     }
 
     state.transport = Transport.HTTP
+    state.no_auth = True
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = FAKE_SERVER_URL
 
@@ -59,6 +61,7 @@ def _http_state(fake_redis):
     state.transport = orig["transport"]
     state.store = orig["store"]
     state.mcp_server_url = orig["mcp_server_url"]
+    state.no_auth = orig["no_auth"]
 
 
 # ── Pure helpers ───────────────────────────────────────────────
@@ -472,17 +475,24 @@ class TestTokenBudgetIntegration:
             }
         )
 
+    @staticmethod
+    def _patch_budget(budget: int):
+        """Patch token_budget on the cached settings object."""
+        settings = state.settings
+        orig = settings.token_budget
+        settings.token_budget = budget
+        return orig
+
     @pytest.mark.asyncio
     async def test_try_store_clamps_page(self, wide_df, _http_state):
         task_id = "task-budget-store"
         await state.store.store_poll_token(task_id, "tok")
 
-        orig_budget = state.token_budget
-        state.token_budget = 2000  # Small budget to trigger clamping
+        orig = self._patch_budget(2000)
         try:
             result = await try_store_result(task_id, wide_df, 0, 10)
         finally:
-            state.token_budget = orig_budget
+            self._patch_budget(orig)
 
         assert result is not None
         widget = json.loads(result[0].text)
@@ -502,12 +512,11 @@ class TestTokenBudgetIntegration:
         meta = json.dumps({"total": len(wide_df), "columns": list(wide_df.columns)})
         await state.store.store_result_meta(task_id, meta)
 
-        orig_budget = state.token_budget
-        state.token_budget = 2000  # Small budget to trigger clamping
+        orig = self._patch_budget(2000)
         try:
             result = await try_cached_result(task_id, 0, 10)
         finally:
-            state.token_budget = orig_budget
+            self._patch_budget(orig)
 
         assert result is not None
         widget = json.loads(result[0].text)
@@ -521,12 +530,11 @@ class TestTokenBudgetIntegration:
         task_id = "task-budget-ok"
         await state.store.store_poll_token(task_id, "tok")
 
-        orig_budget = state.token_budget
-        state.token_budget = 100_000
+        orig = self._patch_budget(100_000)
         try:
             result = await try_store_result(task_id, df, 0, 3)
         finally:
-            state.token_budget = orig_budget
+            self._patch_budget(orig)
 
         assert result is not None
         widget = json.loads(result[0].text)

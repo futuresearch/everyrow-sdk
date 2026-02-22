@@ -38,9 +38,11 @@ def _http_state(fake_redis):
         "transport": state.transport,
         "store": state.store,
         "mcp_server_url": state.mcp_server_url,
+        "no_auth": state.no_auth,
     }
 
     state.transport = Transport.HTTP
+    state.no_auth = True
     state.store = RedisStore(fake_redis)
     state.mcp_server_url = "http://testserver"
 
@@ -49,6 +51,7 @@ def _http_state(fake_redis):
     state.transport = orig["transport"]
     state.store = orig["store"]
     state.mcp_server_url = orig["mcp_server_url"]
+    state.no_auth = orig["no_auth"]
 
 
 def _health_endpoint(_request):

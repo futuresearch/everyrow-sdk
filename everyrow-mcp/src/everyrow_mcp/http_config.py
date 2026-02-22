@@ -36,14 +36,15 @@ def configure_http_mode(
 ) -> None:
     """Configure the MCP server for HTTP transport."""
     state.transport = Transport.HTTP
+    state.no_auth = no_auth
 
     if no_auth:
         settings = _get_dev_http_settings()
-        mcp_server_url = f"http://localhost:{port}"
+        state.mcp_server_url = f"http://localhost:{port}"
         lifespan = _no_auth_http_lifespan
     else:
         settings = _get_http_settings()
-        mcp_server_url = settings.mcp_server_url
+        state.mcp_server_url = settings.mcp_server_url
         lifespan = _http_lifespan
 
     redis_client = create_redis_client(
@@ -55,10 +56,6 @@ def configure_http_mode(
         sentinel_master_name=getattr(settings, "redis_sentinel_master_name", None),
     )
     state.store = RedisStore(redis_client)
-    state.everyrow_api_url = settings.everyrow_api_url
-    state.preview_size = settings.preview_size
-    state.token_budget = settings.token_budget
-    state.mcp_server_url = mcp_server_url
 
     if not no_auth:
         verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
@@ -74,7 +71,7 @@ def configure_http_mode(
     mcp.settings.host = host
     mcp.settings.port = port
 
-    widget_csp = _ui_csp([mcp_server_url])
+    widget_csp = _ui_csp([state.mcp_server_url])
     _patch_tool_csp(mcp, widget_csp)
 
     @mcp.resource(

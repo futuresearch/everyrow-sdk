@@ -42,7 +42,7 @@ async def api_progress(request: Request) -> Any:
 
     try:
         client = AuthenticatedClient(
-            base_url=state.everyrow_api_url,
+            base_url=state.settings.everyrow_api_url,
             token=api_key,
             raise_on_unexpected_status=True,
             follow_redirects=True,

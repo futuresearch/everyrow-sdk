@@ -112,7 +112,9 @@ def _build_result_response(
 
     if has_more:
         page_size_arg = (
-            f", page_size={page_size}" if page_size != state.preview_size else ""
+            f", page_size={page_size}"
+            if page_size != state.settings.preview_size
+            else ""
         )
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
@@ -193,7 +195,7 @@ async def try_cached_result(
             preview = []
 
     preview, effective_page_size = clamp_page_to_budget(
-        preview, page_size, state.token_budget
+        preview, page_size, state.settings.token_budget
     )
 
     csv_url = await _get_csv_url(task_id)
@@ -247,7 +249,7 @@ async def try_store_result(
         )
 
         preview, effective_page_size = clamp_page_to_budget(
-            preview, page_size, state.token_budget
+            preview, page_size, state.settings.token_budget
         )
 
         csv_url = await _get_csv_url(task_id)

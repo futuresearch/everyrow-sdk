@@ -6,23 +6,12 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class StdioSettings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
-
-    everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
-    everyrow_api_key: str
-
-
-class _BaseHttpSettings(BaseSettings):
-    """Common settings for HTTP transport modes (auth and no-auth)."""
+class _CommonSettings(BaseSettings):
+    """Fields shared across all transport modes."""
 
     model_config = SettingsConfigDict(extra="ignore")
 
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
-    redis_host: str = Field(default="localhost")
-    redis_port: int = Field(default=6379)
-    redis_db: int = Field(default=13)
-    redis_password: str | None = Field(default=None)
     preview_size: int = Field(default=5)
     token_budget: int = Field(
         default=20000,
@@ -33,6 +22,19 @@ class _BaseHttpSettings(BaseSettings):
     @classmethod
     def _strip_api_url_slash(cls, v: str) -> str:
         return v.rstrip("/")
+
+
+class StdioSettings(_CommonSettings):
+    everyrow_api_key: str
+
+
+class _BaseHttpSettings(_CommonSettings):
+    """Common settings for HTTP transport modes (auth and no-auth)."""
+
+    redis_host: str = Field(default="localhost")
+    redis_port: int = Field(default=6379)
+    redis_db: int = Field(default=13)
+    redis_password: str | None = Field(default=None)
 
 
 class HttpSettings(_BaseHttpSettings):

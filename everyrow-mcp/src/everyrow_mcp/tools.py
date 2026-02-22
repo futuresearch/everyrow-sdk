@@ -667,8 +667,8 @@ async def everyrow_progress(  # noqa: PLR0912, PLR0915
                 )
             if state.is_http:
                 next_call = (
-                    f"Call everyrow_results(task_id='{task_id}', page_size={state.preview_size}) to view the output. "
-                    f"The server auto-adjusts page_size to fit a {state.token_budget:,}-token budget."
+                    f"Call everyrow_results(task_id='{task_id}', page_size={state.settings.preview_size}) to view the output. "
+                    f"The server auto-adjusts page_size to fit a {state.settings.token_budget:,}-token budget."
                 )
             else:
                 next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
@@ -771,7 +771,7 @@ async def everyrow_results(  # noqa: PLR0911
     preview = page.where(page.notna(), None).to_dict(orient="records")
 
     preview, effective_page_size = clamp_page_to_budget(
-        preview, params.page_size, state.token_budget
+        preview, params.page_size, state.settings.token_budget
     )
 
     col_names = ", ".join(columns[:10])

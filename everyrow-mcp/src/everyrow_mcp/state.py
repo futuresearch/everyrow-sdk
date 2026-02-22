@@ -9,11 +9,15 @@ from __future__ import annotations
 import logging
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 from redis.asyncio import Redis
 
 from everyrow_mcp.redis_utils import build_key
+
+if TYPE_CHECKING:
+    from everyrow_mcp.config import _CommonSettings
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +173,11 @@ class ServerState(BaseModel):
     Thin config holder — all Redis data operations are delegated
     to RedisStore.  The per-request API client is managed via
     FastMCP's lifespan context (see ``SessionContext`` in tool_helpers).
+
+    Settings (``everyrow_api_url``, ``preview_size``, ``token_budget``, …)
+    live exclusively in the pydantic-settings classes and are accessed
+    via the ``settings`` property, which dispatches to the correct
+    ``@lru_cache``-d factory based on the current transport mode.
     """
 
     model_config = ConfigDict(
@@ -178,10 +187,22 @@ class ServerState(BaseModel):
 
     transport: Transport = Transport.STDIO
     mcp_server_url: str = ""
-    everyrow_api_url: str = "https://everyrow.io/api/v0"
-    preview_size: int = 5
-    token_budget: int = 20_000
+    no_auth: bool = False
     store: RedisStore | None = Field(default=None)
+
+    @property
+    def settings(self) -> _CommonSettings:
+        from everyrow_mcp.config import (  # noqa: PLC0415
+            _get_dev_http_settings,
+            _get_http_settings,
+            _get_stdio_settings,
+        )
+
+        if self.transport == Transport.STDIO:
+            return _get_stdio_settings()
+        if self.no_auth:
+            return _get_dev_http_settings()
+        return _get_http_settings()
 
     @property
     def is_stdio(self) -> bool:

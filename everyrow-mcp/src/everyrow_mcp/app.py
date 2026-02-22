@@ -58,7 +58,7 @@ async def _http_lifespan(_server: FastMCP):
         if access_token is None:
             raise RuntimeError("Not authenticated")
         return AuthenticatedClient(
-            base_url=state.everyrow_api_url,
+            base_url=state.settings.everyrow_api_url,
             token=access_token.token,
             raise_on_unexpected_status=True,
             follow_redirects=True,
