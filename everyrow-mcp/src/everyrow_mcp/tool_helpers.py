@@ -1,9 +1,3 @@
-"""Helper functions for MCP tool implementations.
-
-Includes transport-aware UI helpers, client construction, task state
-persistence, and result fetching.
-"""
-
 from __future__ import annotations
 
 import json
@@ -35,7 +29,8 @@ from mcp.server.session import ServerSession
 from mcp.types import TextContent
 from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 
-from everyrow_mcp.state import TASK_STATE_FILE, state
+from everyrow_mcp import redis_store
+from everyrow_mcp.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +40,18 @@ class SessionContext:
     """Per-session lifespan context yielded by all lifespans."""
 
     client_factory: Callable[[], AuthenticatedClient]
-
     """Return an API client for the current request.
 
     In stdio/no-auth mode this returns a long-lived singleton.
     In HTTP mode it constructs a fresh client with the current request's
     access token — call once per tool invocation, do not cache across awaits.
+    """
+
+    mcp_server_url: str = ""
+    """Base URL of the MCP server (HTTP mode only).
+
+    Used to build progress polling and CSV download URLs.
+    Empty in stdio mode.
     """
 
 
@@ -65,7 +66,7 @@ def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
 
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
     """Build human-readable text for submission tool results."""
-    if state.is_stdio:
+    if settings.is_stdio:
         return dedent(f"""\
         {label}
         Session: {session_url}
@@ -84,21 +85,21 @@ async def _submission_ui_json(
     task_id: str,
     total: int,
     token: str,
+    mcp_server_url: str = "",
 ) -> str:
     """Build JSON for the session MCP App widget, and store the token for polling."""
     poll_token = secrets.token_urlsafe(32)
-    if state.store is not None:
-        await state.store.store_task_token(task_id, token)
-        await state.store.store_poll_token(task_id, poll_token)
+    await redis_store.store_task_token(task_id, token)
+    await redis_store.store_poll_token(task_id, poll_token)
     data: dict[str, Any] = {
         "session_url": session_url,
         "task_id": task_id,
         "total": total,
         "status": "submitted",
     }
-    if state.mcp_server_url:
+    if mcp_server_url:
         data["progress_url"] = (
-            f"{state.mcp_server_url}/api/progress/{task_id}?token={poll_token}"
+            f"{mcp_server_url}/api/progress/{task_id}?token={poll_token}"
         )
     return json.dumps(data)
 
@@ -110,6 +111,7 @@ async def create_tool_response(
     label: str,
     token: str,
     total: int,
+    mcp_server_url: str = "",
 ) -> list[TextContent]:
     """Build the standard submission response for a tool.
 
@@ -118,8 +120,10 @@ async def create_tool_response(
     """
     text = _submission_text(label, session_url, task_id)
     main_content = TextContent(type="text", text=text)
-    if state.is_http:
-        ui_json = await _submission_ui_json(session_url, task_id, total, token)
+    if settings.is_http:
+        ui_json = await _submission_ui_json(
+            session_url, task_id, total, token, mcp_server_url=mcp_server_url
+        )
         return [TextContent(type="text", text=ui_json), main_content]
     return [main_content]
 
@@ -230,7 +234,7 @@ class TaskState(BaseModel):
 
     def write_file(self, task_id: str) -> None:
         """Write task tracking state for hooks/status line to read."""
-        if state.is_http:
+        if settings.is_http:
             return
         _write_task_state_file(
             task_id=task_id,
@@ -253,10 +257,10 @@ class TaskState(BaseModel):
                     completed_msg = f"Screening complete ({self.elapsed_s}s)."
                 else:
                     completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
-                if state.is_http:
+                if settings.is_http:
                     next_call = dedent(f"""\
-                        Call everyrow_results(task_id='{task_id}', page_size={state.settings.preview_size}) to view the output. \
-                        The server auto-adjusts page_size to fit a {state.settings.token_budget:,}-token budget.""")
+                        Call everyrow_results(task_id='{task_id}', page_size={settings.preview_size}) to view the output. \
+                        The server auto-adjusts page_size to fit a {settings.token_budget:,}-token budget.""")
                 else:
                     next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
                 return f"{completed_msg}\n{next_call}"
@@ -281,7 +285,7 @@ def write_initial_task_state(
     total: int,
 ) -> None:
     """Write initial task state file when a task is first submitted."""
-    if state.is_http:
+    if settings.is_http:
         return
     _write_task_state_file(
         task_id=task_id,
@@ -310,7 +314,7 @@ def _write_task_state_file(
 ) -> None:
     """Low-level helper: serialise task state to the status-line JSON file."""
     try:
-        TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        redis_store.TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "task_id": task_id,
             "task_type": task_type.value,
@@ -322,7 +326,7 @@ def _write_task_state_file(
             "status": status.value,
             "started_at": started_at.timestamp(),
         }
-        with open(TASK_STATE_FILE, "w") as f:
+        with open(redis_store.TASK_STATE_FILE, "w") as f:
             json.dump(data, f)
     except Exception as e:
         logger.debug(f"Failed to write task state: {e!r}")

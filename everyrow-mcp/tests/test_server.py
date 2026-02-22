@@ -39,7 +39,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.state import Transport, state
+from everyrow_mcp.redis_store import Transport, state
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,

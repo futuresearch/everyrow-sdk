@@ -10,10 +10,9 @@ from pydantic import BaseModel
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
 from everyrow_mcp.app import mcp
-from everyrow_mcp.config import get_dev_http_settings, get_http_settings
+from everyrow_mcp.config import settings
 from everyrow_mcp.http_config import configure_http_mode
-from everyrow_mcp.redis_utils import create_redis_client
-from everyrow_mcp.state import RedisStore, Transport, state
+from everyrow_mcp.redis_store import Transport
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
 
 
@@ -68,33 +67,22 @@ def main():
     input_args = parse_args()
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
-    state.transport = Transport.HTTP if input_args.http else Transport.STDIO
-    state.no_auth = input_args.no_auth
+    transport = Transport.HTTP if input_args.http else Transport.STDIO
+    settings.transport = transport.value
 
-    set_tool_descriptions(state.transport)
+    set_tool_descriptions(transport)
     if input_args.http:
         if input_args.no_auth:
-            settings = get_dev_http_settings()
-            state.mcp_server_url = f"http://localhost:{input_args.port}"
+            mcp_server_url = f"http://localhost:{input_args.port}"
         else:
-            settings = get_http_settings()
-            state.mcp_server_url = settings.mcp_server_url
-
-        redis_client = create_redis_client(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_db,
-            password=settings.redis_password,
-            sentinel_endpoints=settings.redis_sentinel_endpoints,
-            sentinel_master_name=settings.redis_sentinel_master_name,
-        )
-        state.store = RedisStore(redis_client)
+            mcp_server_url = settings.mcp_server_url
 
         configure_http_mode(
-            mcp,
-            redis_client=redis_client,
+            mcp=mcp,
             host=input_args.host,
             port=input_args.port,
+            no_auth=input_args.no_auth,
+            mcp_server_url=mcp_server_url,
         )
     else:
         # Configure logging to use stderr only (stdout is reserved for JSON-RPC)
@@ -111,7 +99,7 @@ def main():
             logging.error("Get an API key at https://everyrow.io/api-key")
             sys.exit(1)
 
-    mcp.run(transport=state.transport.value)
+    mcp.run(transport=transport.value)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """Tests for Redis-backed result retrieval (result_store.py).
 
 Covers pure helpers (_format_columns, _slice_preview, _build_result_response)
-and async functions (try_cached_result, try_store_result) with mocked state,
+and async functions (try_cached_result, try_store_result) with patched Redis,
 plus the download endpoint (api_download).
 """
 
@@ -19,6 +19,8 @@ import pytest
 from starlette.applications import Starlette
 from starlette.routing import Route
 
+from everyrow_mcp import redis_store
+from everyrow_mcp.config import settings
 from everyrow_mcp.result_store import (
     _build_result_response,
     _estimate_tokens,
@@ -29,8 +31,7 @@ from everyrow_mcp.result_store import (
     try_store_result,
 )
 from everyrow_mcp.routes import api_download
-from everyrow_mcp.state import RedisStore, Transport, state
-from tests.conftest import override_state
+from tests.conftest import override_settings
 
 # ── Fixtures ───────────────────────────────────────────────────
 
@@ -44,12 +45,10 @@ def sample_df() -> pd.DataFrame:
 
 @pytest.fixture
 def _http_state(fake_redis):
-    """Configure global state for HTTP mode and restore after test."""
-    with override_state(
-        transport=Transport.HTTP,
-        no_auth=True,
-        store=RedisStore(fake_redis),
-        mcp_server_url=FAKE_SERVER_URL,
+    """Configure settings for HTTP mode and patch Redis."""
+    with (
+        override_settings(transport="streamable-http"),
+        patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield
 
@@ -188,14 +187,10 @@ class TestBuildResultResponse:
 
 class TestTryCachedResult:
     @pytest.mark.asyncio
-    async def test_returns_none_when_redis_not_configured(self):
-        with patch.object(state, "store", None):
-            result = await try_cached_result("task-1", 0, 10)
-        assert result is None
-
-    @pytest.mark.asyncio
     async def test_returns_none_when_no_cached_meta(self, _http_state):
-        result = await try_cached_result("task-2", 0, 10)
+        result = await try_cached_result(
+            "task-2", 0, 10, mcp_server_url=FAKE_SERVER_URL
+        )
         assert result is None
 
     @pytest.mark.asyncio
@@ -205,11 +200,11 @@ class TestTryCachedResult:
         task_id = "task-3"
         poll_token = "test-token"
 
-        await state.store.store_result_meta(task_id, meta)
-        await state.store.store_result_page(task_id, 0, 1, page)
-        await state.store.store_poll_token(task_id, poll_token)
+        await redis_store.store_result_meta(task_id, meta)
+        await redis_store.store_result_page(task_id, 0, 1, page)
+        await redis_store.store_poll_token(task_id, poll_token)
 
-        result = await try_cached_result(task_id, 0, 1)
+        result = await try_cached_result(task_id, 0, 1, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
         assert len(result) == 2
@@ -222,10 +217,10 @@ class TestTryCachedResult:
         csv_text = "name,score\nAlice,95\nBob,87\nCarol,72\n"
         task_id = "task-4"
 
-        await state.store.store_result_meta(task_id, meta)
-        await state.store.store_result_csv(task_id, csv_text)
+        await redis_store.store_result_meta(task_id, meta)
+        await redis_store.store_result_csv(task_id, csv_text)
 
-        result = await try_cached_result(task_id, 0, 2)
+        result = await try_cached_result(task_id, 0, 2, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
         widget = json.loads(result[0].text)
@@ -243,10 +238,10 @@ class TestTryCachedResult:
         page = json.dumps([{"a": 1}])
         task_id = "task-5"
 
-        await state.store.store_result_meta(task_id, meta)
-        await state.store.store_result_page(task_id, 0, 10, page)
+        await redis_store.store_result_meta(task_id, meta)
+        await redis_store.store_result_page(task_id, 0, 10, page)
 
-        result = await try_cached_result(task_id, 0, 10)
+        result = await try_cached_result(task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL)
 
         widget = json.loads(result[0].text)
         assert widget["session_url"] == "https://everyrow.io/sessions/xyz"
@@ -254,17 +249,13 @@ class TestTryCachedResult:
 
 class TestTryStoreResult:
     @pytest.mark.asyncio
-    async def test_returns_none_when_redis_not_configured(self, sample_df):
-        with patch.object(state, "store", None):
-            result = await try_store_result("task-1", sample_df, 0, 10)
-        assert result is None
-
-    @pytest.mark.asyncio
     async def test_stores_and_returns_response(self, sample_df, _http_state):
         task_id = "task-up"
-        await state.store.store_poll_token(task_id, "test-token")
+        await redis_store.store_poll_token(task_id, "test-token")
 
-        result = await try_store_result(task_id, sample_df, 0, 2)
+        result = await try_store_result(
+            task_id, sample_df, 0, 2, mcp_server_url=FAKE_SERVER_URL
+        )
 
         assert result is not None
         assert len(result) == 2
@@ -273,13 +264,13 @@ class TestTryStoreResult:
         assert len(widget["preview"]) == 2
 
         # Verify CSV was stored in Redis
-        stored_csv = await state.store.get_result_csv(task_id)
+        stored_csv = await redis_store.get_result_csv(task_id)
         assert stored_csv is not None
         df = pd.read_csv(io.StringIO(stored_csv))
         assert len(df) == 3
 
         # Verify metadata was cached
-        meta_raw = await state.store.get_result_meta(task_id)
+        meta_raw = await redis_store.get_result_meta(task_id)
         assert meta_raw is not None
         meta = json.loads(meta_raw)
         assert meta["total"] == 3
@@ -288,7 +279,7 @@ class TestTryStoreResult:
     @pytest.mark.asyncio
     async def test_includes_session_url_in_meta(self, sample_df, _http_state):
         task_id = "task-sess"
-        await state.store.store_poll_token(task_id, "test-token")
+        await redis_store.store_poll_token(task_id, "test-token")
 
         await try_store_result(
             task_id,
@@ -296,21 +287,23 @@ class TestTryStoreResult:
             0,
             10,
             session_url="https://everyrow.io/sessions/abc",
+            mcp_server_url=FAKE_SERVER_URL,
         )
 
-        meta_raw = await state.store.get_result_meta(task_id)
+        meta_raw = await redis_store.get_result_meta(task_id)
         meta = json.loads(meta_raw)
         assert meta["session_url"] == "https://everyrow.io/sessions/abc"
 
     @pytest.mark.asyncio
     async def test_returns_none_on_failure(self, sample_df, _http_state):
-        with patch.object(
-            state.store,
-            "store_result_csv",
+        with patch(
+            "everyrow_mcp.result_store.redis_store.store_result_csv",
             new_callable=AsyncMock,
             side_effect=RuntimeError("Redis down"),
         ):
-            result = await try_store_result("task-fail", sample_df, 0, 10)
+            result = await try_store_result(
+                "task-fail", sample_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
+            )
         assert result is None
 
 
@@ -344,8 +337,8 @@ class TestApiDownload:
         poll_token = secrets.token_urlsafe(16)
         csv_text = "name,score\nAlice,95\nBob,87\n"
 
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_result_csv(task_id, csv_text)
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_result_csv(task_id, csv_text)
 
         resp = await client.get(
             f"/api/results/{task_id}/download", params={"token": poll_token}
@@ -360,8 +353,8 @@ class TestApiDownload:
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
 
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_result_csv(task_id, "data")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_result_csv(task_id, "data")
 
         resp = await client.get(
             f"/api/results/{task_id}/download", params={"token": "wrong-token"}
@@ -373,7 +366,7 @@ class TestApiDownload:
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
 
-        await state.store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token)
         # No CSV stored
 
         resp = await client.get(
@@ -459,24 +452,19 @@ class TestTokenBudgetIntegration:
             }
         )
 
-    @staticmethod
-    def _patch_budget(budget: int):
-        """Patch token_budget on the cached settings object."""
-        settings = state.settings
-        orig = settings.token_budget
-        settings.token_budget = budget
-        return orig
-
     @pytest.mark.asyncio
     async def test_try_store_clamps_page(self, wide_df, _http_state):
         task_id = "task-budget-store"
-        await state.store.store_poll_token(task_id, "tok")
+        await redis_store.store_poll_token(task_id, "tok")
 
-        orig = self._patch_budget(2000)
+        orig = settings.token_budget
+        settings.token_budget = 2000
         try:
-            result = await try_store_result(task_id, wide_df, 0, 10)
+            result = await try_store_result(
+                task_id, wide_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
+            )
         finally:
-            self._patch_budget(orig)
+            settings.token_budget = orig
 
         assert result is not None
         widget = json.loads(result[0].text)
@@ -488,19 +476,22 @@ class TestTokenBudgetIntegration:
     @pytest.mark.asyncio
     async def test_try_cached_clamps_page(self, wide_df, _http_state):
         task_id = "task-budget-cached"
-        await state.store.store_poll_token(task_id, "tok")
+        await redis_store.store_poll_token(task_id, "tok")
 
         # Store CSV and metadata first (with normal budget)
         csv_text = wide_df.to_csv(index=False)
-        await state.store.store_result_csv(task_id, csv_text)
+        await redis_store.store_result_csv(task_id, csv_text)
         meta = json.dumps({"total": len(wide_df), "columns": list(wide_df.columns)})
-        await state.store.store_result_meta(task_id, meta)
+        await redis_store.store_result_meta(task_id, meta)
 
-        orig = self._patch_budget(2000)
+        orig = settings.token_budget
+        settings.token_budget = 2000
         try:
-            result = await try_cached_result(task_id, 0, 10)
+            result = await try_cached_result(
+                task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL
+            )
         finally:
-            self._patch_budget(orig)
+            settings.token_budget = orig
 
         assert result is not None
         widget = json.loads(result[0].text)
@@ -512,13 +503,16 @@ class TestTokenBudgetIntegration:
         """With a large budget, the full page_size is returned."""
         df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
         task_id = "task-budget-ok"
-        await state.store.store_poll_token(task_id, "tok")
+        await redis_store.store_poll_token(task_id, "tok")
 
-        orig = self._patch_budget(100_000)
+        orig = settings.token_budget
+        settings.token_budget = 100_000
         try:
-            result = await try_store_result(task_id, df, 0, 3)
+            result = await try_store_result(
+                task_id, df, 0, 3, mcp_server_url=FAKE_SERVER_URL
+            )
         finally:
-            self._patch_budget(orig)
+            settings.token_budget = orig
 
         assert result is not None
         widget = json.loads(result[0].text)

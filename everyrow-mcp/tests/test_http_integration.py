@@ -25,21 +25,19 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from everyrow_mcp import redis_store
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, Transport, state
-from tests.conftest import override_state
+from tests.conftest import override_settings
 
 # ── Fixtures ───────────────────────────────────────────────────
 
 
 @pytest.fixture
 def _http_state(fake_redis):
-    """Configure global state for HTTP mode and restore after test."""
-    with override_state(
-        transport=Transport.HTTP,
-        no_auth=True,
-        store=RedisStore(fake_redis),
-        mcp_server_url="http://testserver",
+    """Configure settings for HTTP mode and patch Redis."""
+    with (
+        override_settings(transport="streamable-http"),
+        patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield
 
@@ -127,8 +125,8 @@ class TestProgressEndpoint:
     async def test_unauthorized_with_wrong_token(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key")
 
         resp = await client.get(f"/api/progress/{task_id}", params={"token": "wrong"})
         assert resp.status_code == 403
@@ -137,7 +135,7 @@ class TestProgressEndpoint:
     async def test_unknown_task_returns_404(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token)
         # No task_token stored
 
         resp = await client.get(
@@ -150,8 +148,8 @@ class TestProgressEndpoint:
     async def test_running_task_returns_progress(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key-123")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key-123")
 
         status_resp = _make_status_response(
             status="running", completed=7, total=20, failed=1, running=4
@@ -182,8 +180,8 @@ class TestProgressEndpoint:
     async def test_completed_task_cleans_up_tokens(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key")
 
         status_resp = _make_status_response(
             status="completed", completed=10, total=10, failed=0, running=0
@@ -202,15 +200,15 @@ class TestProgressEndpoint:
         assert resp.json()["status"] == "completed"
 
         # Task token cleaned up; poll token kept for CSV download
-        assert await state.store.get_task_token(task_id) is None
-        assert await state.store.get_poll_token(task_id) is not None
+        assert await redis_store.get_task_token(task_id) is None
+        assert await redis_store.get_poll_token(task_id) is not None
 
     @pytest.mark.asyncio
     async def test_api_error_returns_500(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key")
 
         with patch(
             "everyrow_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio",
@@ -239,8 +237,8 @@ class TestProgressLifecycle:
         poll_token = secrets.token_urlsafe(16)
 
         # 1. Store tokens (simulating what everyrow_agent does)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key-for-polling")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key-for-polling")
 
         # 2. Poll progress — task is running
         running_resp = _make_status_response(status="running", completed=1, total=3)

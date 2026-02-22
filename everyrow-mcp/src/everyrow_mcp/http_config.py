@@ -17,31 +17,29 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.app import http_lifespan, no_auth_http_lifespan
 from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
-from everyrow_mcp.config import get_http_settings
+from everyrow_mcp.config import settings
 from everyrow_mcp.middleware import RateLimitMiddleware
+from everyrow_mcp.redis_store import get_redis_client
 from everyrow_mcp.routes import api_download, api_progress
-from everyrow_mcp.state import state
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
 
 logger = logging.getLogger(__name__)
 
 
 def configure_http_mode(
+    *,
     mcp: FastMCP,
-    redis_client: Redis,
     host: str,
     port: int,
+    no_auth: bool,
+    mcp_server_url: str,
 ) -> None:
-    """Configure the MCP server for HTTP transport.
-
-    State (``state.transport``, ``state.store``, ``state.mcp_server_url``)
-    must already be set by the caller before this function is invoked.
-    """
-    if state.no_auth:
+    """Configure the MCP server for HTTP transport."""
+    redis_client = get_redis_client()
+    if no_auth:
         lifespan = no_auth_http_lifespan
     else:
         lifespan = http_lifespan
-        settings = get_http_settings()
         verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
         auth_provider = EveryRowAuthProvider(
             redis=redis_client,
@@ -53,14 +51,14 @@ def configure_http_mode(
     mcp.settings.host = host
     mcp.settings.port = port
 
-    _register_widgets(mcp)
-    _register_routes(mcp, auth_provider if not state.no_auth else None)
-    _add_middleware(mcp, redis_client, rate_limit=not state.no_auth)
+    _register_widgets(mcp, mcp_server_url)
+    _register_routes(mcp, auth_provider if not no_auth else None)
+    _add_middleware(mcp, redis_client, rate_limit=not no_auth)
 
 
-def _register_widgets(mcp: FastMCP) -> None:
+def _register_widgets(mcp: FastMCP, mcp_server_url: str) -> None:
     """Register MCP App widget resources for HTTP mode."""
-    widget_csp = _ui_csp([state.mcp_server_url])
+    widget_csp = _ui_csp([mcp_server_url])
 
     @mcp.resource(
         "ui://everyrow/session.html",
@@ -105,7 +103,6 @@ def _configure_mcp_auth(
     verifier: SupabaseTokenVerifier,
 ) -> None:
     """Wire OAuth provider and JWT verifier into FastMCP."""
-    settings = get_http_settings()
     mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
     mcp._token_verifier = verifier
     mcp.settings.auth = AuthSettings(

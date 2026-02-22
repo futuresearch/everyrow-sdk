@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, PositiveInt, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class _CommonSettings(BaseSettings):
-    """Fields shared across all transport modes."""
-
+class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
+
+    transport: str = Field(default="stdio")
 
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
     preview_size: int = Field(default=50)
@@ -17,19 +17,6 @@ class _CommonSettings(BaseSettings):
         default=20000,
         description="Target token budget per page of inline results",
     )
-
-    @field_validator("everyrow_api_url")
-    @classmethod
-    def _strip_api_url_slash(cls, v: str) -> str:
-        return v.rstrip("/")
-
-
-class StdioSettings(_CommonSettings):
-    everyrow_api_key: str
-
-
-class _BaseHttpSettings(_CommonSettings):
-    """Common settings for HTTP transport modes (auth and no-auth)."""
 
     redis_host: str = Field(default="localhost")
     redis_port: int = Field(default=6379)
@@ -40,82 +27,60 @@ class _BaseHttpSettings(_CommonSettings):
     )
     redis_sentinel_master_name: str | None = Field(default=None)
 
+    # HTTP-only settings — unused in stdio mode
+    mcp_server_url: str = Field(default="")
+    supabase_url: str = Field(default="")
+    supabase_anon_key: str = Field(default="")
 
-class HttpSettings(_BaseHttpSettings):
-    mcp_server_url: str
-    supabase_url: str
-    supabase_anon_key: str
-
-    registration_rate_limit: int = Field(
+    registration_rate_limit: PositiveInt = Field(
         default=10,
         description="Max registrations/authorizations per IP per rate window",
     )
-    registration_rate_window: int = Field(
+    registration_rate_window: PositiveInt = Field(
         default=60,
         description="Rate limit sliding window in seconds",
     )
 
-    access_token_ttl: int = Field(
+    access_token_ttl: PositiveInt = Field(
         default=3300,
         description="Access token TTL in seconds (55 min, before Supabase JWT 1h expiry)",
     )
-    auth_code_ttl: int = Field(
+    auth_code_ttl: PositiveInt = Field(
         default=300,
         description="Authorization code TTL in seconds",
     )
-    pending_auth_ttl: int = Field(
+    pending_auth_ttl: PositiveInt = Field(
         default=600,
         description="Pending authorization TTL in seconds",
     )
-    client_registration_ttl: int = Field(
+    client_registration_ttl: PositiveInt = Field(
         default=2_592_000,
         description="Client registration TTL in seconds (30 days)",
     )
-    refresh_token_ttl: int = Field(
+    refresh_token_ttl: PositiveInt = Field(
         default=604_800,
         description="Refresh token TTL in seconds (7 days)",
     )
+    everyrow_api_key: str | None = None
+
+    @property
+    def is_http(self) -> bool:
+        return self.transport == "streamable-http"
+
+    @property
+    def is_stdio(self) -> bool:
+        return self.transport == "stdio"
 
     @field_validator("mcp_server_url", "supabase_url")
     @classmethod
     def _strip_url_slashes(cls, v: str) -> str:
         return v.rstrip("/")
 
-    @field_validator(
-        "registration_rate_limit",
-        "registration_rate_window",
-        "access_token_ttl",
-        "auth_code_ttl",
-        "pending_auth_ttl",
-        "client_registration_ttl",
-        "refresh_token_ttl",
-    )
-    @classmethod
-    def _positive_int(cls, v: int, info) -> int:
-        if v <= 0:
-            raise ValueError(f"{info.field_name} must be > 0, got {v}")
-        return v
-
-
-class DevHttpSettings(_BaseHttpSettings):
-    """Settings for --no-auth HTTP mode (local development only).
-
-    Only requires EVERYROW_API_KEY. Redis defaults to localhost:6379:13.
-    """
-
-    everyrow_api_key: str
-
 
 @lru_cache
-def get_http_settings() -> HttpSettings:
-    return HttpSettings()
+def _get_settings():
+    settings_instance = Settings()  # pyright: ignore[reportCallIssue]
+    return settings_instance
 
 
-@lru_cache
-def get_dev_http_settings() -> DevHttpSettings:
-    return DevHttpSettings()
-
-
-@lru_cache
-def get_stdio_settings() -> StdioSettings:
-    return StdioSettings()
+settings = _get_settings()

@@ -11,13 +11,12 @@ from everyrow.generated.client import AuthenticatedClient
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 
-from everyrow_mcp.state import TASK_STATE_FILE, state
+from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import TASK_STATE_FILE, get_redis_client
 from everyrow_mcp.tool_helpers import SessionContext
 
 
 def _clear_task_state() -> None:
-    if state.is_http:
-        return
     if TASK_STATE_FILE.exists():
         TASK_STATE_FILE.unlink()
 
@@ -48,35 +47,40 @@ async def http_lifespan(_server: FastMCP):
     shared resources (auth_provider, Redis) here — they must survive
     across sessions. Process exit handles cleanup.
     """
-    log = logging.getLogger(__name__)
-    if state.store is not None:
-        await state.store.ping()
-        log.info("Redis health check passed")
+    redis_client = get_redis_client()
+    await redis_client.ping()
 
     def _http_client_factory() -> AuthenticatedClient:
         access_token = get_access_token()
         if access_token is None:
             raise RuntimeError("Not authenticated")
         return AuthenticatedClient(
-            base_url=state.settings.everyrow_api_url,
+            base_url=settings.everyrow_api_url,
             token=access_token.token,
             raise_on_unexpected_status=True,
             follow_redirects=True,
         )
 
-    yield SessionContext(client_factory=_http_client_factory)
+    yield SessionContext(
+        client_factory=_http_client_factory,
+        mcp_server_url=settings.mcp_server_url,
+    )
 
 
 @asynccontextmanager
 async def no_auth_http_lifespan(_server: FastMCP):
     """HTTP no-auth mode: singleton client from API key, verify Redis."""
-    if state.store is not None:
-        await state.store.ping()
+    redis_client = get_redis_client()
+    await redis_client.ping()
+
     with _create_sdk_client() as client:
         response = await get_billing(client=client)
         if response is None:
             raise RuntimeError("Failed to authenticate with everyrow API")
-        yield SessionContext(client_factory=lambda: client)
+        yield SessionContext(
+            client_factory=lambda: client,
+            mcp_server_url=settings.mcp_server_url,
+        )
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=stdio_lifespan)

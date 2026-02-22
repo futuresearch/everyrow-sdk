@@ -31,16 +31,16 @@ from mcp.types import TextContent
 from starlette.applications import Starlette
 from starlette.routing import Route
 
+from everyrow_mcp import redis_store
 from everyrow_mcp.models import AgentInput, ProgressInput, ResultsInput, ScreenInput
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, Transport
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
     everyrow_screen,
 )
-from tests.conftest import make_test_context, override_state
+from tests.conftest import make_test_context, override_settings
 
 # Skip unless explicitly enabled
 pytestmark = pytest.mark.skipif(
@@ -72,11 +72,10 @@ async def real_redis():
 
 @pytest.fixture
 def _http_mode(real_redis):
-    """Configure global state for HTTP mode with real Redis, restore after test."""
-    with override_state(
-        transport=Transport.HTTP,
-        store=RedisStore(real_redis),
-        mcp_server_url="http://testserver",
+    """Configure settings for HTTP mode with real Redis."""
+    with (
+        override_settings(transport="streamable-http"),
+        patch.object(redis_store, "get_redis_client", return_value=real_redis),
     ):
         yield
 

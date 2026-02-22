@@ -19,7 +19,8 @@ import logging
 import pandas as pd
 from mcp.types import TextContent
 
-from everyrow_mcp.state import state
+from everyrow_mcp import redis_store
+from everyrow_mcp.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ def _build_result_response(
     """Build MCP TextContent response for Redis-backed results."""
     col_names = _format_columns(columns)
 
-    widget_data: dict = {
+    widget_data = {
         "csv_url": csv_url,
         "preview": preview,
         "total": total,
@@ -111,11 +112,7 @@ def _build_result_response(
     next_offset = offset + page_size if has_more else None
 
     if has_more:
-        page_size_arg = (
-            f", page_size={page_size}"
-            if page_size != state.settings.preview_size
-            else ""
-        )
+        page_size_arg = f", page_size={page_size}"
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
             f"Showing rows {offset + 1}-{min(offset + page_size, total)} of {total}.\n"
@@ -145,26 +142,24 @@ def _build_result_response(
     ]
 
 
-async def _get_csv_url(task_id: str) -> str:
+async def _get_csv_url(task_id: str, mcp_server_url: str) -> str:
     """Build the CSV download URL with the current poll token."""
-    poll_token = await state.store.get_poll_token(task_id) or ""
-    return f"{state.mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
+    poll_token = await redis_store.get_poll_token(task_id)
+    return f"{mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
 
 
 async def try_cached_result(
     task_id: str,
     offset: int,
     page_size: int,
+    mcp_server_url: str = "",
 ) -> list[TextContent] | None:
     """Return a Redis-backed result page, using per-page cache.
 
     Returns None if Redis is not available or no cached metadata exists.
     """
-    if state.store is None:
-        return None
-
     # Check base metadata — if absent, this task isn't cached
-    cached_meta_raw = await state.store.get_result_meta(task_id)
+    cached_meta_raw = await redis_store.get_result_meta(task_id)
     if not cached_meta_raw:
         return None
 
@@ -174,20 +169,20 @@ async def try_cached_result(
     session_url: str = meta.get("session_url", "")
 
     # Check per-page cache
-    cached_page = await state.store.get_result_page(task_id, offset, page_size)
+    cached_page = await redis_store.get_result_page(task_id, offset, page_size)
     if cached_page is not None:
         preview = json.loads(cached_page)
     else:
         # Page cache miss — read full CSV from Redis and slice
         try:
-            csv_text = await state.store.get_result_csv(task_id)
+            csv_text = await redis_store.get_result_csv(task_id)
             if csv_text is None:
                 preview = []
             else:
                 df = pd.read_csv(io.StringIO(csv_text))
                 all_records = df.where(df.notna(), None).to_dict(orient="records")
                 preview = _slice_preview(all_records, offset, page_size)
-                await state.store.store_result_page(
+                await redis_store.store_result_page(
                     task_id, offset, page_size, json.dumps(preview)
                 )
         except Exception:
@@ -195,10 +190,10 @@ async def try_cached_result(
             preview = []
 
     preview, effective_page_size = clamp_page_to_budget(
-        preview, page_size, state.settings.token_budget
+        preview, page_size, settings.token_budget
     )
 
-    csv_url = await _get_csv_url(task_id)
+    csv_url = await _get_csv_url(task_id, mcp_server_url)
 
     return _build_result_response(
         task_id=task_id,
@@ -218,41 +213,39 @@ async def try_store_result(
     offset: int,
     page_size: int,
     session_url: str = "",
+    mcp_server_url: str = "",
 ) -> list[TextContent] | None:
     """Store a DataFrame in Redis and return a response.
 
     Returns None if Redis is not available (caller should fall back to
     inline results).
     """
-    if state.store is None:
-        return None
-
     try:
         # Store full CSV in Redis
-        await state.store.store_result_csv(task_id, df.to_csv(index=False))
+        await redis_store.store_result_csv(task_id, df.to_csv(index=False))
 
         total = len(df)
         columns = list(df.columns)
 
         # Store base metadata
-        meta: dict = {"total": total, "columns": columns}
+        meta = {"total": total, "columns": columns}
         if session_url:
             meta["session_url"] = session_url
-        await state.store.store_result_meta(task_id, json.dumps(meta))
+        await redis_store.store_result_meta(task_id, json.dumps(meta))
 
         # Build and cache page preview
         clamped_offset = min(offset, total)
         page_df = df.iloc[clamped_offset : clamped_offset + page_size]
         preview = page_df.where(page_df.notna(), None).to_dict(orient="records")
-        await state.store.store_result_page(
+        await redis_store.store_result_page(
             task_id, offset, page_size, json.dumps(preview)
         )
 
         preview, effective_page_size = clamp_page_to_budget(
-            preview, page_size, state.settings.token_budget
+            preview, page_size, settings.token_budget
         )
 
-        csv_url = await _get_csv_url(task_id)
+        csv_url = await _get_csv_url(task_id, mcp_server_url)
 
         return _build_result_response(
             task_id=task_id,

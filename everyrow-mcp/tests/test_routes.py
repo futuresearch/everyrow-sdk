@@ -14,8 +14,8 @@ from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 
+from everyrow_mcp import redis_store
 from everyrow_mcp.routes import api_progress
-from everyrow_mcp.state import RedisStore, state
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -67,13 +67,11 @@ def _make_status_response(
 # ── Fixtures ───────────────────────────────────────────────────
 
 
-@pytest.fixture
-async def setup_state(fake_redis):
-    """Temporarily wire state to mock Redis and restore after test."""
-    original_store = state.store
-    state.store = RedisStore(fake_redis)
-    yield
-    state.store = original_store
+@pytest.fixture(autouse=True)
+def _use_fake_redis(fake_redis):
+    """Patch get_redis_client to return the test Redis instance."""
+    with patch.object(redis_store, "get_redis_client", return_value=fake_redis):
+        yield
 
 
 # ── api_progress tests ─────────────────────────────────────────
@@ -81,17 +79,17 @@ async def setup_state(fake_redis):
 
 class TestApiProgress:
     @pytest.mark.asyncio
-    async def test_options_returns_204(self, setup_state):
+    async def test_options_returns_204(self):
         req = FakeRequest(method="OPTIONS", path_params={"task_id": "abc"})
         resp = await api_progress(req)
         assert resp.status_code == 204
         assert resp.headers["Access-Control-Allow-Origin"] == "*"
 
     @pytest.mark.asyncio
-    async def test_invalid_poll_token_returns_403(self, setup_state):
+    async def test_invalid_poll_token_returns_403(self):
         task_id = str(uuid4())
-        await state.store.store_poll_token(task_id, "correct-token")
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, "correct-token")
+        await redis_store.store_task_token(task_id, "api-key")
 
         req = FakeRequest(
             path_params={"task_id": task_id},
@@ -103,7 +101,7 @@ class TestApiProgress:
         assert body["error"] == "Unauthorized"
 
     @pytest.mark.asyncio
-    async def test_missing_poll_token_returns_403(self, setup_state):
+    async def test_missing_poll_token_returns_403(self):
         task_id = str(uuid4())
         # No poll token stored
         req = FakeRequest(
@@ -114,10 +112,10 @@ class TestApiProgress:
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_missing_task_token_returns_404(self, setup_state):
+    async def test_missing_task_token_returns_404(self):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token)
         # No task token stored
 
         req = FakeRequest(
@@ -130,11 +128,11 @@ class TestApiProgress:
         assert body["error"] == "Unknown task"
 
     @pytest.mark.asyncio
-    async def test_valid_progress_returns_status(self, setup_state):
+    async def test_valid_progress_returns_status(self):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key-123")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key-123")
 
         status_resp = _make_status_response(
             status="running", completed=3, total=10, failed=1, running=2
@@ -164,11 +162,11 @@ class TestApiProgress:
         assert resp.headers["Access-Control-Allow-Origin"] == "*"
 
     @pytest.mark.asyncio
-    async def test_completed_task_pops_tokens(self, setup_state):
+    async def test_completed_task_pops_tokens(self):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key")
 
         status_resp = _make_status_response(status="completed", completed=10, total=10)
 
@@ -189,15 +187,15 @@ class TestApiProgress:
         assert body["status"] == "completed"
 
         # Task token cleaned up; poll token kept for CSV download
-        assert await state.store.get_task_token(task_id) is None
-        assert await state.store.get_poll_token(task_id) is not None
+        assert await redis_store.get_task_token(task_id) is None
+        assert await redis_store.get_poll_token(task_id) is not None
 
     @pytest.mark.asyncio
-    async def test_api_error_returns_500(self, setup_state):
+    async def test_api_error_returns_500(self):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await state.store.store_poll_token(task_id, poll_token)
-        await state.store.store_task_token(task_id, "api-key")
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_token(task_id, "api-key")
 
         req = FakeRequest(
             path_params={"task_id": task_id},

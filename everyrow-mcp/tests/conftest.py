@@ -23,7 +23,7 @@ import pytest
 import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
-from everyrow_mcp.state import state
+from everyrow_mcp.config import settings
 from everyrow_mcp.tool_helpers import SessionContext
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
@@ -81,22 +81,22 @@ def make_test_context(client):
 
 
 @contextmanager
-def override_state(**overrides):
-    """Temporarily override ServerState fields and restore after the block.
+def override_settings(**overrides):
+    """Temporarily override Settings fields and restore after the block.
 
     Usage::
 
-        with override_state(transport=Transport.HTTP, no_auth=True, store=store):
+        with override_settings(transport="streamable-http"):
             ...
     """
-    orig = {k: getattr(state, k) for k in overrides}
+    orig = {k: getattr(settings, k) for k in overrides}
     for k, v in overrides.items():
-        setattr(state, k, v)
+        setattr(settings, k, v)
     try:
         yield
     finally:
         for k, v in orig.items():
-            setattr(state, k, v)
+            setattr(settings, k, v)
 
 
 @pytest.fixture

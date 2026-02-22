@@ -38,7 +38,9 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import TextContent
 
 import everyrow_mcp.tools  # noqa: F401 — trigger @mcp.tool() registration
+from everyrow_mcp import redis_store
 from everyrow_mcp.app import mcp as mcp_app
+from everyrow_mcp.config import settings
 from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
@@ -49,7 +51,7 @@ from everyrow_mcp.models import (
     ScreenInput,
     SingleAgentInput,
 )
-from everyrow_mcp.state import Transport, state
+from everyrow_mcp.redis_store import Transport
 from everyrow_mcp.tool_descriptions import set_tool_descriptions
 from everyrow_mcp.tool_helpers import SessionContext
 from everyrow_mcp.tools import (
@@ -627,7 +629,7 @@ class TestHttpModeIncludesWidgets:
     """Verify HTTP mode DOES include widget data (confirming the gate works both ways)."""
 
     @pytest.mark.asyncio
-    async def test_submit_http_has_widget_json(self, companies_csv: str):
+    async def test_submit_http_has_widget_json(self, companies_csv: str, fake_redis):
         """HTTP mode must include widget JSON as the first TextContent."""
         _task, _session, _client, ctx, *patches = _submit_patches(
             "everyrow_mcp.tools.agent_map_async"
@@ -635,7 +637,8 @@ class TestHttpModeIncludesWidgets:
         with (
             patches[0],
             patches[1],
-            patch.object(state, "transport", Transport.HTTP),
+            patch.object(settings, "transport", Transport.HTTP),
+            patch.object(redis_store, "get_redis_client", return_value=fake_redis),
         ):
             result = await everyrow_agent(
                 AgentInput(task="Find HQ", input_csv=companies_csv), ctx
@@ -657,7 +660,7 @@ class TestHttpModeIncludesWidgets:
         status_resp = _make_status_response(status="running", completed=3, total=10)
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            patch.object(settings, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -680,7 +683,7 @@ class TestHttpModeIncludesWidgets:
         status_resp = _make_status_response(status="completed", completed=5, total=5)
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            patch.object(settings, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -748,7 +751,7 @@ class TestStdioMcpIntegration:
     @pytest.fixture
     def _real_stdio_client(self):
         """Provide a real EveryRow client in stdio mode (default transport)."""
-        assert state.transport == "stdio", "State should default to stdio"
+        assert settings.transport == "stdio", "Settings should default to stdio"
         with create_client() as sdk_client:
             yield sdk_client
 

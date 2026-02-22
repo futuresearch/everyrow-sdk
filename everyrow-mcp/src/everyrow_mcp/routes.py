@@ -12,7 +12,8 @@ from everyrow.generated.client import AuthenticatedClient
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from everyrow_mcp.state import state
+from everyrow_mcp import redis_store
+from everyrow_mcp.config import settings
 from everyrow_mcp.tool_helpers import _UI_EXCLUDE, TaskState
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ _CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GE
 
 async def _validate_poll_token(task_id: str, request: Request) -> JSONResponse | None:
     """Return an error response if the poll token is missing/invalid, else None."""
-    expected = await state.store.get_poll_token(task_id)
+    expected = await redis_store.get_poll_token(task_id)
     provided = request.query_params.get("token", "")
     if not expected or not secrets.compare_digest(provided, expected):
         return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=_CORS)
@@ -39,13 +40,14 @@ async def api_progress(request: Request) -> Response:
     if err := await _validate_poll_token(task_id, request):
         return err
 
-    api_key = await state.store.get_task_token(task_id)
+    api_key = await redis_store.get_task_token(task_id)
+
     if not api_key:
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=_CORS)
 
     try:
         client = AuthenticatedClient(
-            base_url=state.settings.everyrow_api_url,
+            base_url=settings.everyrow_api_url,
             token=api_key,
             raise_on_unexpected_status=True,
             follow_redirects=True,
@@ -60,7 +62,7 @@ async def api_progress(request: Request) -> Response:
         ts = TaskState(status_response)
 
         if ts.is_terminal:
-            await state.store.pop_task_token(task_id)
+            await redis_store.pop_task_token(task_id)
 
         return JSONResponse(
             ts.model_dump(mode="json", exclude=_UI_EXCLUDE), headers=_CORS
@@ -82,7 +84,7 @@ async def api_download(request: Request) -> Response:
     if err := await _validate_poll_token(task_id, request):
         return err
 
-    csv_text = await state.store.get_result_csv(task_id)
+    csv_text = await redis_store.get_result_csv(task_id)
     if csv_text is None:
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=_CORS

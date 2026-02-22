@@ -30,21 +30,20 @@ from mcp.shared.memory import create_connected_server_and_client_session
 
 # Import tools module to trigger @mcp.tool() registration on the FastMCP instance
 import everyrow_mcp.tools  # noqa: F401
+from everyrow_mcp import redis_store
 from everyrow_mcp.app import mcp as mcp_app
-from everyrow_mcp.state import RedisStore, Transport
-from tests.conftest import override_state
+from everyrow_mcp.tool_helpers import SessionContext
+from tests.conftest import override_settings
 
 # ── Fixtures / helpers ────────────────────────────────────────
 
 
 @pytest.fixture
 def _http_state(fake_redis):
-    """Configure global state for HTTP mode, restore after test."""
-    with override_state(
-        transport=Transport.HTTP,
-        no_auth=True,
-        store=RedisStore(fake_redis),
-        mcp_server_url="http://testserver",
+    """Configure settings for HTTP mode and patch Redis."""
+    with (
+        override_settings(transport="streamable-http"),
+        patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield
 
@@ -61,7 +60,10 @@ async def mcp_client():
 
     @asynccontextmanager
     async def _noop_lifespan(_server):
-        yield
+        yield SessionContext(
+            client_factory=lambda: MagicMock(token="fake-token"),
+            mcp_server_url="http://testserver",
+        )
 
     mcp_app._mcp_server.lifespan = lifespan_wrapper(mcp_app, _noop_lifespan)
 
@@ -213,7 +215,7 @@ class TestMcpProtocol:
                     new_callable=AsyncMock,
                     return_value=status_resp,
                 ),
-                patch("everyrow_mcp.tools.PROGRESS_POLL_DELAY", 0),
+                patch("everyrow_mcp.redis_store.PROGRESS_POLL_DELAY", 0),
             ):
                 result = await session.call_tool(
                     "everyrow_progress",
@@ -310,7 +312,7 @@ class TestMcpProtocol:
                     new_callable=AsyncMock,
                     return_value=status_resp,
                 ),
-                patch("everyrow_mcp.tools.PROGRESS_POLL_DELAY", 0),
+                patch("everyrow_mcp.redis_store.PROGRESS_POLL_DELAY", 0),
             ):
                 result = await session.call_tool(
                     "everyrow_progress",

@@ -21,7 +21,9 @@ from everyrow.session import create_session, get_session_url
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
+from everyrow_mcp import redis_store
 from everyrow_mcp.app import _clear_task_state, mcp
+from everyrow_mcp.config import settings
 from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
@@ -34,7 +36,6 @@ from everyrow_mcp.models import (
     _schema_to_model,
 )
 from everyrow_mcp.result_store import try_cached_result, try_store_result
-from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
     EveryRowContext,
     TaskNotReady,
@@ -102,12 +103,14 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
             total=len(df),
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label=f"Submitted: {len(df)} agents starting.",
         token=client.token,
         total=len(df),
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -172,12 +175,14 @@ async def everyrow_single_agent(
             total=1,
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label="Submitted: single agent starting.",
         token=client.token,
         total=1,
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -248,12 +253,14 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
             total=len(df),
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label=f"Submitted: {len(df)} rows for ranking.",
         token=client.token,
         total=len(df),
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -328,12 +335,14 @@ async def everyrow_screen(
             total=len(df),
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label=f"Submitted: {len(df)} rows for screening.",
         token=client.token,
         total=len(df),
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -399,12 +408,14 @@ async def everyrow_dedupe(
             total=len(df),
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label=f"Submitted: {len(df)} rows for deduplication.",
         token=client.token,
         total=len(df),
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -490,12 +501,14 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
             total=len(left_df),
         )
 
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
         label=f"Submitted: {len(left_df)} left rows for merging.",
         token=client.token,
         total=len(left_df),
+        mcp_server_url=mcp_server_url,
     )
 
 
@@ -526,7 +539,7 @@ async def everyrow_progress(
     task_id = params.task_id
 
     # Block server-side before polling — controls the cadence
-    await asyncio.sleep(PROGRESS_POLL_DELAY)
+    await asyncio.sleep(redis_store.PROGRESS_POLL_DELAY)
 
     try:
         status_response = handle_response(
@@ -573,10 +586,13 @@ async def everyrow_results(  # noqa: PLR0911
     """
     client = _get_client(ctx)
     task_id = params.task_id
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
 
     # ── HTTP mode: return from cache if available ───────────────
-    if state.is_http:
-        cached = await try_cached_result(task_id, params.offset, params.page_size)
+    if settings.is_http:
+        cached = await try_cached_result(
+            task_id, params.offset, params.page_size, mcp_server_url=mcp_server_url
+        )
         if cached is not None:
             return cached
 
@@ -597,7 +613,7 @@ async def everyrow_results(  # noqa: PLR0911
         return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
 
     # ── stdio mode: save to file ──────────────────────────────────
-    if state.is_stdio:
+    if settings.is_stdio:
         if params.output_path:
             output_file = Path(params.output_path)
             save_result_to_csv(df, output_file)
@@ -620,7 +636,12 @@ async def everyrow_results(  # noqa: PLR0911
 
     # ── HTTP mode: store in Redis and return paginated response ──
     store_response = await try_store_result(
-        task_id, df, params.offset, params.page_size, session_url
+        task_id,
+        df,
+        params.offset,
+        params.page_size,
+        session_url,
+        mcp_server_url=mcp_server_url,
     )
     if store_response is not None:
         return store_response
