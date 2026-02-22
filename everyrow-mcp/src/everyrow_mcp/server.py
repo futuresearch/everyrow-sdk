@@ -47,7 +47,7 @@ def parse_args() -> InputArgs:
         default="0.0.0.0",
         help="Host for HTTP transport (default: 0.0.0.0).",
     )
-    input_args = InputArgs.model_validate(parser.parse_args())
+    input_args = InputArgs.model_validate(vars(parser.parse_args()))
 
     if input_args.no_auth and not input_args.http:
         parser.error("--no-auth requires --http")
@@ -68,10 +68,10 @@ def main():
     input_args = parse_args()
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
-    transport = Transport.HTTP if input_args.http else Transport.STDIO
+    state.transport = Transport.HTTP if input_args.http else Transport.STDIO
     state.no_auth = input_args.no_auth
 
-    set_tool_descriptions(transport)
+    set_tool_descriptions(state.transport)
     if input_args.http:
         if input_args.no_auth:
             settings = get_dev_http_settings()

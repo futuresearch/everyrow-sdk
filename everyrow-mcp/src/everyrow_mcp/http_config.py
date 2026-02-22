@@ -59,9 +59,8 @@ def configure_http_mode(
 
 
 def _register_widgets(mcp: FastMCP) -> None:
-    """Register MCP App widget resources and patch CSP onto tool metadata."""
+    """Register MCP App widget resources for HTTP mode."""
     widget_csp = _ui_csp([state.mcp_server_url])
-    _patch_tool_csp(mcp, widget_csp)
 
     @mcp.resource(
         "ui://everyrow/session.html",
@@ -119,14 +118,6 @@ def _configure_mcp_auth(
         enable_dns_rebinding_protection=True,
         allowed_hosts=[hostname],
     )
-
-
-def _patch_tool_csp(mcp: FastMCP, csp: dict) -> None:
-    """Patch CSP policy onto tool metadata for MCP App widgets."""
-    for tool_name in ("everyrow_progress", "everyrow_results"):
-        tool = mcp._tool_manager.get_tool(tool_name)
-        if tool and tool.meta and "ui" in tool.meta:
-            tool.meta["ui"]["csp"] = csp
 
 
 def _ui_csp(connect_domains: list[str]) -> dict[str, str | list[str]]:

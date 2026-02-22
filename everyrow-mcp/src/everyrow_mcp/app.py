@@ -12,7 +12,6 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
-from everyrow_mcp.templates import PROGRESS_HTML, UI_CSP_META
 from everyrow_mcp.tool_helpers import SessionContext
 
 
@@ -81,17 +80,3 @@ async def no_auth_http_lifespan(_server: FastMCP):
 
 
 mcp = FastMCP("everyrow_mcp", lifespan=stdio_lifespan)
-
-
-@mcp.resource(
-    "ui://everyrow/progress.html",
-    mime_type="text/html;profile=mcp-app",
-    meta=UI_CSP_META,
-)
-def progress_ui() -> str:
-    return PROGRESS_HTML
-
-
-# NOTE: results.html and session.html are registered in http_config.py
-# (with HTTP-aware CSP) when running in HTTP mode. Only progress.html
-# is registered here because it's used in both transport modes.

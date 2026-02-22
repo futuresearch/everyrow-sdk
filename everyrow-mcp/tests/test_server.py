@@ -1078,8 +1078,8 @@ class TestStdioVsHttpGating:
         assert "2/5 complete" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_progress_http_returns_widget_and_text(self):
-        """In HTTP mode, progress returns widget JSON + human text."""
+    async def test_progress_http_returns_text_only(self):
+        """In HTTP mode, progress returns only human-readable text."""
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
         task_id = str(uuid4())
@@ -1099,8 +1099,5 @@ class TestStdioVsHttpGating:
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        ui_data = json.loads(result[0].text)
-        assert ui_data["completed"] == 2
-        assert ui_data["total"] == 5
-        assert "2/5 complete" in result[1].text
+        assert len(result) == 1
+        assert "2/5 complete" in result[0].text

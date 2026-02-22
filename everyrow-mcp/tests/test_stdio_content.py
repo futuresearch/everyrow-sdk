@@ -649,8 +649,8 @@ class TestHttpModeIncludesWidgets:
         assert "Task ID:" in result[1].text
 
     @pytest.mark.asyncio
-    async def test_progress_http_has_widget_json(self):
-        """HTTP mode progress includes JSON with counts for the widget."""
+    async def test_progress_http_returns_text_only(self):
+        """HTTP mode progress returns only human-readable text (no widget JSON)."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
@@ -668,10 +668,8 @@ class TestHttpModeIncludesWidgets:
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget = json.loads(result[0].text)
-        assert widget["completed"] == 3
-        assert widget["total"] == 10
+        assert len(result) == 1
+        assert "3/10 complete" in result[0].text
 
     @pytest.mark.asyncio
     async def test_progress_http_completed_no_output_path_hint(self):

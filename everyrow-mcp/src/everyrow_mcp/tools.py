@@ -1,7 +1,6 @@
 """MCP tool functions for the everyrow MCP server."""
 
 import asyncio
-import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -37,7 +36,6 @@ from everyrow_mcp.models import (
 from everyrow_mcp.result_store import try_cached_result, try_store_result
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
-    _UI_EXCLUDE,
     EveryRowContext,
     TaskNotReady,
     TaskState,
@@ -511,7 +509,6 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         idempotentHint=True,
         openWorldHint=False,
     ),
-    meta={"ui": {"resourceUri": "ui://everyrow/progress.html"}},
 )
 # NOTE: This docstring is overridden at startup by set_tool_descriptions().
 async def everyrow_progress(
@@ -539,25 +536,19 @@ async def everyrow_progress(
             )
         )
     except Exception as e:
-        text = dedent(f"""\
-            Error polling task: {e!r}
-            Retry: call everyrow_progress(task_id='{task_id}').""")
-        text_content = TextContent(type="text", text=text)
-        if state.is_http:
-            ui_content = TextContent(type="text", text=json.dumps({"status": "error"}))
-            return [ui_content, text_content]
-        return [text_content]
+        return [
+            TextContent(
+                type="text",
+                text=dedent(f"""\
+                    Error polling task: {e!r}
+                    Retry: call everyrow_progress(task_id='{task_id}')."""),
+            )
+        ]
 
     ts = TaskState(status_response)
     ts.write_file(task_id)
 
-    # JSON for MCP App progress UI (parsed by progress.html, not needed in stdio)
-    text_content = TextContent(type="text", text=ts.progress_message(task_id))
-    if state.is_http:
-        ui_json_str = ts.model_dump_json(exclude=_UI_EXCLUDE)
-        ui_content = TextContent(type="text", text=ui_json_str)
-        return [ui_content, text_content]
-    return [text_content]
+    return [TextContent(type="text", text=ts.progress_message(task_id))]
 
 
 @mcp.tool(
