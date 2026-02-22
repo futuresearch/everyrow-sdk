@@ -193,16 +193,16 @@ class ServerState(BaseModel):
     @property
     def settings(self) -> _CommonSettings:
         from everyrow_mcp.config import (  # noqa: PLC0415
-            _get_dev_http_settings,
-            _get_http_settings,
-            _get_stdio_settings,
+            get_dev_http_settings,
+            get_http_settings,
+            get_stdio_settings,
         )
 
         if self.transport == Transport.STDIO:
-            return _get_stdio_settings()
+            return get_stdio_settings()
         if self.no_auth:
-            return _get_dev_http_settings()
-        return _get_http_settings()
+            return get_dev_http_settings()
+        return get_http_settings()
 
     @property
     def is_stdio(self) -> bool:

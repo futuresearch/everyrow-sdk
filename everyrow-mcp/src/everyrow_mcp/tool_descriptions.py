@@ -1,11 +1,3 @@
-"""Transport-aware tool descriptions.
-
-Tool docstrings are registered once at import time, but stdio and HTTP models
-need different guidance.  This module defines per-transport descriptions and
-patches them onto the FastMCP Tool objects at startup, once the transport is
-known.
-"""
-
 from __future__ import annotations
 
 from everyrow_mcp.app import mcp

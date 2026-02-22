@@ -45,6 +45,7 @@ class SessionContext:
     """Per-session lifespan context yielded by all lifespans."""
 
     client_factory: Callable[[], AuthenticatedClient]
+
     """Return an API client for the current request.
 
     In stdio/no-auth mode this returns a long-lived singleton.

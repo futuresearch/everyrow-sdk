@@ -216,7 +216,7 @@ class TestHttpScreenPipeline:
         # 2. Poll progress via REST endpoint
         progress = await poll_via_rest(client, task_id, poll_token)
         assert progress["status"] == "completed"
-        assert progress["total"] > 0
+        # Screen tasks don't report row-level totals
         assert "session_url" in progress
         print(f"  Session: {progress['session_url']}")
 

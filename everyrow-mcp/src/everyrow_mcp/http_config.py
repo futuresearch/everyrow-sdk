@@ -17,7 +17,7 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp.app import http_lifespan, no_auth_http_lifespan
 from everyrow_mcp.auth import EveryRowAuthProvider, SupabaseTokenVerifier
-from everyrow_mcp.config import _get_http_settings
+from everyrow_mcp.config import get_http_settings
 from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.routes import api_download, api_progress
 from everyrow_mcp.state import state
@@ -41,7 +41,7 @@ def configure_http_mode(
         lifespan = no_auth_http_lifespan
     else:
         lifespan = http_lifespan
-        settings = _get_http_settings()
+        settings = get_http_settings()
         verifier = SupabaseTokenVerifier(settings.supabase_url, redis=redis_client)
         auth_provider = EveryRowAuthProvider(
             redis=redis_client,
@@ -106,7 +106,7 @@ def _configure_mcp_auth(
     verifier: SupabaseTokenVerifier,
 ) -> None:
     """Wire OAuth provider and JWT verifier into FastMCP."""
-    settings = _get_http_settings()
+    settings = get_http_settings()
     mcp._auth_server_provider = auth_provider  # type: ignore[arg-type]
     mcp._token_verifier = verifier
     mcp.settings.auth = AuthSettings(

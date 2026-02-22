@@ -107,15 +107,15 @@ class DevHttpSettings(_BaseHttpSettings):
 
 
 @lru_cache
-def _get_http_settings() -> HttpSettings:
+def get_http_settings() -> HttpSettings:
     return HttpSettings()
 
 
 @lru_cache
-def _get_dev_http_settings() -> DevHttpSettings:
+def get_dev_http_settings() -> DevHttpSettings:
     return DevHttpSettings()
 
 
 @lru_cache
-def _get_stdio_settings() -> StdioSettings:
+def get_stdio_settings() -> StdioSettings:
     return StdioSettings()

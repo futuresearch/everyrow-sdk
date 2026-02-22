@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 import everyrow_mcp.tools  # noqa: F401  — registers @mcp.tool() decorators
 from everyrow_mcp.app import mcp
-from everyrow_mcp.config import _get_dev_http_settings, _get_http_settings
+from everyrow_mcp.config import get_dev_http_settings, get_http_settings
 from everyrow_mcp.http_config import configure_http_mode
 from everyrow_mcp.redis_utils import create_redis_client
 from everyrow_mcp.state import RedisStore, Transport, state
@@ -68,16 +68,16 @@ def main():
     input_args = parse_args()
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
     os.environ["EVERYROW_MCP_SERVER"] = "1"
-    state.transport = Transport.HTTP if input_args.http else Transport.STDIO
+    transport = Transport.HTTP if input_args.http else Transport.STDIO
     state.no_auth = input_args.no_auth
 
-    set_tool_descriptions(state.transport)
+    set_tool_descriptions(transport)
     if input_args.http:
         if input_args.no_auth:
-            settings = _get_dev_http_settings()
+            settings = get_dev_http_settings()
             state.mcp_server_url = f"http://localhost:{input_args.port}"
         else:
-            settings = _get_http_settings()
+            settings = get_http_settings()
             state.mcp_server_url = settings.mcp_server_url
 
         redis_client = create_redis_client(
