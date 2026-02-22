@@ -180,6 +180,7 @@ class ServerState(BaseModel):
     mcp_server_url: str = ""
     everyrow_api_url: str = "https://everyrow.io/api/v0"
     preview_size: int = 5
+    token_budget: int = 20_000
     store: RedisStore | None = Field(default=None)
 
     @property

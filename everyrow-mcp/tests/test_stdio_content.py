@@ -696,6 +696,8 @@ class TestHttpModeIncludesWidgets:
         human_text = result[-1].text
         assert "output_path" not in human_text
         assert "everyrow_results" in human_text
+        assert "page_size=" in human_text
+        assert "token budget" in human_text.lower()
 
 
 # ── MCP protocol integration tests (real API) ────────────────────────

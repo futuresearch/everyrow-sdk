@@ -21,8 +21,10 @@ from starlette.routing import Route
 
 from everyrow_mcp.result_store import (
     _build_result_response,
+    _estimate_tokens,
     _format_columns,
     _slice_preview,
+    clamp_page_to_budget,
     try_cached_result,
     try_store_result,
 )
@@ -391,3 +393,141 @@ class TestApiDownload:
         resp = await client.options("/api/results/some-task/download")
         assert resp.status_code == 204
         assert resp.headers["access-control-allow-origin"] == "*"
+
+
+# ── Token budget clamping ─────────────────────────────────────
+
+
+class TestEstimateTokens:
+    def test_empty_string(self):
+        assert _estimate_tokens("") == 0
+
+    def test_basic_estimate(self):
+        # 100 chars → ~25 tokens
+        assert _estimate_tokens("a" * 100) == 25
+
+    def test_json_content(self):
+        data = json.dumps([{"name": "Alice", "score": 95}])
+        # Should be roughly len(data) // 4
+        assert _estimate_tokens(data) == len(data) // 4
+
+
+class TestClampPageToBudget:
+    def test_within_budget_returns_full_page(self):
+        preview = [{"id": i} for i in range(5)]
+        result, effective_size = clamp_page_to_budget(preview, 5, 100_000)
+        assert result == preview
+        assert effective_size == 5
+
+    def test_empty_preview(self):
+        result, effective_size = clamp_page_to_budget([], 10, 100)
+        assert result == []
+        assert effective_size == 10
+
+    def test_over_budget_reduces_page(self):
+        # Create rows with long text that will exceed a small budget
+        preview = [{"text": "x" * 1000} for _ in range(20)]
+        budget = 500  # ~2000 chars budget → fits ~1-2 rows
+        result, effective_size = clamp_page_to_budget(preview, 20, budget)
+        assert effective_size < 20
+        assert len(result) == effective_size
+        # Verify the clamped result fits within budget
+        assert _estimate_tokens(json.dumps(result)) <= budget
+
+    def test_never_reduces_below_one(self):
+        # Single huge row that exceeds budget
+        preview = [{"text": "x" * 100_000}]
+        result, effective_size = clamp_page_to_budget(preview, 1, 100)
+        assert effective_size == 1
+        assert len(result) == 1
+
+    def test_finds_optimal_page_size(self):
+        # Each row is ~40 chars → ~10 tokens.  Budget of 50 tokens
+        # (~200 chars) should fit only a handful of 20 rows.
+        preview = [{"name": f"Person_{i:03d}", "score": i * 10} for i in range(20)]
+        full_tokens = _estimate_tokens(json.dumps(preview))
+        # Sanity: the full preview must actually exceed the budget
+        budget = full_tokens // 3
+        result, effective_size = clamp_page_to_budget(preview, 20, budget)
+        assert effective_size < 20
+        # Verify it fits
+        assert _estimate_tokens(json.dumps(result)) <= budget
+        # Verify adding one more row would exceed
+        if effective_size < len(preview):
+            over = preview[: effective_size + 1]
+            assert _estimate_tokens(json.dumps(over)) > budget
+
+
+class TestTokenBudgetIntegration:
+    """Integration tests verifying token budget clamping in try_store_result and try_cached_result."""
+
+    @pytest.fixture
+    def wide_df(self) -> pd.DataFrame:
+        """DataFrame with wide text columns that will blow the token budget."""
+        return pd.DataFrame(
+            {
+                "id": range(10),
+                "research": [f"Long research text {'x' * 2000}" for _ in range(10)],
+                "summary": [f"Summary {'y' * 500}" for _ in range(10)],
+            }
+        )
+
+    @pytest.mark.asyncio
+    async def test_try_store_clamps_page(self, wide_df, _http_state):
+        task_id = "task-budget-store"
+        await state.store.store_poll_token(task_id, "tok")
+
+        orig_budget = state.token_budget
+        state.token_budget = 2000  # Small budget to trigger clamping
+        try:
+            result = await try_store_result(task_id, wide_df, 0, 10)
+        finally:
+            state.token_budget = orig_budget
+
+        assert result is not None
+        widget = json.loads(result[0].text)
+        # Should have fewer than 10 rows due to clamping
+        assert len(widget["preview"]) < 10
+        # Verify the preview fits within the budget
+        assert _estimate_tokens(json.dumps(widget["preview"])) <= 2000
+
+    @pytest.mark.asyncio
+    async def test_try_cached_clamps_page(self, wide_df, _http_state):
+        task_id = "task-budget-cached"
+        await state.store.store_poll_token(task_id, "tok")
+
+        # Store CSV and metadata first (with normal budget)
+        csv_text = wide_df.to_csv(index=False)
+        await state.store.store_result_csv(task_id, csv_text)
+        meta = json.dumps({"total": len(wide_df), "columns": list(wide_df.columns)})
+        await state.store.store_result_meta(task_id, meta)
+
+        orig_budget = state.token_budget
+        state.token_budget = 2000  # Small budget to trigger clamping
+        try:
+            result = await try_cached_result(task_id, 0, 10)
+        finally:
+            state.token_budget = orig_budget
+
+        assert result is not None
+        widget = json.loads(result[0].text)
+        assert len(widget["preview"]) < 10
+        assert _estimate_tokens(json.dumps(widget["preview"])) <= 2000
+
+    @pytest.mark.asyncio
+    async def test_large_budget_preserves_full_page(self, _http_state):
+        """With a large budget, the full page_size is returned."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+        task_id = "task-budget-ok"
+        await state.store.store_poll_token(task_id, "tok")
+
+        orig_budget = state.token_budget
+        state.token_budget = 100_000
+        try:
+            result = await try_store_result(task_id, df, 0, 3)
+        finally:
+            state.token_budget = orig_budget
+
+        assert result is not None
+        widget = json.loads(result[0].text)
+        assert len(widget["preview"]) == 3

@@ -57,6 +57,7 @@ def configure_http_mode(
     state.store = RedisStore(redis_client)
     state.everyrow_api_url = settings.everyrow_api_url
     state.preview_size = settings.preview_size
+    state.token_budget = settings.token_budget
     state.mcp_server_url = mcp_server_url
 
     if not no_auth:

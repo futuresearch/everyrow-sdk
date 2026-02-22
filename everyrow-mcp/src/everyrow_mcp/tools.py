@@ -36,7 +36,11 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.result_store import try_cached_result, try_store_result
+from everyrow_mcp.result_store import (
+    clamp_page_to_budget,
+    try_cached_result,
+    try_store_result,
+)
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
     EveryRowContext,
@@ -663,7 +667,8 @@ async def everyrow_progress(  # noqa: PLR0912, PLR0915
                 )
             if state.is_http:
                 next_call = (
-                    f"Call everyrow_results(task_id='{task_id}') to view the output."
+                    f"Call everyrow_results(task_id='{task_id}', page_size={state.preview_size}) to view the output. "
+                    f"The server auto-adjusts page_size to fit a {state.token_budget:,}-token budget."
                 )
             else:
                 next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
@@ -764,16 +769,21 @@ async def everyrow_results(  # noqa: PLR0911
     clamped = min(params.offset, total)
     page = df.iloc[clamped : clamped + params.page_size]
     preview = page.where(page.notna(), None).to_dict(orient="records")
+
+    preview, effective_page_size = clamp_page_to_budget(
+        preview, params.page_size, state.token_budget
+    )
+
     col_names = ", ".join(columns[:10])
     if len(columns) > 10:
         col_names += f", ... (+{len(columns) - 10} more)"
 
     summary = f"Results: {total} rows, {len(columns)} columns ({col_names})."
-    has_more = clamped + params.page_size < total
+    has_more = clamped + effective_page_size < total
     if has_more:
-        next_offset = clamped + params.page_size
+        next_offset = clamped + effective_page_size
         summary += (
-            f"\nShowing rows {clamped + 1}-{clamped + params.page_size} of {total}."
+            f"\nShowing rows {clamped + 1}-{clamped + effective_page_size} of {total}."
             f"\nCall everyrow_results(task_id='{task_id}', offset={next_offset}) for the next page."
         )
 

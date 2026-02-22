@@ -38,6 +38,53 @@ def _slice_preview(records: list[dict], offset: int, page_size: int) -> list[dic
     return records[clamped : clamped + page_size]
 
 
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count using ~4 characters per token heuristic."""
+    return len(text) // 4
+
+
+def clamp_page_to_budget(
+    preview: list[dict],
+    page_size: int,
+    token_budget: int,
+) -> tuple[list[dict], int]:
+    """Reduce page if serialised preview exceeds the token budget.
+
+    Uses binary search to find the largest page_size whose JSON
+    representation fits within *token_budget*.  Never reduces below 1 row.
+
+    Returns ``(clamped_preview, effective_page_size)``.
+    """
+    if not preview:
+        return preview, page_size
+
+    estimated = _estimate_tokens(json.dumps(preview))
+    if estimated <= token_budget:
+        return preview, page_size
+
+    # Binary search for the largest page that fits
+    lo, hi = 1, len(preview)
+    best = 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = preview[:mid]
+        if _estimate_tokens(json.dumps(candidate)) <= token_budget:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    clamped = preview[:best]
+    logger.info(
+        "Token budget %d exceeded (%d est. tokens for %d rows); clamped to %d rows",
+        token_budget,
+        estimated,
+        len(preview),
+        best,
+    )
+    return clamped, best
+
+
 def _build_result_response(
     task_id: str,
     csv_url: str,
@@ -145,6 +192,10 @@ async def try_cached_result(
             logger.warning("Failed to read CSV from Redis for task %s", task_id)
             preview = []
 
+    preview, effective_page_size = clamp_page_to_budget(
+        preview, page_size, state.token_budget
+    )
+
     csv_url = await _get_csv_url(task_id)
 
     return _build_result_response(
@@ -154,7 +205,7 @@ async def try_cached_result(
         total=total,
         columns=columns,
         offset=min(offset, total),
-        page_size=page_size,
+        page_size=effective_page_size,
         session_url=session_url,
     )
 
@@ -195,6 +246,10 @@ async def try_store_result(
             task_id, offset, page_size, json.dumps(preview)
         )
 
+        preview, effective_page_size = clamp_page_to_budget(
+            preview, page_size, state.token_budget
+        )
+
         csv_url = await _get_csv_url(task_id)
 
         return _build_result_response(
@@ -204,7 +259,7 @@ async def try_store_result(
             total=total,
             columns=columns,
             offset=clamped_offset,
-            page_size=page_size,
+            page_size=effective_page_size,
             session_url=session_url,
         )
     except Exception:
