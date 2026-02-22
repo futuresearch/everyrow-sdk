@@ -28,6 +28,7 @@ from everyrow.generated.models.task_status_response import TaskStatusResponse
 from mcp.types import TextContent
 from pydantic import ValidationError
 
+from everyrow_mcp import redis_store
 from everyrow_mcp.models import (
     AgentInput,
     DedupeInput,
@@ -39,14 +40,13 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.redis_store import Transport, state
 from everyrow_mcp.tools import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
     everyrow_single_agent,
 )
-from tests.conftest import make_test_context
+from tests.conftest import make_test_context, override_settings
 
 # CSV fixtures are defined in conftest.py
 
@@ -261,6 +261,7 @@ def _make_mock_client():
     client = AsyncMock(spec=AuthenticatedClient)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
+    client.token = "fake-token"
     return client
 
 
@@ -738,7 +739,7 @@ class TestResults:
         ]
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            override_settings(transport="streamable-http"),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -789,7 +790,7 @@ class TestResults:
         ]
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            override_settings(transport="streamable-http"),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -811,7 +812,7 @@ class TestResults:
         result_response = _make_task_result_response([{"name": "A"}])
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            override_settings(transport="streamable-http"),
             patch(
                 "everyrow_mcp.tools.try_cached_result",
                 new_callable=AsyncMock,
@@ -1026,7 +1027,9 @@ class TestStdioVsHttpGating:
         assert "Task ID:" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_submit_http_returns_widget_and_text(self, companies_csv: str):
+    async def test_submit_http_returns_widget_and_text(
+        self, companies_csv: str, fake_redis
+    ):
         """In HTTP mode, submission tools return widget JSON + human text."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
@@ -1034,14 +1037,15 @@ class TestStdioVsHttpGating:
         ctx = make_test_context(mock_client)
 
         with (
+            override_settings(transport="streamable-http"),
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
-            patch.object(state, "transport", Transport.HTTP),
             patch(
                 "everyrow_mcp.tools.create_session",
                 return_value=_make_async_context_manager(mock_session),
             ),
+            patch.object(redis_store, "get_redis_client", return_value=fake_redis),
         ):
             mock_op.return_value = mock_task
             params = AgentInput(task="test", input_csv=companies_csv)
@@ -1088,7 +1092,7 @@ class TestStdioVsHttpGating:
         )
 
         with (
-            patch.object(state, "transport", Transport.HTTP),
+            override_settings(transport="streamable-http"),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
