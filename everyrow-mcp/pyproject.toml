@@ -13,7 +13,8 @@ dependencies = [
     "pandas>=2.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "pydantic-settings>=2.0.0",
-    "redis>=5.0.0",
+    "redis[hiredis]>=5.0.0",
+    "tabulate>=0.9.0",
 ]
 
 [project.scripts]
@@ -52,6 +53,7 @@ ignore = [
     "RUF012",  # Mutable class attributes should be annotated with `typing.ClassVar`
     "PLR2004", # Magic value used in comparison
     "PLR0913", # Too many arguments
+    "ARG002",  # Unused method argument (protocol overrides)
 ]
 fixable = ["ALL"]
 unfixable = []
