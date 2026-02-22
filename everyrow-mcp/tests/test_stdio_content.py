@@ -339,7 +339,7 @@ class TestStdioProgressContent:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -363,7 +363,7 @@ class TestStdioProgressContent:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -394,7 +394,7 @@ class TestStdioProgressContent:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -422,7 +422,7 @@ class TestStdioProgressContent:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -468,7 +468,7 @@ class TestStdioProgressContent:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -664,7 +664,7 @@ class TestHttpModeIncludesWidgets:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -689,7 +689,7 @@ class TestHttpModeIncludesWidgets:
                 return_value=status_resp,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 

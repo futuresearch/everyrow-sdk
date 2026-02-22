@@ -24,7 +24,7 @@ def _clear_task_state() -> None:
 
 
 @asynccontextmanager
-async def _stdio_lifespan(_server: FastMCP):
+async def stdio_lifespan(_server: FastMCP):
     """Initialize singleton client and validate credentials on startup (stdio mode)."""
     _clear_task_state()
 
@@ -42,7 +42,7 @@ async def _stdio_lifespan(_server: FastMCP):
 
 
 @asynccontextmanager
-async def _http_lifespan(_server: FastMCP):
+async def http_lifespan(_server: FastMCP):
     """HTTP mode lifespan — verify Redis on startup.
 
     NOTE: This runs per MCP *session*, not per server. Do NOT close
@@ -68,7 +68,7 @@ async def _http_lifespan(_server: FastMCP):
 
 
 @asynccontextmanager
-async def _no_auth_http_lifespan(_server: FastMCP):
+async def no_auth_http_lifespan(_server: FastMCP):
     """HTTP no-auth mode: singleton client from API key, verify Redis."""
     await state.store.ping()
     with _create_sdk_client() as client:
@@ -78,7 +78,7 @@ async def _no_auth_http_lifespan(_server: FastMCP):
         yield SessionContext(client_factory=lambda: client)
 
 
-mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)
+mcp = FastMCP("everyrow_mcp", lifespan=stdio_lifespan)
 
 
 @mcp.resource(
@@ -86,7 +86,7 @@ mcp = FastMCP("everyrow_mcp", lifespan=_stdio_lifespan)
     mime_type="text/html;profile=mcp-app",
     meta=UI_CSP_META,
 )
-def _progress_ui() -> str:
+def progress_ui() -> str:
     return PROGRESS_HTML
 
 

@@ -11,7 +11,8 @@ import logging
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from textwrap import dedent
 from typing import Any
 from uuid import UUID
 
@@ -27,11 +28,16 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
     TaskResultResponseDataType1,
 )
 from everyrow.generated.models.task_status import TaskStatus
+from everyrow.generated.models.task_status_response import TaskStatusResponse
+from everyrow.generated.types import Unset
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from mcp.types import TextContent
+from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 
 from everyrow_mcp.state import TASK_STATE_FILE, state
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -59,17 +65,17 @@ def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
 def _submission_text(label: str, session_url: str, task_id: str) -> str:
     """Build human-readable text for submission tool results."""
     if state.is_stdio:
-        return (
-            f"{label}\n"
-            f"Session: {session_url}\n"
-            f"Task ID: {task_id}\n\n"
-            f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
-        )
-    return (
-        f"{label}\n"
-        f"Task ID: {task_id}\n\n"
-        f"Immediately call everyrow_progress(task_id='{task_id}')."
-    )
+        return dedent(f"""\
+        {label}
+        Session: {session_url}
+        Task ID: {task_id}
+
+        Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').""")
+    return dedent(f"""\
+        {label}
+        Task ID: {task_id}
+
+        Immediately call everyrow_progress(task_id='{task_id}').""")
 
 
 async def _submission_ui_json(
@@ -117,7 +123,180 @@ async def create_tool_response(
     return [main_content]
 
 
-def _write_task_state(
+_UI_EXCLUDE = frozenset(
+    {"is_terminal", "is_screen", "task_type", "error", "started_at"}
+)
+
+
+class TaskState(BaseModel):
+    """Parsed progress snapshot from an API status response."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    _response: TaskStatusResponse = PrivateAttr()
+
+    def __init__(self, response: TaskStatusResponse) -> None:
+        super().__init__()
+        self._response = response
+
+    @computed_field
+    @property
+    def status(self) -> TaskStatus:
+        return self._response.status
+
+    @computed_field
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.REVOKED,
+        )
+
+    @computed_field
+    @property
+    def is_screen(self) -> bool:
+        return self._response.task_type == PublicTaskType.SCREEN
+
+    @computed_field
+    @property
+    def task_type(self) -> PublicTaskType:
+        return self._response.task_type
+
+    @computed_field
+    @property
+    def session_url(self) -> str:
+        from everyrow.session import get_session_url  # noqa: PLC0415
+
+        return get_session_url(self._response.session_id)
+
+    @computed_field
+    @property
+    def completed(self) -> int:
+        p = self._response.progress
+        return p.completed if p else 0
+
+    @computed_field
+    @property
+    def failed(self) -> int:
+        p = self._response.progress
+        return p.failed if p else 0
+
+    @computed_field
+    @property
+    def running(self) -> int:
+        p = self._response.progress
+        return p.running if p else 0
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        p = self._response.progress
+        return p.total if p else 0
+
+    @computed_field
+    @property
+    def error(self) -> str | None:
+        err = self._response.error
+        if err and not isinstance(err, Unset):
+            return str(err)
+        return None
+
+    @computed_field
+    @property
+    def started_at(self) -> datetime:
+        created = self._response.created_at
+        if not created:
+            return datetime.now(UTC)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        return created
+
+    @computed_field
+    @property
+    def elapsed_s(self) -> int:
+        created = self._response.created_at
+        if not created:
+            return 0
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        if self.is_terminal and self._response.updated_at:
+            end = self._response.updated_at
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=UTC)
+            return round((end - created).total_seconds())
+        return round((datetime.now(UTC) - created).total_seconds())
+
+    def write_file(self, task_id: str) -> None:
+        """Write task tracking state for hooks/status line to read."""
+        if state.is_http:
+            return
+        _write_task_state_file(
+            task_id=task_id,
+            task_type=self.task_type,
+            session_url=self.session_url,
+            total=self.total,
+            completed=self.completed,
+            failed=self.failed,
+            running=self.running,
+            status=self.status,
+            started_at=self.started_at,
+        )
+
+    def progress_message(self, task_id: str) -> str:
+        if self.is_terminal:
+            if self.error:
+                return f"Task {self.status.value}: {self.error}"
+            if self.status == TaskStatus.COMPLETED:
+                if self.is_screen:
+                    completed_msg = f"Screening complete ({self.elapsed_s}s)."
+                else:
+                    completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
+                if state.is_http:
+                    next_call = dedent(f"""\
+                        Call everyrow_results(task_id='{task_id}', page_size={state.settings.preview_size}) to view the output. \
+                        The server auto-adjusts page_size to fit a {state.settings.token_budget:,}-token budget.""")
+                else:
+                    next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
+                return f"{completed_msg}\n{next_call}"
+            return f"Task {self.status.value}. Report the error to the user."
+
+        if self.is_screen:
+            return dedent(f"""\
+                Screen running ({self.elapsed_s}s elapsed).
+                Immediately call everyrow_progress(task_id='{task_id}').""")
+
+        fail_part = f", {self.failed} failed" if self.failed else ""
+        return dedent(f"""\
+            Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed)
+            Immediately call everyrow_progress(task_id='{task_id}').""")
+
+
+def write_initial_task_state(
+    task_id: str,
+    *,
+    task_type: PublicTaskType,
+    session_url: str,
+    total: int,
+) -> None:
+    """Write initial task state file when a task is first submitted."""
+    if state.is_http:
+        return
+    _write_task_state_file(
+        task_id=task_id,
+        task_type=task_type,
+        session_url=session_url,
+        total=total,
+        completed=0,
+        failed=0,
+        running=0,
+        status=TaskStatus.RUNNING,
+        started_at=datetime.now(UTC),
+    )
+
+
+def _write_task_state_file(
+    *,
     task_id: str,
     task_type: PublicTaskType,
     session_url: str,
@@ -128,16 +307,10 @@ def _write_task_state(
     status: TaskStatus,
     started_at: datetime,
 ) -> None:
-    """Write task tracking state for hooks/status line to read.
-
-    Note: Only one task is tracked at a time. If multiple tasks run concurrently,
-    only the most recent one's progress is shown.
-    """
-    if state.is_http:
-        return
+    """Low-level helper: serialise task state to the status-line JSON file."""
     try:
         TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        task_state = {
+        data = {
             "task_id": task_id,
             "task_type": task_type.value,
             "session_url": session_url,
@@ -149,9 +322,9 @@ def _write_task_state(
             "started_at": started_at.timestamp(),
         }
         with open(TASK_STATE_FILE, "w") as f:
-            json.dump(task_state, f)
+            json.dump(data, f)
     except Exception as e:
-        logging.getLogger(__name__).debug(f"Failed to write task state: {e!r}")
+        logger.debug(f"Failed to write task state: {e!r}")
 
 
 class TaskNotReady(Exception):

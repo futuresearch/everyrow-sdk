@@ -12,7 +12,7 @@ class _CommonSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     everyrow_api_url: str = Field(default="https://everyrow.io/api/v0")
-    preview_size: int = Field(default=5)
+    preview_size: int = Field(default=50)
     token_budget: int = Field(
         default=20000,
         description="Target token budget per page of inline results",
@@ -35,17 +35,16 @@ class _BaseHttpSettings(_CommonSettings):
     redis_port: int = Field(default=6379)
     redis_db: int = Field(default=13)
     redis_password: str | None = Field(default=None)
+    redis_sentinel_endpoints: str | None = Field(
+        default=None, description="Comma-separated host:port pairs"
+    )
+    redis_sentinel_master_name: str | None = Field(default=None)
 
 
 class HttpSettings(_BaseHttpSettings):
     mcp_server_url: str
     supabase_url: str
     supabase_anon_key: str
-
-    redis_sentinel_endpoints: str | None = Field(
-        default=None, description="Comma-separated host:port pairs"
-    )
-    redis_sentinel_master_name: str | None = Field(default=None)
 
     registration_rate_limit: int = Field(
         default=10,

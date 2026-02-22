@@ -526,7 +526,7 @@ class TestProgress:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params, ctx)
@@ -561,7 +561,7 @@ class TestProgress:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params, ctx)
@@ -801,8 +801,8 @@ class TestResults:
         assert result == cached_response
 
     @pytest.mark.asyncio
-    async def test_results_http_store_failure(self):
-        """In HTTP mode, store failure falls back to inline results."""
+    async def test_results_http_store_failure_returns_error(self):
+        """In HTTP mode, store failure returns an error (Redis is required)."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
@@ -835,10 +835,8 @@ class TestResults:
         ):
             result = await everyrow_results(ResultsInput(task_id=task_id), ctx)
 
-        # HTTP mode returns widget JSON + summary text
-        assert len(result) == 2
-        assert '"preview"' in result[0].text
-        assert "Results: 1 rows" in result[1].text
+        assert len(result) == 1
+        assert "Error: failed to store results" in result[0].text
 
 
 class TestAgentInlineInput:
@@ -1072,7 +1070,7 @@ class TestStdioVsHttpGating:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -1097,7 +1095,7 @@ class TestStdioVsHttpGating:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools._write_task_state"),
+            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 

@@ -30,7 +30,7 @@ TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
 
 class Transport(StrEnum):
     STDIO = "stdio"
-    HTTP = "http"
+    HTTP = "streamable-http"
 
 
 class RedisStore:

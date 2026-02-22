@@ -2,16 +2,14 @@
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 from uuid import UUID
 
 from everyrow.api_utils import handle_response
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.models.public_task_type import PublicTaskType
-from everyrow.generated.models.task_status import TaskStatus
-from everyrow.generated.types import Unset
 from everyrow.ops import (
     agent_map_async,
     dedupe_async,
@@ -36,19 +34,17 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     _schema_to_model,
 )
-from everyrow_mcp.result_store import (
-    clamp_page_to_budget,
-    try_cached_result,
-    try_store_result,
-)
+from everyrow_mcp.result_store import try_cached_result, try_store_result
 from everyrow_mcp.state import PROGRESS_POLL_DELAY, state
 from everyrow_mcp.tool_helpers import (
+    _UI_EXCLUDE,
     EveryRowContext,
     TaskNotReady,
+    TaskState,
     _fetch_task_result,
     _get_client,
-    _write_task_state,
     create_tool_response,
+    write_initial_task_state,
 )
 from everyrow_mcp.utils import load_csv, save_result_to_csv
 
@@ -101,16 +97,11 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
             kwargs["response_model"] = response_model
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
             total=len(df),
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -176,16 +167,11 @@ async def everyrow_single_agent(
             kwargs["response_model"] = response_model
         cohort_task = await single_agent_async(**kwargs)
         task_id = str(cohort_task.task_id)
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
             total=1,
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -257,16 +243,11 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
             ascending_order=params.ascending_order,
         )
         task_id = str(cohort_task.task_id)
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.RANK,
             session_url=session_url,
             total=len(df),
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -342,16 +323,11 @@ async def everyrow_screen(
             response_model=response_model,
         )
         task_id = str(cohort_task.task_id)
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.SCREEN,
             session_url=session_url,
             total=len(df),
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -418,17 +394,11 @@ async def everyrow_dedupe(
             input=df,
         )
         task_id = str(cohort_task.task_id)
-
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.DEDUPE,
             session_url=session_url,
             total=len(df),
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -515,17 +485,11 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
             relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
-
-        _write_task_state(
+        write_initial_task_state(
             task_id,
             task_type=PublicTaskType.MERGE,
             session_url=session_url,
             total=len(left_df),
-            completed=0,
-            failed=0,
-            running=0,
-            status=TaskStatus.RUNNING,
-            started_at=datetime.now(UTC),
         )
 
     return await create_tool_response(
@@ -549,7 +513,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
     ),
 )
 # NOTE: This docstring is overridden at startup by set_tool_descriptions().
-async def everyrow_progress(  # noqa: PLR0912, PLR0915
+async def everyrow_progress(
     params: ProgressInput,
     ctx: EveryRowContext,
 ) -> list[TextContent]:
@@ -574,118 +538,25 @@ async def everyrow_progress(  # noqa: PLR0912, PLR0915
             )
         )
     except Exception as e:
-        result = [
-            TextContent(
-                type="text",
-                text=f"Error polling task: {e!r}\nRetry: call everyrow_progress(task_id='{task_id}').",
-            )
-        ]
+        text = dedent(f"""\
+            Error polling task: {e!r}
+            Retry: call everyrow_progress(task_id='{task_id}').""")
+        text_content = TextContent(type="text", text=text)
         if state.is_http:
-            result.insert(
-                0, TextContent(type="text", text=json.dumps({"status": "error"}))
-            )
-        return result
+            ui_content = TextContent(type="text", text=json.dumps({"status": "error"}))
+            return [ui_content, text_content]
+        return [text_content]
 
-    status = status_response.status
-    progress = status_response.progress
-    is_terminal = status in (
-        TaskStatus.COMPLETED,
-        TaskStatus.FAILED,
-        TaskStatus.REVOKED,
-    )
-    is_screen = status_response.task_type == PublicTaskType.SCREEN
-    session_url = get_session_url(status_response.session_id)
-
-    completed = progress.completed if progress else 0
-    failed = progress.failed if progress else 0
-    running = progress.running if progress else 0
-    total = progress.total if progress else 0
-
-    # Calculate elapsed time from API timestamps.
-    # For terminal states, use updated_at - created_at (actual task duration).
-    # For running/pending, use now - created_at (ongoing elapsed time).
-    if status_response.created_at:
-        created_at = status_response.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=UTC)
-        started_at = created_at
-
-        if is_terminal and status_response.updated_at:
-            updated_at = status_response.updated_at
-            if updated_at.tzinfo is None:
-                updated_at = updated_at.replace(tzinfo=UTC)
-            elapsed_s = round((updated_at - created_at).total_seconds())
-        else:
-            now = datetime.now(UTC)
-            elapsed_s = round((now - created_at).total_seconds())
-    else:
-        elapsed_s = 0
-        started_at = datetime.now(UTC)
-
-    _write_task_state(
-        task_id,
-        task_type=status_response.task_type,
-        session_url=session_url,
-        total=total,
-        completed=completed,
-        failed=failed,
-        running=running,
-        status=status,
-        started_at=started_at,
-    )
+    ts = TaskState(status_response)
+    ts.write_file(task_id)
 
     # JSON for MCP App progress UI (parsed by progress.html, not needed in stdio)
+    text_content = TextContent(type="text", text=ts.progress_message(task_id))
     if state.is_http:
-        ui_json_str = json.dumps(
-            {
-                "status": status.value,
-                "completed": completed,
-                "total": total,
-                "failed": failed,
-                "running": running,
-                "elapsed_s": elapsed_s,
-                "session_url": session_url,
-            }
-        )
-
-    def _progress_result(text: str) -> list[TextContent]:
-        result = [TextContent(type="text", text=text)]
-        if state.is_http:
-            result.insert(0, TextContent(type="text", text=ui_json_str))
-        return result
-
-    if is_terminal:
-        error = status_response.error
-        if error and not isinstance(error, Unset):
-            return _progress_result(f"Task {status.value}: {error}")
-        if status == TaskStatus.COMPLETED:
-            if is_screen:
-                completed_msg = f"Screening complete ({elapsed_s}s)."
-            else:
-                completed_msg = (
-                    f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
-                )
-            if state.is_http:
-                next_call = (
-                    f"Call everyrow_results(task_id='{task_id}', page_size={state.settings.preview_size}) to view the output. "
-                    f"The server auto-adjusts page_size to fit a {state.settings.token_budget:,}-token budget."
-                )
-            else:
-                next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
-            return _progress_result(f"{completed_msg}\n{next_call}")
-        return _progress_result(f"Task {status.value}. Report the error to the user.")
-
-    if is_screen:
-        return _progress_result(
-            f"Screen running ({elapsed_s}s elapsed).\n"
-            f"Immediately call everyrow_progress(task_id='{task_id}')."
-        )
-
-    fail_part = f", {failed} failed" if failed else ""
-    return _progress_result(
-        f"Running: {completed}/{total} complete, {running} running{fail_part} ({elapsed_s}s elapsed)\n"
-        f"Immediately call everyrow_progress(task_id='{task_id}')."
-    )
+        ui_json_str = ts.model_dump_json(exclude=_UI_EXCLUDE)
+        ui_content = TextContent(type="text", text=ui_json_str)
+        return [ui_content, text_content]
+    return [text_content]
 
 
 @mcp.tool(
@@ -725,10 +596,9 @@ async def everyrow_results(  # noqa: PLR0911
         return [
             TextContent(
                 type="text",
-                text=(
-                    f"Task status is {e.status}. Cannot fetch results yet.\n"
-                    f"Call everyrow_progress(task_id='{task_id}') to check again."
-                ),
+                text=dedent(f"""\
+                    Task status is {e.status}. Cannot fetch results yet.
+                    Call everyrow_progress(task_id='{task_id}') to check again."""),
             )
         ]
     except Exception as e:
@@ -742,11 +612,11 @@ async def everyrow_results(  # noqa: PLR0911
             return [
                 TextContent(
                     type="text",
-                    text=(
-                        f"Saved {len(df)} rows to {output_file}\n\n"
-                        "Tip: For multi-step pipelines or custom response models, "
-                        "use the everyrow Python SDK directly."
-                    ),
+                    text=dedent(f"""\
+                        Saved {len(df)} rows to {output_file}
+
+                        Tip: For multi-step pipelines or custom response models, \
+                        use the everyrow Python SDK directly."""),
                 )
             ]
         return [
@@ -756,42 +626,15 @@ async def everyrow_results(  # noqa: PLR0911
             )
         ]
 
-    # ── HTTP mode: store in Redis ────────────────────────────────
+    # ── HTTP mode: store in Redis and return paginated response ──
     store_response = await try_store_result(
         task_id, df, params.offset, params.page_size, session_url
     )
     if store_response is not None:
         return store_response
 
-    # ── HTTP mode fallback: inline results (Redis unavailable) ──
-    total = len(df)
-    columns = list(df.columns)
-    clamped = min(params.offset, total)
-    page = df.iloc[clamped : clamped + params.page_size]
-    preview = page.where(page.notna(), None).to_dict(orient="records")
-
-    preview, effective_page_size = clamp_page_to_budget(
-        preview, params.page_size, state.settings.token_budget
-    )
-
-    col_names = ", ".join(columns[:10])
-    if len(columns) > 10:
-        col_names += f", ... (+{len(columns) - 10} more)"
-
-    summary = f"Results: {total} rows, {len(columns)} columns ({col_names})."
-    has_more = clamped + effective_page_size < total
-    if has_more:
-        next_offset = clamped + effective_page_size
-        summary += (
-            f"\nShowing rows {clamped + 1}-{clamped + effective_page_size} of {total}."
-            f"\nCall everyrow_results(task_id='{task_id}', offset={next_offset}) for the next page."
+    return [
+        TextContent(
+            type="text", text=f"Error: failed to store results for task {task_id}."
         )
-
-    widget_data = {"preview": preview, "total": total}
-    if session_url:
-        widget_data["session_url"] = session_url
-
-    result = [TextContent(type="text", text=summary)]
-    if state.is_http:
-        result.insert(0, TextContent(type="text", text=json.dumps(widget_data)))
-    return result
+    ]
