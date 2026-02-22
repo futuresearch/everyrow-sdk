@@ -15,6 +15,20 @@ from everyrow_mcp.redis_store import build_key
 logger = logging.getLogger(__name__)
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract client IP, preferring proxy headers when behind a reverse proxy.
+
+    Priority: CF-Connecting-IP (Cloudflare) > X-Forwarded-For > request.client.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Redis-based fixed-window rate limiter per client IP.
 
@@ -37,7 +51,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._window_seconds = window_seconds
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         window_id = str(int(time.time()) // self._window_seconds)
         key = build_key("rate", client_ip, window_id)
 

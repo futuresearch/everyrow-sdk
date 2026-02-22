@@ -27,6 +27,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from everyrow_mcp.config import settings
+from everyrow_mcp.middleware import get_client_ip
 from everyrow_mcp.redis_store import build_key
 
 if TYPE_CHECKING:
@@ -194,9 +195,7 @@ class EveryRowAuthProvider(
 
     @staticmethod
     def _client_ip(request: Request) -> str:
-        if request.client is None:
-            raise HTTPException(status_code=400, detail="Missing client IP")
-        return request.client.host
+        return get_client_ip(request)
 
     async def _check_rate_limit(self, action: str, client_ip: str) -> None:
         rl_key = build_key("ratelimit", action, client_ip)
