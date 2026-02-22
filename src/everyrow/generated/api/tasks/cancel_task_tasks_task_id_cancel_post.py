@@ -8,9 +8,9 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
+from ...models.cancel_task_response import CancelTaskResponse
 from ...models.error_response import ErrorResponse
 from ...models.http_validation_error import HTTPValidationError
-from ...models.task_result_response import TaskResultResponse
 from typing import cast
 from uuid import UUID
 
@@ -27,8 +27,8 @@ def _get_kwargs(
     
 
     _kwargs: dict[str, Any] = {
-        "method": "get",
-        "url": "/tasks/{task_id}/result".format(task_id=quote(str(task_id), safe=""),),
+        "method": "post",
+        "url": "/tasks/{task_id}/cancel".format(task_id=quote(str(task_id), safe=""),),
     }
 
 
@@ -36,9 +36,9 @@ def _get_kwargs(
 
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> ErrorResponse | HTTPValidationError | TaskResultResponse | None:
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> CancelTaskResponse | ErrorResponse | HTTPValidationError | None:
     if response.status_code == 200:
-        response_200 = TaskResultResponse.from_dict(response.json())
+        response_200 = CancelTaskResponse.from_dict(response.json())
 
 
 
@@ -64,7 +64,7 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[ErrorResponse | HTTPValidationError | TaskResultResponse]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[CancelTaskResponse | ErrorResponse | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -78,11 +78,10 @@ def sync_detailed(
     *,
     client: AuthenticatedClient,
 
-) -> Response[ErrorResponse | HTTPValidationError | TaskResultResponse]:
-    """ Get task result data
+) -> Response[CancelTaskResponse | ErrorResponse | HTTPValidationError]:
+    """ Cancel a task
 
-     Get the result data of a completed task. Returns the artifact data as a list of records (for tables)
-    or a single record (for scalars).
+     Cancel a running or pending task. Returns 409 if the task has already completed.
 
     Args:
         task_id (UUID):
@@ -92,7 +91,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | HTTPValidationError | TaskResultResponse]
+        Response[CancelTaskResponse | ErrorResponse | HTTPValidationError]
      """
 
 
@@ -112,11 +111,10 @@ def sync(
     *,
     client: AuthenticatedClient,
 
-) -> ErrorResponse | HTTPValidationError | TaskResultResponse | None:
-    """ Get task result data
+) -> CancelTaskResponse | ErrorResponse | HTTPValidationError | None:
+    """ Cancel a task
 
-     Get the result data of a completed task. Returns the artifact data as a list of records (for tables)
-    or a single record (for scalars).
+     Cancel a running or pending task. Returns 409 if the task has already completed.
 
     Args:
         task_id (UUID):
@@ -126,7 +124,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | HTTPValidationError | TaskResultResponse
+        CancelTaskResponse | ErrorResponse | HTTPValidationError
      """
 
 
@@ -141,11 +139,10 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
 
-) -> Response[ErrorResponse | HTTPValidationError | TaskResultResponse]:
-    """ Get task result data
+) -> Response[CancelTaskResponse | ErrorResponse | HTTPValidationError]:
+    """ Cancel a task
 
-     Get the result data of a completed task. Returns the artifact data as a list of records (for tables)
-    or a single record (for scalars).
+     Cancel a running or pending task. Returns 409 if the task has already completed.
 
     Args:
         task_id (UUID):
@@ -155,7 +152,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | HTTPValidationError | TaskResultResponse]
+        Response[CancelTaskResponse | ErrorResponse | HTTPValidationError]
      """
 
 
@@ -175,11 +172,10 @@ async def asyncio(
     *,
     client: AuthenticatedClient,
 
-) -> ErrorResponse | HTTPValidationError | TaskResultResponse | None:
-    """ Get task result data
+) -> CancelTaskResponse | ErrorResponse | HTTPValidationError | None:
+    """ Cancel a task
 
-     Get the result data of a completed task. Returns the artifact data as a list of records (for tables)
-    or a single record (for scalars).
+     Cancel a running or pending task. Returns 409 if the task has already completed.
 
     Args:
         task_id (UUID):
@@ -189,7 +185,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | HTTPValidationError | TaskResultResponse
+        CancelTaskResponse | ErrorResponse | HTTPValidationError
      """
 
 

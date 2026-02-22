@@ -259,6 +259,26 @@ class MergeInput(BaseModel):
         return v
 
 
+class ForecastInput(BaseModel):
+    """Input for the forecast operation."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(
+        ...,
+        description="Overall context/instructions for the forecast. "
+        "Each row in the input CSV should contain the question/scenario to forecast.",
+        min_length=1,
+    )
+    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+
+    @field_validator("input_csv")
+    @classmethod
+    def validate_input_csv(cls, v: str) -> str:
+        validate_csv_path(v)
+        return v
+
+
 class ProgressInput(BaseModel):
     """Input for checking task progress."""
 

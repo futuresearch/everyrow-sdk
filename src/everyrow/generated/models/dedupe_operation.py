@@ -1,36 +1,43 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar, cast
-from uuid import UUID
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.dedupe_operation_strategy import DedupeOperationStrategy
 from ..types import UNSET, Unset
 
+from ..models.dedupe_operation_strategy import DedupeOperationStrategy
+from ..types import UNSET, Unset
+from typing import cast
+from uuid import UUID
+
 if TYPE_CHECKING:
-    from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
-    from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
+  from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
+  from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
+
+
+
 
 
 T = TypeVar("T", bound="DedupeOperation")
 
 
+
 @_attrs_define
 class DedupeOperation:
-    """
-    Attributes:
-        input_ (DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID): The input data as a) the ID of
-            an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form of a
-            list of JSON objects
-        equivalence_relation (str): Description of what makes two rows equivalent/duplicates
-        session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
-        strategy (DedupeOperationStrategy | Unset): Strategy for handling duplicates: 'identify' (cluster only),
-            'select' (pick best), 'combine' (synthesize combined row) Default: DedupeOperationStrategy.SELECT.
-        strategy_prompt (None | str | Unset): Optional instructions guiding how selection or combining is performed
-    """
+    """ 
+        Attributes:
+            input_ (DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID): The input data as a) the ID of
+                an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form of a
+                list of JSON objects
+            equivalence_relation (str): Description of what makes two rows equivalent/duplicates
+            session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
+            strategy (DedupeOperationStrategy | Unset): Strategy for handling duplicates: 'identify' (cluster only),
+                'select' (pick best), 'combine' (synthesize combined row) Default: DedupeOperationStrategy.SELECT.
+            strategy_prompt (None | str | Unset): Optional instructions guiding how selection or combining is performed
+     """
 
     input_: DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID
     equivalence_relation: str
@@ -39,7 +46,13 @@ class DedupeOperation:
     strategy_prompt: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
+        from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
         input_: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.input_, UUID):
             input_ = str(self.input_)
@@ -49,8 +62,10 @@ class DedupeOperation:
                 input_type_1_item = input_type_1_item_data.to_dict()
                 input_.append(input_type_1_item)
 
+
         else:
             input_ = self.input_.to_dict()
+
 
         equivalence_relation = self.equivalence_relation
 
@@ -66,20 +81,20 @@ class DedupeOperation:
         if not isinstance(self.strategy, Unset):
             strategy = self.strategy.value
 
+
         strategy_prompt: None | str | Unset
         if isinstance(self.strategy_prompt, Unset):
             strategy_prompt = UNSET
         else:
             strategy_prompt = self.strategy_prompt
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "input": input_,
-                "equivalence_relation": equivalence_relation,
-            }
-        )
+        field_dict.update({
+            "input": input_,
+            "equivalence_relation": equivalence_relation,
+        })
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
         if strategy is not UNSET:
@@ -89,18 +104,20 @@ class DedupeOperation:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
         from ..models.dedupe_operation_input_type_2 import DedupeOperationInputType2
-
         d = dict(src_dict)
-
         def _parse_input_(data: object) -> DedupeOperationInputType2 | list[DedupeOperationInputType1Item] | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
                 input_type_0 = UUID(data)
+
+
 
                 return input_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -110,8 +127,10 @@ class DedupeOperation:
                     raise TypeError()
                 input_type_1 = []
                 _input_type_1 = data
-                for input_type_1_item_data in _input_type_1:
+                for input_type_1_item_data in (_input_type_1):
                     input_type_1_item = DedupeOperationInputType1Item.from_dict(input_type_1_item_data)
+
+
 
                     input_type_1.append(input_type_1_item)
 
@@ -122,9 +141,12 @@ class DedupeOperation:
                 raise TypeError()
             input_type_2 = DedupeOperationInputType2.from_dict(data)
 
+
+
             return input_type_2
 
         input_ = _parse_input_(d.pop("input"))
+
 
         equivalence_relation = d.pop("equivalence_relation")
 
@@ -138,6 +160,8 @@ class DedupeOperation:
                     raise TypeError()
                 session_id_type_0 = UUID(data)
 
+
+
                 return session_id_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
@@ -145,12 +169,16 @@ class DedupeOperation:
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
 
+
         _strategy = d.pop("strategy", UNSET)
         strategy: DedupeOperationStrategy | Unset
-        if isinstance(_strategy, Unset):
+        if isinstance(_strategy,  Unset):
             strategy = UNSET
         else:
             strategy = DedupeOperationStrategy(_strategy)
+
+
+
 
         def _parse_strategy_prompt(data: object) -> None | str | Unset:
             if data is None:
@@ -161,6 +189,7 @@ class DedupeOperation:
 
         strategy_prompt = _parse_strategy_prompt(d.pop("strategy_prompt", UNSET))
 
+
         dedupe_operation = cls(
             input_=input_,
             equivalence_relation=equivalence_relation,
@@ -168,6 +197,7 @@ class DedupeOperation:
             strategy=strategy,
             strategy_prompt=strategy_prompt,
         )
+
 
         dedupe_operation.additional_properties = d
         return dedupe_operation

@@ -8,21 +8,28 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from ..models.task_status import TaskStatus
+from uuid import UUID
 
 
 
 
 
 
-T = TypeVar("T", bound="AgentMapOperationInputType1Item")
+T = TypeVar("T", bound="CancelTaskResponse")
 
 
 
 @_attrs_define
-class AgentMapOperationInputType1Item:
+class CancelTaskResponse:
     """ 
+        Attributes:
+            task_id (UUID): The cancelled task ID
+            status (TaskStatus):
      """
 
+    task_id: UUID
+    status: TaskStatus
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
 
@@ -30,9 +37,17 @@ class AgentMapOperationInputType1Item:
 
 
     def to_dict(self) -> dict[str, Any]:
-        
+        task_id = str(self.task_id)
+
+        status = self.status.value
+
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
+        field_dict.update({
+            "task_id": task_id,
+            "status": status,
+        })
 
         return field_dict
 
@@ -41,12 +56,24 @@ class AgentMapOperationInputType1Item:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        agent_map_operation_input_type_1_item = cls(
+        task_id = UUID(d.pop("task_id"))
+
+
+
+
+        status = TaskStatus(d.pop("status"))
+
+
+
+
+        cancel_task_response = cls(
+            task_id=task_id,
+            status=status,
         )
 
 
-        agent_map_operation_input_type_1_item.additional_properties = d
-        return agent_map_operation_input_type_1_item
+        cancel_task_response.additional_properties = d
+        return cancel_task_response
 
     @property
     def additional_keys(self) -> list[str]:

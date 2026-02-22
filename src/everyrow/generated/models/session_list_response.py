@@ -8,21 +8,27 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from typing import cast
+
+if TYPE_CHECKING:
+  from ..models.session_list_item import SessionListItem
 
 
 
 
 
-
-T = TypeVar("T", bound="AgentMapOperationInputType1Item")
+T = TypeVar("T", bound="SessionListResponse")
 
 
 
 @_attrs_define
-class AgentMapOperationInputType1Item:
+class SessionListResponse:
     """ 
+        Attributes:
+            sessions (list[SessionListItem]): List of sessions
      """
 
+    sessions: list[SessionListItem]
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
 
@@ -30,9 +36,20 @@ class AgentMapOperationInputType1Item:
 
 
     def to_dict(self) -> dict[str, Any]:
-        
+        from ..models.session_list_item import SessionListItem
+        sessions = []
+        for sessions_item_data in self.sessions:
+            sessions_item = sessions_item_data.to_dict()
+            sessions.append(sessions_item)
+
+
+
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
+        field_dict.update({
+            "sessions": sessions,
+        })
 
         return field_dict
 
@@ -40,13 +57,25 @@ class AgentMapOperationInputType1Item:
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.session_list_item import SessionListItem
         d = dict(src_dict)
-        agent_map_operation_input_type_1_item = cls(
+        sessions = []
+        _sessions = d.pop("sessions")
+        for sessions_item_data in (_sessions):
+            sessions_item = SessionListItem.from_dict(sessions_item_data)
+
+
+
+            sessions.append(sessions_item)
+
+
+        session_list_response = cls(
+            sessions=sessions,
         )
 
 
-        agent_map_operation_input_type_1_item.additional_properties = d
-        return agent_map_operation_input_type_1_item
+        session_list_response.additional_properties = d
+        return session_list_response
 
     @property
     def additional_keys(self) -> list[str]:

@@ -1,46 +1,60 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
-from uuid import UUID
 
 import httpx
 
-from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
 from ...models.error_response import ErrorResponse
 from ...models.http_validation_error import HTTPValidationError
 from ...models.task_status_response import TaskStatusResponse
-from ...types import Response
+from typing import cast
+from uuid import UUID
+
 
 
 def _get_kwargs(
     task_id: UUID,
+
 ) -> dict[str, Any]:
+    
+
+    
+
+    
+
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/tasks/{task_id}/status".format(
-            task_id=quote(str(task_id), safe=""),
-        ),
+        "url": "/tasks/{task_id}/status".format(task_id=quote(str(task_id), safe=""),),
     }
+
 
     return _kwargs
 
 
-def _parse_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
+
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
     if response.status_code == 200:
         response_200 = TaskStatusResponse.from_dict(response.json())
+
+
 
         return response_200
 
     if response.status_code == 404:
         response_404 = ErrorResponse.from_dict(response.json())
 
+
+
         return response_404
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
+
+
 
         return response_422
 
@@ -50,9 +64,7 @@ def _parse_response(
         return None
 
 
-def _build_response(
-    *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -65,8 +77,9 @@ def sync_detailed(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
+
 ) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
-    """Get task details
+    """ Get task details
 
      Get the status and metadata of a task by its ID.
 
@@ -79,10 +92,12 @@ def sync_detailed(
 
     Returns:
         Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         task_id=task_id,
+
     )
 
     response = client.get_httpx_client().request(
@@ -91,13 +106,13 @@ def sync_detailed(
 
     return _build_response(client=client, response=response)
 
-
 def sync(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
+
 ) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
-    """Get task details
+    """ Get task details
 
      Get the status and metadata of a task by its ID.
 
@@ -110,20 +125,22 @@ def sync(
 
     Returns:
         ErrorResponse | HTTPValidationError | TaskStatusResponse
-    """
+     """
+
 
     return sync_detailed(
         task_id=task_id,
-        client=client,
-    ).parsed
+client=client,
 
+    ).parsed
 
 async def asyncio_detailed(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
+
 ) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
-    """Get task details
+    """ Get task details
 
      Get the status and metadata of a task by its ID.
 
@@ -136,23 +153,27 @@ async def asyncio_detailed(
 
     Returns:
         Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]
-    """
+     """
+
 
     kwargs = _get_kwargs(
         task_id=task_id,
+
     )
 
-    response = await client.get_async_httpx_client().request(**kwargs)
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
 
     return _build_response(client=client, response=response)
-
 
 async def asyncio(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
+
 ) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
-    """Get task details
+    """ Get task details
 
      Get the status and metadata of a task by its ID.
 
@@ -165,11 +186,11 @@ async def asyncio(
 
     Returns:
         ErrorResponse | HTTPValidationError | TaskStatusResponse
-    """
+     """
 
-    return (
-        await asyncio_detailed(
-            task_id=task_id,
-            client=client,
-        )
-    ).parsed
+
+    return (await asyncio_detailed(
+        task_id=task_id,
+client=client,
+
+    )).parsed

@@ -14,12 +14,12 @@ from ..types import UNSET, Unset
 
 
 
-T = TypeVar("T", bound="AgentMapOperationInputType1Item")
+T = TypeVar("T", bound="ForecastOperationInputType1Item")
 
 
 
 @_attrs_define
-class AgentMapOperationInputType1Item:
+class ForecastOperationInputType1Item:
     """ 
      """
 
@@ -41,12 +41,12 @@ class AgentMapOperationInputType1Item:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        agent_map_operation_input_type_1_item = cls(
+        forecast_operation_input_type_1_item = cls(
         )
 
 
-        agent_map_operation_input_type_1_item.additional_properties = d
-        return agent_map_operation_input_type_1_item
+        forecast_operation_input_type_1_item.additional_properties = d
+        return forecast_operation_input_type_1_item
 
     @property
     def additional_keys(self) -> list[str]:

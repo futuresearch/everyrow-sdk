@@ -1,5 +1,5 @@
-"""A client library for accessing everyrow API"""
 
+""" A client library for accessing everyrow API """
 from .client import AuthenticatedClient, Client
 
 __all__ = (

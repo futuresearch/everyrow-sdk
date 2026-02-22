@@ -8,7 +8,7 @@ from ...client import AuthenticatedClient, Client
 from ...types import Response, UNSET
 from ... import errors
 
-from ...models.health_response import HealthResponse
+from ...models.session_list_response import SessionListResponse
 from typing import cast
 
 
@@ -24,7 +24,7 @@ def _get_kwargs(
 
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/health",
+        "url": "/sessions",
     }
 
 
@@ -32,9 +32,9 @@ def _get_kwargs(
 
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> HealthResponse | None:
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> SessionListResponse | None:
     if response.status_code == 200:
-        response_200 = HealthResponse.from_dict(response.json())
+        response_200 = SessionListResponse.from_dict(response.json())
 
 
 
@@ -46,7 +46,7 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[HealthResponse]:
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[SessionListResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -57,17 +57,19 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 
 def sync_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 
-) -> Response[HealthResponse]:
-    """ Health
+) -> Response[SessionListResponse]:
+    """ List sessions
+
+     List all sessions owned by the authenticated user.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HealthResponse]
+        Response[SessionListResponse]
      """
 
 
@@ -83,17 +85,19 @@ def sync_detailed(
 
 def sync(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 
-) -> HealthResponse | None:
-    """ Health
+) -> SessionListResponse | None:
+    """ List sessions
+
+     List all sessions owned by the authenticated user.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HealthResponse
+        SessionListResponse
      """
 
 
@@ -104,17 +108,19 @@ def sync(
 
 async def asyncio_detailed(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 
-) -> Response[HealthResponse]:
-    """ Health
+) -> Response[SessionListResponse]:
+    """ List sessions
+
+     List all sessions owned by the authenticated user.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HealthResponse]
+        Response[SessionListResponse]
      """
 
 
@@ -130,17 +136,19 @@ async def asyncio_detailed(
 
 async def asyncio(
     *,
-    client: AuthenticatedClient | Client,
+    client: AuthenticatedClient,
 
-) -> HealthResponse | None:
-    """ Health
+) -> SessionListResponse | None:
+    """ List sessions
+
+     List all sessions owned by the authenticated user.
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HealthResponse
+        SessionListResponse
      """
 
 

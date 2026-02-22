@@ -8,24 +8,34 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
+from dateutil.parser import isoparse
+from typing import cast
+from uuid import UUID
+import datetime
 
 
 
 
 
 
-T = TypeVar("T", bound="CreateSession")
+T = TypeVar("T", bound="SessionListItem")
 
 
 
 @_attrs_define
-class CreateSession:
+class SessionListItem:
     """ 
         Attributes:
+            session_id (UUID): The session ID
             name (str): Name of the session
+            created_at (datetime.datetime): When the session was created
+            updated_at (datetime.datetime): When the session was last updated
      """
 
+    session_id: UUID
     name: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
 
@@ -33,13 +43,22 @@ class CreateSession:
 
 
     def to_dict(self) -> dict[str, Any]:
+        session_id = str(self.session_id)
+
         name = self.name
+
+        created_at = self.created_at.isoformat()
+
+        updated_at = self.updated_at.isoformat()
 
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update({
+            "session_id": session_id,
             "name": name,
+            "created_at": created_at,
+            "updated_at": updated_at,
         })
 
         return field_dict
@@ -49,15 +68,33 @@ class CreateSession:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
+        session_id = UUID(d.pop("session_id"))
+
+
+
+
         name = d.pop("name")
 
-        create_session = cls(
+        created_at = isoparse(d.pop("created_at"))
+
+
+
+
+        updated_at = isoparse(d.pop("updated_at"))
+
+
+
+
+        session_list_item = cls(
+            session_id=session_id,
             name=name,
+            created_at=created_at,
+            updated_at=updated_at,
         )
 
 
-        create_session.additional_properties = d
-        return create_session
+        session_list_item.additional_properties = d
+        return session_list_item
 
     @property
     def additional_keys(self) -> list[str]:

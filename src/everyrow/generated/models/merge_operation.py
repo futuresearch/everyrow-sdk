@@ -1,45 +1,52 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, TypeVar, cast
-from uuid import UUID
+from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 from ..models.merge_operation_relationship_type_type_0 import MergeOperationRelationshipTypeType0
 from ..models.merge_operation_use_web_search_type_0 import MergeOperationUseWebSearchType0
 from ..types import UNSET, Unset
+from typing import cast
+from uuid import UUID
 
 if TYPE_CHECKING:
-    from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
-    from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
-    from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
-    from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
+  from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
+  from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
+  from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
+  from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
+
+
+
 
 
 T = TypeVar("T", bound="MergeOperation")
 
 
+
 @_attrs_define
 class MergeOperation:
-    """
-    Attributes:
-        left_input (list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID): Left input: artifact
-            UUID, list of records, or single record
-        right_input (list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID): Right input:
-            artifact UUID, list of records, or single record
-        task (str): Instructions for the AI to determine how to merge rows
-        left_key (None | str | Unset): Column name to merge on from left table
-        right_key (None | str | Unset): Column name to merge on from right table
-        use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
-            tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
-            without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
-        relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control merge relationship behavior:
-            'many_to_one' (default) allows multiple left rows to match the same right row, 'one_to_one' enforces unique
-            matches and resolves clashes Default: MergeOperationRelationshipTypeType0.MANY_TO_ONE.
-        session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
-    """
+    """ 
+        Attributes:
+            left_input (list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID): Left input: artifact
+                UUID, list of records, or single record
+            right_input (list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID): Right input:
+                artifact UUID, list of records, or single record
+            task (str): Instructions for the AI to determine how to merge rows
+            left_key (None | str | Unset): Column name to merge on from left table
+            right_key (None | str | Unset): Column name to merge on from right table
+            use_web_search (MergeOperationUseWebSearchType0 | None | Unset): Control web search behavior: 'auto' (default)
+                tries LLM merge first then conditionally searches, 'no' skips web search entirely, 'yes' forces web search
+                without initial LLM merge Default: MergeOperationUseWebSearchType0.AUTO.
+            relationship_type (MergeOperationRelationshipTypeType0 | None | Unset): Control merge relationship behavior:
+                'many_to_one' (default) allows multiple left rows to match the same right row, 'one_to_one' enforces unique
+                matches and resolves clashes Default: MergeOperationRelationshipTypeType0.MANY_TO_ONE.
+            session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
+     """
 
     left_input: list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID
     right_input: list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID
@@ -47,13 +54,19 @@ class MergeOperation:
     left_key: None | str | Unset = UNSET
     right_key: None | str | Unset = UNSET
     use_web_search: MergeOperationUseWebSearchType0 | None | Unset = MergeOperationUseWebSearchType0.AUTO
-    relationship_type: MergeOperationRelationshipTypeType0 | None | Unset = (
-        MergeOperationRelationshipTypeType0.MANY_TO_ONE
-    )
+    relationship_type: MergeOperationRelationshipTypeType0 | None | Unset = MergeOperationRelationshipTypeType0.MANY_TO_ONE
     session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
+
+
+
+
     def to_dict(self) -> dict[str, Any]:
+        from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
+        from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
+        from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
+        from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
         left_input: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.left_input, UUID):
             left_input = str(self.left_input)
@@ -63,8 +76,10 @@ class MergeOperation:
                 left_input_type_1_item = left_input_type_1_item_data.to_dict()
                 left_input.append(left_input_type_1_item)
 
+
         else:
             left_input = self.left_input.to_dict()
+
 
         right_input: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.right_input, UUID):
@@ -75,8 +90,10 @@ class MergeOperation:
                 right_input_type_1_item = right_input_type_1_item_data.to_dict()
                 right_input.append(right_input_type_1_item)
 
+
         else:
             right_input = self.right_input.to_dict()
+
 
         task = self.task
 
@@ -116,15 +133,14 @@ class MergeOperation:
         else:
             session_id = self.session_id
 
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "left_input": left_input,
-                "right_input": right_input,
-                "task": task,
-            }
-        )
+        field_dict.update({
+            "left_input": left_input,
+            "right_input": right_input,
+            "task": task,
+        })
         if left_key is not UNSET:
             field_dict["left_key"] = left_key
         if right_key is not UNSET:
@@ -138,22 +154,22 @@ class MergeOperation:
 
         return field_dict
 
+
+
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
         from ..models.merge_operation_left_input_type_2 import MergeOperationLeftInputType2
         from ..models.merge_operation_right_input_type_1_item import MergeOperationRightInputType1Item
         from ..models.merge_operation_right_input_type_2 import MergeOperationRightInputType2
-
         d = dict(src_dict)
-
-        def _parse_left_input(
-            data: object,
-        ) -> list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID:
+        def _parse_left_input(data: object) -> list[MergeOperationLeftInputType1Item] | MergeOperationLeftInputType2 | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
                 left_input_type_0 = UUID(data)
+
+
 
                 return left_input_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -163,8 +179,10 @@ class MergeOperation:
                     raise TypeError()
                 left_input_type_1 = []
                 _left_input_type_1 = data
-                for left_input_type_1_item_data in _left_input_type_1:
+                for left_input_type_1_item_data in (_left_input_type_1):
                     left_input_type_1_item = MergeOperationLeftInputType1Item.from_dict(left_input_type_1_item_data)
+
+
 
                     left_input_type_1.append(left_input_type_1_item)
 
@@ -175,17 +193,20 @@ class MergeOperation:
                 raise TypeError()
             left_input_type_2 = MergeOperationLeftInputType2.from_dict(data)
 
+
+
             return left_input_type_2
 
         left_input = _parse_left_input(d.pop("left_input"))
 
-        def _parse_right_input(
-            data: object,
-        ) -> list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID:
+
+        def _parse_right_input(data: object) -> list[MergeOperationRightInputType1Item] | MergeOperationRightInputType2 | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
                 right_input_type_0 = UUID(data)
+
+
 
                 return right_input_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -195,8 +216,10 @@ class MergeOperation:
                     raise TypeError()
                 right_input_type_1 = []
                 _right_input_type_1 = data
-                for right_input_type_1_item_data in _right_input_type_1:
+                for right_input_type_1_item_data in (_right_input_type_1):
                     right_input_type_1_item = MergeOperationRightInputType1Item.from_dict(right_input_type_1_item_data)
+
+
 
                     right_input_type_1.append(right_input_type_1_item)
 
@@ -207,9 +230,12 @@ class MergeOperation:
                 raise TypeError()
             right_input_type_2 = MergeOperationRightInputType2.from_dict(data)
 
+
+
             return right_input_type_2
 
         right_input = _parse_right_input(d.pop("right_input"))
+
 
         task = d.pop("task")
 
@@ -222,6 +248,7 @@ class MergeOperation:
 
         left_key = _parse_left_key(d.pop("left_key", UNSET))
 
+
         def _parse_right_key(data: object) -> None | str | Unset:
             if data is None:
                 return data
@@ -230,6 +257,7 @@ class MergeOperation:
             return cast(None | str | Unset, data)
 
         right_key = _parse_right_key(d.pop("right_key", UNSET))
+
 
         def _parse_use_web_search(data: object) -> MergeOperationUseWebSearchType0 | None | Unset:
             if data is None:
@@ -241,12 +269,15 @@ class MergeOperation:
                     raise TypeError()
                 use_web_search_type_0 = MergeOperationUseWebSearchType0(data)
 
+
+
                 return use_web_search_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(MergeOperationUseWebSearchType0 | None | Unset, data)
 
         use_web_search = _parse_use_web_search(d.pop("use_web_search", UNSET))
+
 
         def _parse_relationship_type(data: object) -> MergeOperationRelationshipTypeType0 | None | Unset:
             if data is None:
@@ -258,12 +289,15 @@ class MergeOperation:
                     raise TypeError()
                 relationship_type_type_0 = MergeOperationRelationshipTypeType0(data)
 
+
+
                 return relationship_type_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(MergeOperationRelationshipTypeType0 | None | Unset, data)
 
         relationship_type = _parse_relationship_type(d.pop("relationship_type", UNSET))
+
 
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
@@ -275,12 +309,15 @@ class MergeOperation:
                     raise TypeError()
                 session_id_type_0 = UUID(data)
 
+
+
                 return session_id_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | Unset | UUID, data)
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
+
 
         merge_operation = cls(
             left_input=left_input,
@@ -292,6 +329,7 @@ class MergeOperation:
             relationship_type=relationship_type,
             session_id=session_id,
         )
+
 
         merge_operation.additional_properties = d
         return merge_operation

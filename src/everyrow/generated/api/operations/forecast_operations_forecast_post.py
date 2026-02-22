@@ -9,9 +9,9 @@ from ...types import Response, UNSET
 from ... import errors
 
 from ...models.error_response import ErrorResponse
+from ...models.forecast_operation import ForecastOperation
 from ...models.insufficient_balance_error import InsufficientBalanceError
 from ...models.operation_response import OperationResponse
-from ...models.single_agent_operation import SingleAgentOperation
 from ...types import UNSET, Unset
 from typing import cast
 
@@ -19,7 +19,7 @@ from typing import cast
 
 def _get_kwargs(
     *,
-    body: SingleAgentOperation,
+    body: ForecastOperation,
     x_cohort_source: None | str | Unset = UNSET,
 
 ) -> dict[str, Any]:
@@ -35,7 +35,7 @@ def _get_kwargs(
 
     _kwargs: dict[str, Any] = {
         "method": "post",
-        "url": "/operations/single-agent",
+        "url": "/operations/forecast",
     }
 
     _kwargs["json"] = body.to_dict()
@@ -88,31 +88,17 @@ def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Res
 def sync_detailed(
     *,
     client: AuthenticatedClient,
-    body: SingleAgentOperation,
+    body: ForecastOperation,
     x_cohort_source: None | str | Unset = UNSET,
 
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
-    """ Single AI research agent
+    """ AI-powered probability forecast
 
-     Run a single AI agent to perform research and generate a response.
-
-    **Configuration options** (mutually exclusive):
-
-    1. **Use a preset** - set `effort_level` to one of:
-       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
-       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
-       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
-
-    2. **Fully customize** - set `effort_level=null` and provide ALL of:
-       - `llm`: The LLM model to use
-       - `iteration_budget`: Number of agent iterations (0-20)
-       - `include_research`: Whether to include research notes
-
-    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+     Run 6 parallel research agents per row, then synthesize into a probability forecast with rationale.
 
     Args:
         x_cohort_source (None | str | Unset):
-        body (SingleAgentOperation):
+        body (ForecastOperation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -138,31 +124,17 @@ x_cohort_source=x_cohort_source,
 def sync(
     *,
     client: AuthenticatedClient,
-    body: SingleAgentOperation,
+    body: ForecastOperation,
     x_cohort_source: None | str | Unset = UNSET,
 
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
-    """ Single AI research agent
+    """ AI-powered probability forecast
 
-     Run a single AI agent to perform research and generate a response.
-
-    **Configuration options** (mutually exclusive):
-
-    1. **Use a preset** - set `effort_level` to one of:
-       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
-       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
-       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
-
-    2. **Fully customize** - set `effort_level=null` and provide ALL of:
-       - `llm`: The LLM model to use
-       - `iteration_budget`: Number of agent iterations (0-20)
-       - `include_research`: Whether to include research notes
-
-    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+     Run 6 parallel research agents per row, then synthesize into a probability forecast with rationale.
 
     Args:
         x_cohort_source (None | str | Unset):
-        body (SingleAgentOperation):
+        body (ForecastOperation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -183,31 +155,17 @@ x_cohort_source=x_cohort_source,
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient,
-    body: SingleAgentOperation,
+    body: ForecastOperation,
     x_cohort_source: None | str | Unset = UNSET,
 
 ) -> Response[ErrorResponse | InsufficientBalanceError | OperationResponse]:
-    """ Single AI research agent
+    """ AI-powered probability forecast
 
-     Run a single AI agent to perform research and generate a response.
-
-    **Configuration options** (mutually exclusive):
-
-    1. **Use a preset** - set `effort_level` to one of:
-       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
-       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
-       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
-
-    2. **Fully customize** - set `effort_level=null` and provide ALL of:
-       - `llm`: The LLM model to use
-       - `iteration_budget`: Number of agent iterations (0-20)
-       - `include_research`: Whether to include research notes
-
-    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+     Run 6 parallel research agents per row, then synthesize into a probability forecast with rationale.
 
     Args:
         x_cohort_source (None | str | Unset):
-        body (SingleAgentOperation):
+        body (ForecastOperation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -233,31 +191,17 @@ x_cohort_source=x_cohort_source,
 async def asyncio(
     *,
     client: AuthenticatedClient,
-    body: SingleAgentOperation,
+    body: ForecastOperation,
     x_cohort_source: None | str | Unset = UNSET,
 
 ) -> ErrorResponse | InsufficientBalanceError | OperationResponse | None:
-    """ Single AI research agent
+    """ AI-powered probability forecast
 
-     Run a single AI agent to perform research and generate a response.
-
-    **Configuration options** (mutually exclusive):
-
-    1. **Use a preset** - set `effort_level` to one of:
-       - `low`: Fast, minimal research (Gemini Flash, 0 iterations, no provenance)
-       - `medium`: Balanced (Gemini Flash High, 5 iterations, with provenance)
-       - `high`: Thorough research (Claude Opus, 10 iterations, with provenance)
-
-    2. **Fully customize** - set `effort_level=null` and provide ALL of:
-       - `llm`: The LLM model to use
-       - `iteration_budget`: Number of agent iterations (0-20)
-       - `include_research`: Whether to include research notes
-
-    You cannot mix these approaches - either use a preset OR specify all custom parameters.
+     Run 6 parallel research agents per row, then synthesize into a probability forecast with rationale.
 
     Args:
         x_cohort_source (None | str | Unset):
-        body (SingleAgentOperation):
+        body (ForecastOperation):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
