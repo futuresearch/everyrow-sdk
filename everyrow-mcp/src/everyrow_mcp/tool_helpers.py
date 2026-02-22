@@ -34,11 +34,17 @@ from mcp.types import TextContent
 from everyrow_mcp.state import TASK_STATE_FILE, state
 
 
-@dataclass
+@dataclass(slots=True)
 class SessionContext:
     """Per-session lifespan context yielded by all lifespans."""
 
     client_factory: Callable[[], AuthenticatedClient]
+    """Return an API client for the current request.
+
+    In stdio/no-auth mode this returns a long-lived singleton.
+    In HTTP mode it constructs a fresh client with the current request's
+    access token — call once per tool invocation, do not cache across awaits.
+    """
 
 
 # Typed Context alias — gives type checkers visibility into lifespan_context.
