@@ -109,7 +109,6 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
   <span id="sum">Loading...</span>
   <button id="selAllBtn">Select all</button>
   <button id="copyBtn" disabled>Copy (0)</button>
-  <span class="export-btns"><button id="downloadLink" style="display:none" title="Open CSV download link">Download CSV</button></span>
   <span class="settings-wrap"><button id="settingsBtn" title="Settings">Settings</button><div id="settingsDrop" class="settings-drop"><div class="drop-hdr">Copy format</div><label><input type="radio" name="cfmt" value="tsv" checked> TSV (tabs)</label><label><input type="radio" name="cfmt" value="csv"> CSV</label><label><input type="radio" name="cfmt" value="json"> JSON</label><div class="drop-sep"></div><div class="drop-hdr">Table height</div><label><input type="radio" name="tsize" value="250"> Small</label><label><input type="radio" name="tsize" value="420" checked> Medium</label><label><input type="radio" name="tsize" value="700"> Large</label></div></span>
   <button id="expandBtn" title="Toggle fullscreen">&#x2922;</button>
 </div>
@@ -162,6 +161,7 @@ app.onhostcontextchanged=(ctx)=>{
 /* --- helpers --- */
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 function escAttr(s){return esc(s).replace(/"/g,"&quot;");}
+function linkify(s){return esc(s).replace(/https?:\\/\\/[^\\s<)\\]]+/g,m=>'<a href="'+escAttr(m)+'" target="_blank">'+m+'</a>');}
 
 /* --- data processing --- */
 function flat(obj,pre){
@@ -259,9 +259,8 @@ function renderTable(){
       const v=row.display[c],cls=hasR?' class="has-research"':"",dc=' data-col="'+escAttr(c)+'"';
       if(v==null){h+="<td"+cls+dc+"></td>";}
       else{const s=String(v);
-        if(s.match(/^https?:\\/\\//))h+='<td'+cls+dc+'><a href="'+escAttr(s)+'" target="_blank">'+esc(s)+'</a></td>';
-        else if(s.length>TRUNC)h+='<td'+cls+dc+'><span class="cell-text">'+esc(s.slice(0,TRUNC))+'</span><span class="cell-more">&hellip; more</span></td>';
-        else h+='<td'+cls+dc+'>'+esc(s)+'</td>';
+        if(s.length>TRUNC)h+='<td'+cls+dc+'><span class="cell-text">'+linkify(s.slice(0,TRUNC))+'</span><span class="cell-more">&hellip; more</span></td>';
+        else h+='<td'+cls+dc+'>'+linkify(s)+'</td>';
       }
     }
     h+='</tr>';
@@ -307,7 +306,7 @@ tbl.addEventListener("click",e=>{
     const td=more.closest("td"),tr=td.closest("tr");
     const idx=parseInt(tr.dataset.idx,10),col=td.dataset.col;
     const full=String(S.rows[idx].display[col]);
-    td.querySelector(".cell-text").textContent=full;
+    td.querySelector(".cell-text").innerHTML=linkify(full);
     more.textContent="less";more.className="cell-less";
     return;
   }
@@ -317,7 +316,7 @@ tbl.addEventListener("click",e=>{
     const td=less.closest("td"),tr=td.closest("tr");
     const idx=parseInt(tr.dataset.idx,10),col=td.dataset.col;
     const full=String(S.rows[idx].display[col]);
-    td.querySelector(".cell-text").textContent=full.slice(0,TRUNC);
+    td.querySelector(".cell-text").innerHTML=linkify(full.slice(0,TRUNC));
     less.textContent="\\u2026 more";less.className="cell-more";
     return;
   }
@@ -410,7 +409,7 @@ function showPopover(td){
   const row=S.rows[idx];if(!row)return;
   const text=getResearch(row,col);if(text==null)return;
   popHdr.textContent="research."+col.replace(/^research\\./,"");
-  popBody.textContent=text;
+  popBody.innerHTML=linkify(text);
   const rect=td.getBoundingClientRect();
   let left=rect.left,top=rect.bottom+4;
   pop.classList.add("visible");popVisible=true;
@@ -585,13 +584,7 @@ async function copyToClipboard(text){
   return false;
 }
 
-const downloadLink=document.getElementById("downloadLink");
-function updateDownloadLink(){
-  if(csvUrl){downloadLink.style.display="inline-block";}
-}
-downloadLink.addEventListener("click",()=>{
-  if(csvUrl)app.openLink({url:csvUrl}).catch(()=>window.open(csvUrl,"_blank"));
-});
+function updateDownloadLink(){updateSessionLink();}
 
 /* --- row resize (drag bottom border) --- */
 let rowResizing=false,rowResizeTr=null,rowStartY=0,rowStartH=0;
@@ -632,13 +625,18 @@ function onRowResizeUp(){
 
 /* --- session URL display --- */
 function updateSessionLink(){
-  if(sessionUrl){
-    sessionLinkEl.innerHTML='<a href="#" id="sessionOpenLink">Open everyrow session &#x2197;</a>';
-    document.getElementById("sessionOpenLink").addEventListener("click",e=>{
-      e.preventDefault();
-      app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
-    });
-  }
+  let h="";
+  if(sessionUrl)h+='<a href="#" id="sessionOpenLink">Open everyrow session &#x2197;</a>';
+  if(csvUrl){if(h)h+=" &nbsp;|&nbsp; ";h+='<a href="#" id="csvOpenLink">Download CSV &#x2913;</a>';}
+  sessionLinkEl.innerHTML=h;
+  document.getElementById("sessionOpenLink")?.addEventListener("click",e=>{
+    e.preventDefault();
+    app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
+  });
+  document.getElementById("csvOpenLink")?.addEventListener("click",e=>{
+    e.preventDefault();
+    app.openLink({url:csvUrl}).catch(()=>window.open(csvUrl,"_blank"));
+  });
 }
 
 /* --- data loading --- */
