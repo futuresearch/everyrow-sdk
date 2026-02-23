@@ -774,24 +774,30 @@ async def dedupe_async(
 
 
 async def forecast(
-    task: str,
+    input: DataFrame | UUID | TableResult,
+    context: str | None = None,
     session: Session | None = None,
-    input: DataFrame | UUID | TableResult | None = None,
 ) -> TableResult:
     """Forecast probabilities for each row using 6 parallel research agents + dual forecasters.
 
+    The input table should contain at minimum a ``question`` column with the binary
+    question to forecast.  Recommended additional columns: ``resolution_criteria``,
+    ``resolution_date``, ``background``.  All columns are passed to the research
+    agents and forecasters.
+
     Args:
-        task: Overall context or instructions for the forecast.
+        input: The input table.  Each row should contain the question/scenario to
+            forecast.
+        context: Optional batch-level context or instructions that apply to every
+            row (e.g. "Focus on EU regulatory sources" or "Assume resolution by
+            end of 2027").  Leave *None* when the rows are self-contained.
         session: Optional session. If not provided, one will be created automatically.
-        input: The input table (DataFrame, UUID, or TableResult). Each row should
-            contain the question/scenario to forecast.
 
     Returns:
-        TableResult with `probability` (int, 0-100) and `rationale` (str) columns
+        TableResult with ``probability`` (int, 0-100) and ``rationale`` (str) columns
         added to each input row.
     """
-    if input is None:
-        raise EveryrowError("input is required for forecast")
+    task = context or ""
     if session is None:
         async with create_session() as internal_session:
             cohort_task = await forecast_async(

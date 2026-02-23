@@ -20,10 +20,7 @@ async def test_forecast_returns_probability_and_rationale():
         ]
     )
 
-    result = await forecast(
-        task="Forecast the probability of each question resolving YES.",
-        input=input_df,
-    )
+    result = await forecast(input=input_df)
 
     assert isinstance(result, TableResult)
     assert result.artifact_id is not None

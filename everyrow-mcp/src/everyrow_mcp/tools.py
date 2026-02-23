@@ -553,17 +553,15 @@ async def everyrow_forecast(params: ForecastInput) -> list[TextContent]:
     Then feed this information to an ensemble of forecasters and synthesize their
     predictions.
 
-    The CSV file may contain additional columns with context and resolution criteria
-    for each question. The entire row's contents will be passed to the research
-    agents and forecasters.
+    The CSV should contain at minimum a ``question`` column.  Recommended additional
+    columns: ``resolution_criteria``, ``resolution_date``, ``background``.  All
+    columns are passed to the research agents and forecasters.
 
-    Example:
-    - Task: "Forecast the likelihood of a yes answer to the given question."
-    - Questions in CSV file:
-        1. "Will the price of Bitcoin be higher one year from now compared to today?"
-        2. "Will the world population peak before 2100?"
+    The optional ``context`` parameter provides batch-level instructions that apply
+    to every row (e.g. "Focus on EU regulatory sources").  Leave it empty when the
+    rows are self-contained.
 
-    Output columns added: `rationale` (str) and `probability` (int, 0-100).
+    Output columns added: ``rationale`` (str) and ``probability`` (int, 0-100).
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.
@@ -578,7 +576,7 @@ async def everyrow_forecast(params: ForecastInput) -> list[TextContent]:
     async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await forecast_async(
-            task=params.task,
+            task=params.context or "",
             session=session,
             input=df,
         )

@@ -264,16 +264,16 @@ class ForecastInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    task: str = Field(
-        ...,
-        description="Overall context/instructions for the forecast. "
-        "Each row in the input CSV should contain the question/scenario to forecast.",
-        min_length=1,
-    )
     input_csv: str = Field(
         ...,
         description="Absolute path to the input CSV file containing a binary "
         "question and optional resolution criteria on each row.",
+    )
+    context: str | None = Field(
+        default=None,
+        description="Optional batch-level context or instructions that apply to every row "
+        "(e.g. 'Focus on EU regulatory sources' or 'Assume resolution by end of 2027'). "
+        "Leave empty when the rows are self-contained.",
     )
 
     @field_validator("input_csv")
