@@ -65,6 +65,7 @@ SKIPPED_URLS: set[str] = {
     "https://github.com/futuresearch/everyrow-sdk",
     "https://github.com/futuresearch/everyrow-sdk/releases",
     "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
+    "https://huggingface.co/datasets/google-research-datasets/paws",
     "https://hugovk.github.io/top-pypi-packages/",
     "https://jqlang.org/",
     "https://pip.pypa.io/en/stable/",
