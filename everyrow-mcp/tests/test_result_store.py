@@ -232,6 +232,7 @@ class TestTryCachedResult:
 
         await redis_store.store_result_meta(task_id, meta)
         await redis_store.store_result_csv(task_id, csv_text)
+        await redis_store.store_poll_token(task_id, "test-token")
 
         result = await try_cached_result(task_id, 0, 2, mcp_server_url=FAKE_SERVER_URL)
 
@@ -253,6 +254,7 @@ class TestTryCachedResult:
 
         await redis_store.store_result_meta(task_id, meta)
         await redis_store.store_result_page(task_id, 0, 10, page)
+        await redis_store.store_poll_token(task_id, "test-token")
 
         result = await try_cached_result(task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL)
 

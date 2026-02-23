@@ -128,9 +128,14 @@ def _build_result_response(
     ]
 
 
-async def _get_csv_url(task_id: str, mcp_server_url: str) -> str:
-    """Build the CSV download URL with the current poll token."""
+async def _get_csv_url(task_id: str, mcp_server_url: str) -> str | None:
+    """Build the CSV download URL with the current poll token.
+
+    Returns None if the poll token has expired (24h TTL).
+    """
     poll_token = await redis_store.get_poll_token(task_id)
+    if poll_token is None:
+        return None
     return f"{mcp_server_url}/api/results/{task_id}/download?token={poll_token}"
 
 
@@ -171,11 +176,15 @@ async def try_cached_result(
             )
             return None
 
+    csv_url = await _get_csv_url(task_id, mcp_server_url)
+    if csv_url is None:
+        logger.warning("Poll token expired for task %s, falling back to API", task_id)
+        return None
+
     preview_records, effective_page_size = clamp_page_to_budget(
         preview_records=preview_records,
         page_size=page_size,
     )
-    csv_url = await _get_csv_url(task_id, mcp_server_url)
 
     return _build_result_response(
         task_id=task_id,
@@ -227,12 +236,17 @@ async def try_store_result(
             preview_json=json.dumps(preview_records),
         )
 
+        csv_url = await _get_csv_url(task_id, mcp_server_url)
+        if csv_url is None:
+            logger.warning(
+                "Poll token expired for task %s, cannot build download URL", task_id
+            )
+            return None
+
         preview_records, effective_page_size = clamp_page_to_budget(
             preview_records=preview_records,
             page_size=page_size,
         )
-
-        csv_url = await _get_csv_url(task_id, mcp_server_url)
 
         return _build_result_response(
             task_id=task_id,
