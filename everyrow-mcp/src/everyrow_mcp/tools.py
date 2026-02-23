@@ -549,9 +549,10 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
 async def everyrow_forecast(params: ForecastInput) -> list[TextContent]:
     """Forecast the probability of binary questions from a CSV file.
 
-    For each row, use multiple research agents to gather the relevant information.
-    Then feed this information to an ensemble of forecasters and synthesize their
-    predictions.
+    Each row is forecast using an approach validated against FutureSearch's
+    past-casting environment of 1500 hard forecasting questions and 15M research
+    documents, see more at https://futuresearch.ai/automating-forecasting-questions/
+    and https://arxiv.org/abs/2506.21558.
 
     The CSV should contain at minimum a ``question`` column.  Recommended additional
     columns: ``resolution_criteria``, ``resolution_date``, ``background``.  All
