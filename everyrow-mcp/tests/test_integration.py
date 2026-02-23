@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from everyrow.generated.client import AuthenticatedClient
 
 from everyrow_mcp.models import (
     AgentInput,
@@ -88,7 +87,6 @@ class TestScreenIntegration:
     @pytest.mark.asyncio
     async def test_screen_jobs(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         jobs_csv: Path,
         tmp_path: Path,
@@ -141,7 +139,6 @@ class TestRankIntegration:
     @pytest.mark.asyncio
     async def test_rank_companies(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         companies_csv: Path,
         tmp_path: Path,
@@ -191,7 +188,6 @@ class TestDedupeIntegration:
     @pytest.mark.asyncio
     async def test_dedupe_contacts(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         contacts_csv: Path,
         tmp_path: Path,
@@ -249,7 +245,6 @@ class TestMergeIntegration:
     @pytest.mark.asyncio
     async def test_merge_products_suppliers(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         products_csv: Path,
         suppliers_csv: Path,
@@ -301,7 +296,6 @@ class TestAgentIntegration:
     @pytest.mark.asyncio
     async def test_agent_company_research(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         tmp_path: Path,
     ):
@@ -371,7 +365,6 @@ class TestSingleAgentIntegration:
     @pytest.mark.asyncio
     async def test_single_agent_basic(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         tmp_path: Path,
     ):
@@ -426,7 +419,6 @@ class TestSingleAgentIntegration:
     @pytest.mark.asyncio
     async def test_single_agent_no_input_data(
         self,
-        everyrow_client: AuthenticatedClient,
         real_ctx,
         tmp_path: Path,
     ):

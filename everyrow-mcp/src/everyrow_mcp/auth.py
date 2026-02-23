@@ -461,7 +461,7 @@ class EveryRowAuthProvider(
             supabase_refresh_token=authorization_code.supabase_refresh_token,
         )
 
-    async def load_access_token(self, token: str) -> AccessToken | None:
+    async def load_access_token(self, token: str) -> AccessToken | None:  # noqa: ARG002
         return None
 
     async def load_refresh_token(
