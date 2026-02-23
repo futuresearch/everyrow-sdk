@@ -45,7 +45,7 @@ from everyrow_mcp.tool_helpers import (
     create_tool_response,
     write_initial_task_state,
 )
-from everyrow_mcp.utils import load_csv, save_result_to_csv
+from everyrow_mcp.utils import load_data, save_result_to_csv
 
 
 @mcp.tool(
@@ -79,11 +79,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_csv(
-        input_csv=params.input_csv,
-        input_data=params.input_data,
-        input_json=params.input_json,
-    )
+    df = load_data(data=params.data, input_csv=params.input_csv)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -222,11 +218,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_csv(
-        input_csv=params.input_csv,
-        input_data=params.input_data,
-        input_json=params.input_json,
-    )
+    df = load_data(data=params.data, input_csv=params.input_csv)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -306,11 +298,7 @@ async def everyrow_screen(
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_csv(
-        input_csv=params.input_csv,
-        input_data=params.input_data,
-        input_json=params.input_json,
-    )
+    df = load_data(data=params.data, input_csv=params.input_csv)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -383,11 +371,7 @@ async def everyrow_dedupe(
     client = _get_client(ctx)
     _clear_task_state()
 
-    df = load_csv(
-        input_csv=params.input_csv,
-        input_data=params.input_data,
-        input_json=params.input_json,
-    )
+    df = load_data(data=params.data, input_csv=params.input_csv)
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
@@ -464,17 +448,8 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
     client = _get_client(ctx)
     _clear_task_state()
 
-    left_df = load_csv(
-        input_csv=params.left_csv,
-        input_data=params.left_input_data,
-        input_json=params.left_input_json,
-    )
-
-    right_df = load_csv(
-        input_csv=params.right_csv,
-        input_data=params.right_input_data,
-        input_json=params.right_input_json,
-    )
+    left_df = load_data(data=params.left_data, input_csv=params.left_csv)
+    right_df = load_data(data=params.right_data, input_csv=params.right_csv)
 
     async with create_session(client=client) as session:
         session_url = session.get_url()

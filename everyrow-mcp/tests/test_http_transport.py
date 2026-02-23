@@ -240,7 +240,7 @@ class TestAgentHttpTransport:
                 {
                     "params": {
                         "task": "Find the company's headquarters city.",
-                        "input_data": "name\nAnthropic\nOpenAI",
+                        "data": "name\nAnthropic\nOpenAI",
                         "response_schema": {
                             "type": "object",
                             "properties": {

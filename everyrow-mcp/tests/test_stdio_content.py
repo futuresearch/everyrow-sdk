@@ -654,14 +654,13 @@ class TestToolDescriptions:
         ],
     )
     def test_stdio_schema_has_input_csv(self, tool_name: str, def_name: str):
-        """In stdio mode, CSV-based tools expose input_csv."""
+        """In stdio mode, CSV-based tools expose input_csv and data."""
         set_tool_descriptions("stdio")
         tool = mcp_app._tool_manager.get_tool(tool_name)
         assert tool is not None
         input_def = tool.parameters["$defs"][def_name]
         assert "input_csv" in input_def["properties"]
-        assert "input_data" in input_def["properties"]
-        assert "input_json" in input_def["properties"]
+        assert "data" in input_def["properties"]
 
     @pytest.mark.parametrize(
         "tool_name,def_name",
@@ -679,8 +678,7 @@ class TestToolDescriptions:
         assert tool is not None
         input_def = tool.parameters["$defs"][def_name]
         assert "input_csv" not in input_def["properties"]
-        assert "input_data" in input_def["properties"]
-        assert "input_json" in input_def["properties"]
+        assert "data" in input_def["properties"]
         set_tool_descriptions("stdio")
 
     def test_stdio_merge_has_csv_fields(self):
@@ -700,8 +698,8 @@ class TestToolDescriptions:
         merge_def = tool.parameters["$defs"]["MergeInput"]
         assert "left_csv" not in merge_def["properties"]
         assert "right_csv" not in merge_def["properties"]
-        assert "left_input_data" in merge_def["properties"]
-        assert "right_input_data" in merge_def["properties"]
+        assert "left_data" in merge_def["properties"]
+        assert "right_data" in merge_def["properties"]
         set_tool_descriptions("stdio")
 
 

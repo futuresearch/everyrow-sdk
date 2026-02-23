@@ -128,13 +128,9 @@ class _SingleSourceInput(BaseModel):
         default=None,
         description="Absolute path to CSV file (local/stdio mode only).",
     )
-    input_data: str | None = Field(
+    data: str | list[dict[str, Any]] | None = Field(
         default=None,
-        description="Raw CSV content as a string (for small datasets).",
-    )
-    input_json: list[dict[str, Any]] | None = Field(
-        default=None,
-        description="Data as a JSON array of objects.",
+        description="Inline data — CSV string or JSON array of objects.",
     )
 
     @field_validator("input_csv")
@@ -147,8 +143,8 @@ class _SingleSourceInput(BaseModel):
     @model_validator(mode="after")
     def check_input_source(self):
         _check_exactly_one(
-            values=(self.input_csv, self.input_data, self.input_json),
-            field_names=("input_csv", "input_data", "input_json"),
+            values=(self.input_csv, self.data),
+            field_names=("input_csv", "data"),
             label="Input",
         )
         return self
@@ -257,13 +253,9 @@ class MergeInput(BaseModel):
         default=None,
         description="Absolute path to the left CSV (table being enriched).",
     )
-    left_input_data: str | None = Field(
+    left_data: str | list[dict[str, Any]] | None = Field(
         default=None,
-        description="Raw CSV content for the left table (remote use).",
-    )
-    left_input_json: list[dict[str, Any]] | None = Field(
-        default=None,
-        description="Left table as JSON array of objects.",
+        description="Inline data for the left table — CSV string or JSON array of objects.",
     )
 
     # RIGHT table
@@ -271,13 +263,9 @@ class MergeInput(BaseModel):
         default=None,
         description="Absolute path to the right CSV (lookup table).",
     )
-    right_input_data: str | None = Field(
+    right_data: str | list[dict[str, Any]] | None = Field(
         default=None,
-        description="Raw CSV content for the right table (remote use).",
-    )
-    right_input_json: list[dict[str, Any]] | None = Field(
-        default=None,
-        description="Right table as JSON array of objects.",
+        description="Inline data for the right table — CSV string or JSON array of objects.",
     )
 
     merge_on_left: str | None = Field(
@@ -308,25 +296,13 @@ class MergeInput(BaseModel):
     @model_validator(mode="after")
     def check_sources(self) -> "MergeInput":
         _check_exactly_one(
-            values=(
-                self.left_csv,
-                self.left_input_data,
-                self.left_input_json,
-            ),
-            field_names=("left_csv", "left_input_data", "left_input_json"),
+            values=(self.left_csv, self.left_data),
+            field_names=("left_csv", "left_data"),
             label="Left table",
         )
         _check_exactly_one(
-            values=(
-                self.right_csv,
-                self.right_input_data,
-                self.right_input_json,
-            ),
-            field_names=(
-                "right_csv",
-                "right_input_data",
-                "right_input_json",
-            ),
+            values=(self.right_csv, self.right_data),
+            field_names=("right_csv", "right_data"),
             label="Right table",
         )
         return self

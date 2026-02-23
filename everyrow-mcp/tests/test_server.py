@@ -845,7 +845,7 @@ class TestAgentInlineInput:
 
     @pytest.mark.asyncio
     async def test_submit_with_inline_data(self):
-        """Test agent submission with input_data instead of input_csv."""
+        """Test agent submission with data instead of input_csv."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
@@ -864,7 +864,7 @@ class TestAgentInlineInput:
 
             params = AgentInput(
                 task="Find HQ for each company",
-                input_data="name,industry\nTechStart,Software\nAILabs,AI\n",
+                data="name,industry\nTechStart,Software\nAILabs,AI\n",
             )
             result = await everyrow_agent(params, ctx)
 
@@ -893,40 +893,30 @@ class TestAgentInputValidation:
             AgentInput(
                 task="test",
                 input_csv=companies_csv,
-                input_data="name,industry\nA,B\n",
+                data="name,industry\nA,B\n",
             )
 
     def test_accepts_input_csv(self, companies_csv: str):
         """Test that input_csv alone is valid."""
         params = AgentInput(task="test", input_csv=companies_csv)
         assert params.input_csv == companies_csv
-        assert params.input_data is None
+        assert params.data is None
 
-    def test_accepts_input_data(self):
-        """Test that input_data alone is valid."""
-        params = AgentInput(task="test", input_data="a,b\n1,2\n")
-        assert params.input_data is not None
+    def test_accepts_data_csv_string(self):
+        """Test that data as CSV string is valid."""
+        params = AgentInput(task="test", data="a,b\n1,2\n")
+        assert params.data is not None
         assert params.input_csv is None
 
-    def test_accepts_input_json(self):
-        """Test that input_json alone is valid."""
-        data = [
+    def test_accepts_data_json_list(self):
+        """Test that data as JSON list of dicts is valid."""
+        records = [
             {"company": "Acme", "url": "acme.com"},
             {"company": "Beta", "url": "beta.io"},
         ]
-        params = AgentInput(task="test", input_json=data)
-        assert params.input_json == data
+        params = AgentInput(task="test", data=records)
+        assert params.data == records
         assert params.input_csv is None
-        assert params.input_data is None
-
-    def test_rejects_input_json_with_csv(self, companies_csv: str):
-        """Test that input_json + input_csv raises."""
-        with pytest.raises(ValidationError, match="Provide exactly one of"):
-            AgentInput(
-                task="test",
-                input_csv=companies_csv,
-                input_json=[{"a": 1}],
-            )
 
 
 class TestResultsInputValidation:
@@ -952,49 +942,49 @@ class TestInputModelsUnchanged:
     """Verify that input models require an input source."""
 
     def test_rank_requires_input_source(self):
-        """RankInput requires either input_csv or input_data."""
+        """RankInput requires either input_csv or data."""
         with pytest.raises(ValidationError):
             RankInput(task="test", field_name="score")
 
-    def test_rank_accepts_input_data(self):
-        """RankInput accepts input_data as alternative to input_csv."""
-        params = RankInput(task="test", field_name="score", input_data="col\nval")
-        assert params.input_data == "col\nval"
+    def test_rank_accepts_data(self):
+        """RankInput accepts data as alternative to input_csv."""
+        params = RankInput(task="test", field_name="score", data="col\nval")
+        assert params.data == "col\nval"
         assert params.input_csv is None
 
     def test_rank_rejects_both_inputs(self):
-        """RankInput rejects both input_csv and input_data."""
+        """RankInput rejects both input_csv and data."""
         with pytest.raises(ValidationError):
             RankInput(
                 task="test",
                 field_name="score",
                 input_csv="/tmp/test.csv",
-                input_data="col\nval",
+                data="col\nval",
             )
 
     def test_screen_requires_input_source(self):
-        """ScreenInput requires either input_csv or input_data."""
+        """ScreenInput requires either input_csv or data."""
         with pytest.raises(ValidationError):
             ScreenInput(task="test")
 
-    def test_screen_accepts_input_data(self):
-        """ScreenInput accepts input_data as alternative to input_csv."""
-        params = ScreenInput(task="test", input_data="col\nval")
-        assert params.input_data == "col\nval"
+    def test_screen_accepts_data(self):
+        """ScreenInput accepts data as alternative to input_csv."""
+        params = ScreenInput(task="test", data="col\nval")
+        assert params.data == "col\nval"
         assert params.input_csv is None
 
     def test_screen_rejects_both_inputs(self):
-        """ScreenInput rejects both input_csv and input_data."""
+        """ScreenInput rejects both input_csv and data."""
         with pytest.raises(ValidationError):
-            ScreenInput(task="test", input_csv="/tmp/test.csv", input_data="col\nval")
+            ScreenInput(task="test", input_csv="/tmp/test.csv", data="col\nval")
 
-    def test_dedupe_requires_input_csv(self):
-        """DedupeInput still requires input_csv as a string."""
+    def test_dedupe_requires_input_source(self):
+        """DedupeInput requires either input_csv or data."""
         with pytest.raises(ValidationError):
             DedupeInput(equivalence_relation="same entity")
 
-    def test_merge_requires_csv_paths(self):
-        """MergeInput still requires left_csv and right_csv."""
+    def test_merge_requires_input_sources(self):
+        """MergeInput requires left and right input sources."""
         with pytest.raises(ValidationError):
             MergeInput(task="test")
 

@@ -67,7 +67,7 @@ def _patch_csv_input_tools(mode: str) -> None:
     """In HTTP mode, remove ``input_csv`` from single-source input tools.
 
     The HTTP server cannot read the client's local filesystem, so only
-    ``input_data`` and ``input_json`` are valid in HTTP mode.
+    ``data`` is valid in HTTP mode.
     """
     if mode == "stdio":
         # Restore originals (all three input options visible)
