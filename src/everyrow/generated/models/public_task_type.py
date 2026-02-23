@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class PublicTaskType(str, Enum):
     AGENT = "agent"
     DEDUPE = "dedupe"

@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class DedupeOperationStrategy(str, Enum):
     COMBINE = "combine"
     IDENTIFY = "identify"

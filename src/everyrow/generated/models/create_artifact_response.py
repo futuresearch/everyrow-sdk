@@ -1,75 +1,54 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
+from uuid import UUID
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-from uuid import UUID
-
-
-
-
-
-
 T = TypeVar("T", bound="CreateArtifactResponse")
-
 
 
 @_attrs_define
 class CreateArtifactResponse:
-    """ 
-        Attributes:
-            artifact_id (UUID): The ID of the created artifact
-            session_id (UUID): The session ID (auto-created if not provided)
-     """
+    """
+    Attributes:
+        artifact_id (UUID): The ID of the created artifact
+        session_id (UUID): The session ID (auto-created if not provided)
+    """
 
     artifact_id: UUID
     session_id: UUID
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         artifact_id = str(self.artifact_id)
 
         session_id = str(self.session_id)
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "artifact_id": artifact_id,
-            "session_id": session_id,
-        })
+        field_dict.update(
+            {
+                "artifact_id": artifact_id,
+                "session_id": session_id,
+            }
+        )
 
         return field_dict
-
-
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         artifact_id = UUID(d.pop("artifact_id"))
 
-
-
-
         session_id = UUID(d.pop("session_id"))
-
-
-
 
         create_artifact_response = cls(
             artifact_id=artifact_id,
             session_id=session_id,
         )
-
 
         create_artifact_response.additional_properties = d
         return create_artifact_response

@@ -1,37 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-from ..types import UNSET, Unset
-from typing import cast
-
-
-
-
-
-
 T = TypeVar("T", bound="MergeBreakdownResponse")
-
 
 
 @_attrs_define
 class MergeBreakdownResponse:
-    """ Breakdown of match methods for a merge operation.
+    """Breakdown of match methods for a merge operation.
 
-        Attributes:
-            exact (list[list[int]] | Unset): Pairs matched via exact string match (left_idx, right_idx)
-            fuzzy (list[list[int]] | Unset): Pairs matched via fuzzy string match (left_idx, right_idx)
-            llm (list[list[int]] | Unset): Pairs matched via LLM (left_idx, right_idx)
-            web (list[list[int]] | Unset): Pairs matched via LLM with web research (left_idx, right_idx)
-            unmatched_left (list[int] | Unset): Left row indices that had no match
-            unmatched_right (list[int] | Unset): Right row indices that had no match
-     """
+    Attributes:
+        exact (list[list[int]] | Unset): Pairs matched via exact string match (left_idx, right_idx)
+        fuzzy (list[list[int]] | Unset): Pairs matched via fuzzy string match (left_idx, right_idx)
+        llm (list[list[int]] | Unset): Pairs matched via LLM (left_idx, right_idx)
+        web (list[list[int]] | Unset): Pairs matched via LLM with web research (left_idx, right_idx)
+        unmatched_left (list[int] | Unset): Left row indices that had no match
+        unmatched_right (list[int] | Unset): Right row indices that had no match
+    """
 
     exact: list[list[int]] | Unset = UNSET
     fuzzy: list[list[int]] | Unset = UNSET
@@ -40,10 +31,6 @@ class MergeBreakdownResponse:
     unmatched_left: list[int] | Unset = UNSET
     unmatched_right: list[int] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         exact: list[list[int]] | Unset = UNSET
@@ -56,10 +43,7 @@ class MergeBreakdownResponse:
                     exact_item_item = exact_item_item_data
                     exact_item.append(exact_item_item)
 
-
                 exact.append(exact_item)
-
-
 
         fuzzy: list[list[int]] | Unset = UNSET
         if not isinstance(self.fuzzy, Unset):
@@ -71,10 +55,7 @@ class MergeBreakdownResponse:
                     fuzzy_item_item = fuzzy_item_item_data
                     fuzzy_item.append(fuzzy_item_item)
 
-
                 fuzzy.append(fuzzy_item)
-
-
 
         llm: list[list[int]] | Unset = UNSET
         if not isinstance(self.llm, Unset):
@@ -86,10 +67,7 @@ class MergeBreakdownResponse:
                     llm_item_item = llm_item_item_data
                     llm_item.append(llm_item_item)
 
-
                 llm.append(llm_item)
-
-
 
         web: list[list[int]] | Unset = UNSET
         if not isinstance(self.web, Unset):
@@ -101,28 +79,19 @@ class MergeBreakdownResponse:
                     web_item_item = web_item_item_data
                     web_item.append(web_item_item)
 
-
                 web.append(web_item)
-
-
 
         unmatched_left: list[int] | Unset = UNSET
         if not isinstance(self.unmatched_left, Unset):
             unmatched_left = self.unmatched_left
 
-
-
         unmatched_right: list[int] | Unset = UNSET
         if not isinstance(self.unmatched_right, Unset):
             unmatched_right = self.unmatched_right
 
-
-
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-        })
+        field_dict.update({})
         if exact is not UNSET:
             field_dict["exact"] = exact
         if fuzzy is not UNSET:
@@ -138,8 +107,6 @@ class MergeBreakdownResponse:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
@@ -150,7 +117,8 @@ class MergeBreakdownResponse:
             for exact_item_data in _exact:
                 exact_item = []
                 _exact_item = exact_item_data
-                for exact_item_item_data in (_exact_item):
+                for exact_item_item_data in _exact_item:
+
                     def _parse_exact_item_item(data: object) -> int:
                         return cast(int, data)
 
@@ -160,7 +128,6 @@ class MergeBreakdownResponse:
 
                 exact.append(exact_item)
 
-
         _fuzzy = d.pop("fuzzy", UNSET)
         fuzzy: list[list[int]] | Unset = UNSET
         if _fuzzy is not UNSET:
@@ -168,7 +135,8 @@ class MergeBreakdownResponse:
             for fuzzy_item_data in _fuzzy:
                 fuzzy_item = []
                 _fuzzy_item = fuzzy_item_data
-                for fuzzy_item_item_data in (_fuzzy_item):
+                for fuzzy_item_item_data in _fuzzy_item:
+
                     def _parse_fuzzy_item_item(data: object) -> int:
                         return cast(int, data)
 
@@ -178,7 +146,6 @@ class MergeBreakdownResponse:
 
                 fuzzy.append(fuzzy_item)
 
-
         _llm = d.pop("llm", UNSET)
         llm: list[list[int]] | Unset = UNSET
         if _llm is not UNSET:
@@ -186,7 +153,8 @@ class MergeBreakdownResponse:
             for llm_item_data in _llm:
                 llm_item = []
                 _llm_item = llm_item_data
-                for llm_item_item_data in (_llm_item):
+                for llm_item_item_data in _llm_item:
+
                     def _parse_llm_item_item(data: object) -> int:
                         return cast(int, data)
 
@@ -196,7 +164,6 @@ class MergeBreakdownResponse:
 
                 llm.append(llm_item)
 
-
         _web = d.pop("web", UNSET)
         web: list[list[int]] | Unset = UNSET
         if _web is not UNSET:
@@ -204,7 +171,8 @@ class MergeBreakdownResponse:
             for web_item_data in _web:
                 web_item = []
                 _web_item = web_item_data
-                for web_item_item_data in (_web_item):
+                for web_item_item_data in _web_item:
+
                     def _parse_web_item_item(data: object) -> int:
                         return cast(int, data)
 
@@ -214,12 +182,9 @@ class MergeBreakdownResponse:
 
                 web.append(web_item)
 
-
         unmatched_left = cast(list[int], d.pop("unmatched_left", UNSET))
 
-
         unmatched_right = cast(list[int], d.pop("unmatched_right", UNSET))
-
 
         merge_breakdown_response = cls(
             exact=exact,
@@ -229,7 +194,6 @@ class MergeBreakdownResponse:
             unmatched_left=unmatched_left,
             unmatched_right=unmatched_right,
         )
-
 
         merge_breakdown_response.additional_properties = d
         return merge_breakdown_response

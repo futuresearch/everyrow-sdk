@@ -1,4 +1,4 @@
-""" Contains all the data models used in inputs/outputs """
+"""Contains all the data models used in inputs/outputs"""
 
 from .agent_map_operation import AgentMapOperation
 from .agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item

@@ -1,33 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-
-
-
-
-
-
 T = TypeVar("T", bound="TaskProgressInfo")
-
 
 
 @_attrs_define
 class TaskProgressInfo:
-    """ 
-        Attributes:
-            pending (int): Number of subtasks pending
-            running (int): Number of subtasks currently running
-            completed (int): Number of subtasks completed
-            failed (int): Number of subtasks failed
-            total (int): Total number of subtasks
-     """
+    """
+    Attributes:
+        pending (int): Number of subtasks pending
+        running (int): Number of subtasks currently running
+        completed (int): Number of subtasks completed
+        failed (int): Number of subtasks failed
+        total (int): Total number of subtasks
+    """
 
     pending: int
     running: int
@@ -35,10 +26,6 @@ class TaskProgressInfo:
     failed: int
     total: int
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
-
-
-
-
 
     def to_dict(self) -> dict[str, Any]:
         pending = self.pending
@@ -51,20 +38,19 @@ class TaskProgressInfo:
 
         total = self.total
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "pending": pending,
-            "running": running,
-            "completed": completed,
-            "failed": failed,
-            "total": total,
-        })
+        field_dict.update(
+            {
+                "pending": pending,
+                "running": running,
+                "completed": completed,
+                "failed": failed,
+                "total": total,
+            }
+        )
 
         return field_dict
-
-
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
@@ -86,7 +72,6 @@ class TaskProgressInfo:
             failed=failed,
             total=total,
         )
-
 
         task_progress_info.additional_properties = d
         return task_progress_info

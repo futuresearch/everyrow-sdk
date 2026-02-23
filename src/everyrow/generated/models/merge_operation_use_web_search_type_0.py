@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class MergeOperationUseWebSearchType0(str, Enum):
     AUTO = "auto"
     NO = "no"

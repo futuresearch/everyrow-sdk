@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class PublicEffortLevel(str, Enum):
     HIGH = "high"
     LOW = "low"

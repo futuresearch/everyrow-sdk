@@ -1,61 +1,54 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, BinaryIO, TextIO, TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+from uuid import UUID
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
 from ..models.llm_enum_public import LLMEnumPublic
 from ..models.public_effort_level import PublicEffortLevel
 from ..types import UNSET, Unset
-from typing import cast
-from uuid import UUID
 
 if TYPE_CHECKING:
-  from ..models.agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item
-  from ..models.agent_map_operation_input_type_2 import AgentMapOperationInputType2
-  from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
-
-
-
+    from ..models.agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item
+    from ..models.agent_map_operation_input_type_2 import AgentMapOperationInputType2
+    from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
 
 
 T = TypeVar("T", bound="AgentMapOperation")
 
 
-
 @_attrs_define
 class AgentMapOperation:
-    """ 
-        Attributes:
-            input_ (AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID): The input data as a) the ID
-                of an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form
-                of a list of JSON objects
-            task (str): Instructions for the AI agent to execute per row
-            session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
-            response_schema (AgentMapOperationResponseSchemaType0 | None | Unset): JSON Schema for the response format. If
-                not provided, use default answer schema.
-            llm (LLMEnumPublic | None | Unset): LLM to use for each agent. Required when effort_level is not set.
-            effort_level (None | PublicEffortLevel | Unset): Effort level preset: low (quick), medium (balanced), high
-                (thorough). Mutually exclusive with llm/iteration_budget/include_reasoning - use either a preset or custom
-                params, not both. If not specified, you must provide all individual parameters (llm, iteration_budget,
-                include_reasoning).
-            join_with_input (bool | Unset): If True, merge agent output with input row. If False, output only agent results.
-                Default: True.
-            iteration_budget (int | None | Unset): Number of agent iterations per row (0-20). Required when effort_level is
-                not set.
-            include_reasoning (bool | None | Unset): Include reasoning notes in the response. Required when effort_level is
-                not set.
-            include_research (bool | None | Unset): Deprecated: use include_reasoning instead. Include research notes in the
-                response. Required when effort_level is not set.
-            enforce_row_independence (bool | Unset): If True, each agent runs completely independently without being
-                affected by other agents. Disables adaptive budget adjustment and straggler management, ensuring agents are not
-                hurried or given iteration limits based on other agents' progress. Use this when consistent per-row behavior is
-                more important than overall throughput. Default: False.
-     """
+    """
+    Attributes:
+        input_ (AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID): The input data as a) the ID
+            of an existing artifact, b) a single record in the form of a JSON object, or c) a table of records in the form
+            of a list of JSON objects
+        task (str): Instructions for the AI agent to execute per row
+        session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
+        response_schema (AgentMapOperationResponseSchemaType0 | None | Unset): JSON Schema for the response format. If
+            not provided, use default answer schema.
+        llm (LLMEnumPublic | None | Unset): LLM to use for each agent. Required when effort_level is not set.
+        effort_level (None | PublicEffortLevel | Unset): Effort level preset: low (quick), medium (balanced), high
+            (thorough). Mutually exclusive with llm/iteration_budget/include_reasoning - use either a preset or custom
+            params, not both. If not specified, you must provide all individual parameters (llm, iteration_budget,
+            include_reasoning).
+        join_with_input (bool | Unset): If True, merge agent output with input row. If False, output only agent results.
+            Default: True.
+        iteration_budget (int | None | Unset): Number of agent iterations per row (0-20). Required when effort_level is
+            not set.
+        include_reasoning (bool | None | Unset): Include reasoning notes in the response. Required when effort_level is
+            not set.
+        include_research (bool | None | Unset): Deprecated: use include_reasoning instead. Include research notes in the
+            response. Required when effort_level is not set.
+        enforce_row_independence (bool | Unset): If True, each agent runs completely independently without being
+            affected by other agents. Disables adaptive budget adjustment and straggler management, ensuring agents are not
+            hurried or given iteration limits based on other agents' progress. Use this when consistent per-row behavior is
+            more important than overall throughput. Default: False.
+    """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
     task: str
@@ -70,14 +63,9 @@ class AgentMapOperation:
     enforce_row_independence: bool | Unset = False
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
-
-
-
-
     def to_dict(self) -> dict[str, Any]:
-        from ..models.agent_map_operation_input_type_2 import AgentMapOperationInputType2
         from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
-        from ..models.agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item
+
         input_: dict[str, Any] | list[dict[str, Any]] | str
         if isinstance(self.input_, UUID):
             input_ = str(self.input_)
@@ -87,10 +75,8 @@ class AgentMapOperation:
                 input_type_1_item = input_type_1_item_data.to_dict()
                 input_.append(input_type_1_item)
 
-
         else:
             input_ = self.input_.to_dict()
-
 
         task = self.task
 
@@ -148,13 +134,14 @@ class AgentMapOperation:
 
         enforce_row_independence = self.enforce_row_independence
 
-
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update({
-            "input": input_,
-            "task": task,
-        })
+        field_dict.update(
+            {
+                "input": input_,
+                "task": task,
+            }
+        )
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
         if response_schema is not UNSET:
@@ -176,21 +163,19 @@ class AgentMapOperation:
 
         return field_dict
 
-
-
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.agent_map_operation_input_type_1_item import AgentMapOperationInputType1Item
         from ..models.agent_map_operation_input_type_2 import AgentMapOperationInputType2
         from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
+
         d = dict(src_dict)
+
         def _parse_input_(data: object) -> AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
                 input_type_0 = UUID(data)
-
-
 
                 return input_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
@@ -200,10 +185,8 @@ class AgentMapOperation:
                     raise TypeError()
                 input_type_1 = []
                 _input_type_1 = data
-                for input_type_1_item_data in (_input_type_1):
+                for input_type_1_item_data in _input_type_1:
                     input_type_1_item = AgentMapOperationInputType1Item.from_dict(input_type_1_item_data)
-
-
 
                     input_type_1.append(input_type_1_item)
 
@@ -214,12 +197,9 @@ class AgentMapOperation:
                 raise TypeError()
             input_type_2 = AgentMapOperationInputType2.from_dict(data)
 
-
-
             return input_type_2
 
         input_ = _parse_input_(d.pop("input"))
-
 
         task = d.pop("task")
 
@@ -233,15 +213,12 @@ class AgentMapOperation:
                     raise TypeError()
                 session_id_type_0 = UUID(data)
 
-
-
                 return session_id_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | Unset | UUID, data)
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
-
 
         def _parse_response_schema(data: object) -> AgentMapOperationResponseSchemaType0 | None | Unset:
             if data is None:
@@ -253,15 +230,12 @@ class AgentMapOperation:
                     raise TypeError()
                 response_schema_type_0 = AgentMapOperationResponseSchemaType0.from_dict(data)
 
-
-
                 return response_schema_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(AgentMapOperationResponseSchemaType0 | None | Unset, data)
 
         response_schema = _parse_response_schema(d.pop("response_schema", UNSET))
-
 
         def _parse_llm(data: object) -> LLMEnumPublic | None | Unset:
             if data is None:
@@ -273,15 +247,12 @@ class AgentMapOperation:
                     raise TypeError()
                 llm_type_0 = LLMEnumPublic(data)
 
-
-
                 return llm_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(LLMEnumPublic | None | Unset, data)
 
         llm = _parse_llm(d.pop("llm", UNSET))
-
 
         def _parse_effort_level(data: object) -> None | PublicEffortLevel | Unset:
             if data is None:
@@ -293,15 +264,12 @@ class AgentMapOperation:
                     raise TypeError()
                 effort_level_type_0 = PublicEffortLevel(data)
 
-
-
                 return effort_level_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | PublicEffortLevel | Unset, data)
 
         effort_level = _parse_effort_level(d.pop("effort_level", UNSET))
-
 
         join_with_input = d.pop("join_with_input", UNSET)
 
@@ -314,7 +282,6 @@ class AgentMapOperation:
 
         iteration_budget = _parse_iteration_budget(d.pop("iteration_budget", UNSET))
 
-
         def _parse_include_reasoning(data: object) -> bool | None | Unset:
             if data is None:
                 return data
@@ -324,7 +291,6 @@ class AgentMapOperation:
 
         include_reasoning = _parse_include_reasoning(d.pop("include_reasoning", UNSET))
 
-
         def _parse_include_research(data: object) -> bool | None | Unset:
             if data is None:
                 return data
@@ -333,7 +299,6 @@ class AgentMapOperation:
             return cast(bool | None | Unset, data)
 
         include_research = _parse_include_research(d.pop("include_research", UNSET))
-
 
         enforce_row_independence = d.pop("enforce_row_independence", UNSET)
 
@@ -350,7 +315,6 @@ class AgentMapOperation:
             include_research=include_research,
             enforce_row_independence=enforce_row_independence,
         )
-
 
         agent_map_operation.additional_properties = d
         return agent_map_operation
