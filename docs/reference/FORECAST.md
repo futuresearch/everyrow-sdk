@@ -5,9 +5,7 @@ description: API reference for the EveryRow forecast tool, which produces calibr
 
 # Forecast
 
-`forecast` takes a DataFrame of binary questions and produces a calibrated probability estimate (0–100) and rationale for each row. Each question is researched across six dimensions in parallel—timeline, base rates, key factors, expert & market opinions, arguments for, and arguments against—then synthesized by an ensemble of forecasters.
-
-The approach is validated against FutureSearch's past-casting environment of 1500 hard forecasting questions and 15M research documents. See more at [Automating Forecasting Questions](https://futuresearch.ai/automating-forecasting-questions/) and [arXiv:2506.21558](https://arxiv.org/abs/2506.21558).
+`forecast` takes a DataFrame of binary questions and produces a calibrated probability estimate (0–100) and rationale for each row. The approach is validated against FutureSearch's past-casting environment of 1500 hard forecasting questions and 15M research documents. See more at [Automating Forecasting Questions](https://futuresearch.ai/automating-forecasting-questions/) and [arXiv:2506.21558](https://arxiv.org/abs/2506.21558).
 
 ## Examples
 
