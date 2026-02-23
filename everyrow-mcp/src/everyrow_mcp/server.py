@@ -1,6 +1,5 @@
 """MCP server for everyrow SDK operations."""
 
-
 import logging
 import os
 import sys
