@@ -1,10 +1,11 @@
 """Input models and schema helpers for everyrow MCP tools."""
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
+from uuid import UUID
 
 from jsonschema import SchemaError
 from jsonschema.validators import validator_for
-from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 
 from everyrow_mcp.utils import validate_csv_output_path, validate_csv_path
 
@@ -111,16 +112,37 @@ class AgentInput(BaseModel):
     task: str = Field(
         ..., description="Natural language task to perform on each row.", min_length=1
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact from a previous everyrow operation. "
+        "Use this instead of input_csv to chain operations without re-uploading data.",
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the agent's response per row.",
     )
 
+    @model_validator(mode="after")
+    def validate_input_source(self) -> Self:
+        if self.input_csv is not None and self.artifact_id is not None:
+            raise ValueError("Provide either input_csv or artifact_id, not both.")
+        if self.input_csv is None and self.artifact_id is None:
+            raise ValueError("Either input_csv or artifact_id must be provided.")
+        if self.artifact_id is not None:
+            try:
+                UUID(self.artifact_id)
+            except ValueError:
+                raise ValueError(f"artifact_id is not a valid UUID: {self.artifact_id}")
+        return self
+
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
 
     @field_validator("response_schema")
@@ -141,7 +163,14 @@ class RankInput(BaseModel):
         description="Natural language instructions for scoring a single row.",
         min_length=1,
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact from a previous everyrow operation. "
+        "Use this instead of input_csv to chain operations without re-uploading data.",
+    )
     field_name: str = Field(..., description="Name of the field to sort by.")
     field_type: Literal["float", "int", "str", "bool"] = Field(
         default="float",
@@ -155,10 +184,24 @@ class RankInput(BaseModel):
         description="Optional JSON schema for the response model.",
     )
 
+    @model_validator(mode="after")
+    def validate_input_source(self) -> Self:
+        if self.input_csv is not None and self.artifact_id is not None:
+            raise ValueError("Provide either input_csv or artifact_id, not both.")
+        if self.input_csv is None and self.artifact_id is None:
+            raise ValueError("Either input_csv or artifact_id must be provided.")
+        if self.artifact_id is not None:
+            try:
+                UUID(self.artifact_id)
+            except ValueError:
+                raise ValueError(f"artifact_id is not a valid UUID: {self.artifact_id}")
+        return self
+
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
 
     @field_validator("response_schema")
@@ -177,17 +220,38 @@ class ScreenInput(BaseModel):
     task: str = Field(
         ..., description="Natural language screening criteria.", min_length=1
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact from a previous everyrow operation. "
+        "Use this instead of input_csv to chain operations without re-uploading data.",
+    )
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the response model. "
         "Must include at least one boolean property — screen uses the boolean field to filter rows into pass/fail.",
     )
 
+    @model_validator(mode="after")
+    def validate_input_source(self) -> Self:
+        if self.input_csv is not None and self.artifact_id is not None:
+            raise ValueError("Provide either input_csv or artifact_id, not both.")
+        if self.input_csv is None and self.artifact_id is None:
+            raise ValueError("Either input_csv or artifact_id must be provided.")
+        if self.artifact_id is not None:
+            try:
+                UUID(self.artifact_id)
+            except ValueError:
+                raise ValueError(f"artifact_id is not a valid UUID: {self.artifact_id}")
+        return self
+
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
 
     @field_validator("response_schema")
@@ -209,12 +273,33 @@ class DedupeInput(BaseModel):
         "The LLM will use this to identify which rows represent the same entity.",
         min_length=1,
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str | None = Field(
+        default=None, description="Absolute path to the input CSV file."
+    )
+    artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact from a previous everyrow operation. "
+        "Use this instead of input_csv to chain operations without re-uploading data.",
+    )
+
+    @model_validator(mode="after")
+    def validate_input_source(self) -> Self:
+        if self.input_csv is not None and self.artifact_id is not None:
+            raise ValueError("Provide either input_csv or artifact_id, not both.")
+        if self.input_csv is None and self.artifact_id is None:
+            raise ValueError("Either input_csv or artifact_id must be provided.")
+        if self.artifact_id is not None:
+            try:
+                UUID(self.artifact_id)
+            except ValueError:
+                raise ValueError(f"artifact_id is not a valid UUID: {self.artifact_id}")
+        return self
 
     @field_validator("input_csv")
     @classmethod
-    def validate_input_csv(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_input_csv(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
 
 
@@ -228,13 +313,21 @@ class MergeInput(BaseModel):
         description="Natural language description of how to match rows.",
         min_length=1,
     )
-    left_csv: str = Field(
-        ...,
+    left_csv: str | None = Field(
+        default=None,
         description="Absolute path to the left CSV. Works like a LEFT JOIN: ALL rows from this table are kept in the output. This should be the table being enriched.",
     )
-    right_csv: str = Field(
-        ...,
+    left_artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact for the left table. Use instead of left_csv.",
+    )
+    right_csv: str | None = Field(
+        default=None,
         description="Absolute path to the right CSV. This is the lookup/reference table. Its columns are added to matching left rows; unmatched left rows get nulls.",
+    )
+    right_artifact_id: str | None = Field(
+        default=None,
+        description="UUID of a result artifact for the right table. Use instead of right_csv.",
     )
     merge_on_left: str | None = Field(
         default=None,
@@ -252,10 +345,33 @@ class MergeInput(BaseModel):
         description="Leave unset for the default many_to_one, which is correct in most cases. many_to_one: multiple left rows can match one right row (e.g. products → companies). one_to_one: each left row matches at most one right row AND vice versa. Only use one_to_one when both tables represent unique entities of the same kind.",
     )
 
+    @model_validator(mode="after")
+    def validate_input_sources(self) -> Self:
+        if self.left_csv is not None and self.left_artifact_id is not None:
+            raise ValueError("Provide either left_csv or left_artifact_id, not both.")
+        if self.left_csv is None and self.left_artifact_id is None:
+            raise ValueError("Either left_csv or left_artifact_id must be provided.")
+        if self.left_artifact_id is not None:
+            try:
+                UUID(self.left_artifact_id)
+            except ValueError:
+                raise ValueError(f"left_artifact_id is not a valid UUID: {self.left_artifact_id}")
+        if self.right_csv is not None and self.right_artifact_id is not None:
+            raise ValueError("Provide either right_csv or right_artifact_id, not both.")
+        if self.right_csv is None and self.right_artifact_id is None:
+            raise ValueError("Either right_csv or right_artifact_id must be provided.")
+        if self.right_artifact_id is not None:
+            try:
+                UUID(self.right_artifact_id)
+            except ValueError:
+                raise ValueError(f"right_artifact_id is not a valid UUID: {self.right_artifact_id}")
+        return self
+
     @field_validator("left_csv", "right_csv")
     @classmethod
-    def validate_csv_paths(cls, v: str) -> str:
-        validate_csv_path(v)
+    def validate_csv_paths(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_csv_path(v)
         return v
 
 

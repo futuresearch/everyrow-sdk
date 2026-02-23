@@ -24,6 +24,7 @@ from pydantic import ValidationError
 
 from everyrow_mcp.server import (
     AgentInput,
+    DedupeInput,
     MergeInput,
     ProgressInput,
     RankInput,
@@ -34,6 +35,7 @@ from everyrow_mcp.server import (
     everyrow_agent,
     everyrow_progress,
     everyrow_results,
+    everyrow_screen,
     everyrow_single_agent,
 )
 
@@ -229,6 +231,79 @@ class TestInputValidation:
             },
         )
 
+    # --- Artifact ID chaining validation tests ---
+
+    def test_screen_input_accepts_artifact_id(self):
+        """ScreenInput accepts artifact_id instead of input_csv."""
+        aid = str(uuid4())
+        inp = ScreenInput(task="test", artifact_id=aid)
+        assert inp.artifact_id == aid
+        assert inp.input_csv is None
+
+    def test_screen_input_rejects_both(self, tmp_path: Path):
+        """ScreenInput rejects both input_csv and artifact_id."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+        with pytest.raises(ValidationError, match="not both"):
+            ScreenInput(task="test", input_csv=str(csv_file), artifact_id=str(uuid4()))
+
+    def test_screen_input_rejects_neither(self):
+        """ScreenInput rejects neither input_csv nor artifact_id."""
+        with pytest.raises(ValidationError, match="must be provided"):
+            ScreenInput(task="test")
+
+    def test_screen_input_rejects_invalid_uuid(self):
+        """ScreenInput rejects a non-UUID artifact_id."""
+        with pytest.raises(ValidationError, match="not a valid UUID"):
+            ScreenInput(task="test", artifact_id="not-a-uuid")
+
+    def test_screen_input_csv_still_works(self, tmp_path: Path):
+        """ScreenInput still works with input_csv (no artifact_id)."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+        inp = ScreenInput(task="test", input_csv=str(csv_file))
+        assert inp.input_csv == str(csv_file)
+        assert inp.artifact_id is None
+
+    def test_merge_input_accepts_artifact_ids(self):
+        """MergeInput accepts artifact_ids for both tables."""
+        left_aid = str(uuid4())
+        right_aid = str(uuid4())
+        inp = MergeInput(
+            task="match companies",
+            left_artifact_id=left_aid,
+            right_artifact_id=right_aid,
+        )
+        assert inp.left_artifact_id == left_aid
+        assert inp.right_artifact_id == right_aid
+        assert inp.left_csv is None
+        assert inp.right_csv is None
+
+    def test_merge_input_mixed_csv_and_artifact(self, tmp_path: Path):
+        """MergeInput accepts CSV for one table and artifact_id for the other."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+        right_aid = str(uuid4())
+        inp = MergeInput(
+            task="match",
+            left_csv=str(csv_file),
+            right_artifact_id=right_aid,
+        )
+        assert inp.left_csv == str(csv_file)
+        assert inp.right_artifact_id == right_aid
+
+    def test_merge_input_rejects_both_left(self, tmp_path: Path):
+        """MergeInput rejects both left_csv and left_artifact_id."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("a,b\n1,2\n")
+        with pytest.raises(ValidationError, match="not both"):
+            MergeInput(
+                task="match",
+                left_csv=str(csv_file),
+                left_artifact_id=str(uuid4()),
+                right_csv=str(csv_file),
+            )
+
 
 def _make_mock_task(task_id=None):
     """Create a mock EveryrowTask with a task_id."""
@@ -273,23 +348,27 @@ def _make_task_status_response(
     running: int = 0,
     pending: int = 0,
     total: int = 10,
+    artifact_id: UUID | None = None,
 ) -> TaskStatusResponse:
     """Create a real TaskStatusResponse for testing."""
-    return TaskStatusResponse(
-        task_id=task_id or uuid4(),
-        session_id=session_id or uuid4(),
-        status=TaskStatus(status),
-        task_type=PublicTaskType.AGENT,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-        progress=TaskProgressInfo(
+    kwargs: dict = {
+        "task_id": task_id or uuid4(),
+        "session_id": session_id or uuid4(),
+        "status": TaskStatus(status),
+        "task_type": PublicTaskType.AGENT,
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
+        "progress": TaskProgressInfo(
             pending=pending,
             running=running,
             completed=completed,
             failed=failed,
             total=total,
         ),
-    )
+    }
+    if artifact_id is not None:
+        kwargs["artifact_id"] = artifact_id
+    return TaskStatusResponse(**kwargs)
 
 
 def _make_task_result_response(
@@ -338,6 +417,39 @@ class TestAgent:
             assert str(mock_task.task_id) in text
             assert "Session:" in text
             assert "everyrow_progress" in text
+
+
+    @pytest.mark.asyncio
+    async def test_submit_with_artifact_id(self):
+        """Test that agent accepts artifact_id instead of CSV."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        aid = str(uuid4())
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+
+            params = AgentInput(task="Find HQ for each company", artifact_id=aid)
+            result = await everyrow_agent(params)
+            text = result[0].text
+
+            assert str(mock_task.task_id) in text
+            assert "artifact" in text
+
+            # Verify the UUID was passed (not a DataFrame)
+            call_kwargs = mock_op.call_args[1]
+            assert isinstance(call_kwargs["input"], UUID)
+            assert str(call_kwargs["input"]) == aid
 
 
 class TestSingleAgent:
@@ -465,6 +577,42 @@ class TestSingleAgent:
             )
 
 
+class TestScreen:
+    """Tests for everyrow_screen."""
+
+    @pytest.mark.asyncio
+    async def test_screen_with_artifact_id(self):
+        """Test that screen accepts artifact_id instead of CSV."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        aid = str(uuid4())
+
+        with (
+            patch(
+                "everyrow_mcp.tools.screen_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+
+            params = ScreenInput(task="Is this company public?", artifact_id=aid)
+            result = await everyrow_screen(params)
+            text = result[0].text
+
+            assert str(mock_task.task_id) in text
+            assert "artifact" in text
+
+            # Verify the UUID was passed
+            call_kwargs = mock_op.call_args[1]
+            assert isinstance(call_kwargs["input"], UUID)
+            assert str(call_kwargs["input"]) == aid
+
+
 class TestProgress:
     """Tests for everyrow_progress."""
 
@@ -553,6 +701,39 @@ class TestProgress:
         assert "Completed: 5/5" in text
         assert "everyrow_results" in text
 
+    @pytest.mark.asyncio
+    async def test_progress_completed_includes_artifact_id(self):
+        """Test that completed progress includes artifact_id when present."""
+        task_id = str(uuid4())
+        artifact_id = uuid4()
+        mock_client = _make_mock_client()
+        status_response = _make_task_status_response(
+            status="completed",
+            completed=5,
+            failed=0,
+            running=0,
+            pending=0,
+            total=5,
+            artifact_id=artifact_id,
+        )
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
+            patch("everyrow_mcp.tools._write_task_state"),
+        ):
+            params = ProgressInput(task_id=task_id)
+            result = await everyrow_progress(params)
+        text = result[0].text
+
+        assert f"Artifact ID: {artifact_id}" in text
+        assert "everyrow_results" in text
+
 
 class TestResults:
     """Tests for everyrow_results."""
@@ -616,3 +797,69 @@ class TestResults:
         output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]
+
+    @pytest.mark.asyncio
+    async def test_results_includes_artifact_id(self, tmp_path: Path):
+        """Test results output includes artifact_id when present."""
+        task_id = str(uuid4())
+        artifact_id = uuid4()
+        mock_client = _make_mock_client()
+        output_file = tmp_path / "output.csv"
+
+        status_response = _make_task_status_response(
+            status="completed", artifact_id=artifact_id
+        )
+        result_response = _make_task_result_response(
+            [{"name": "TechStart", "answer": "Series A"}]
+        )
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch(
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=result_response,
+            ),
+        ):
+            params = ResultsInput(task_id=task_id, output_path=str(output_file))
+            result = await everyrow_results(params)
+        text = result[0].text
+
+        assert f"Artifact ID: {artifact_id}" in text
+        assert "artifact_id" in text  # tip text
+
+    @pytest.mark.asyncio
+    async def test_results_omits_artifact_id_when_unset(self, tmp_path: Path):
+        """Test results output omits artifact_id when not set."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        output_file = tmp_path / "output.csv"
+
+        status_response = _make_task_status_response(status="completed")
+        result_response = _make_task_result_response(
+            [{"name": "TechStart", "answer": "Series A"}]
+        )
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=status_response,
+            ),
+            patch(
+                "everyrow_mcp.tools.get_task_result_tasks_task_id_result_get.asyncio",
+                new_callable=AsyncMock,
+                return_value=result_response,
+            ),
+        ):
+            params = ResultsInput(task_id=task_id, output_path=str(output_file))
+            result = await everyrow_results(params)
+        text = result[0].text
+
+        assert "Artifact ID:" not in text

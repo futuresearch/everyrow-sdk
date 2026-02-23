@@ -58,6 +58,20 @@ def _get_client():
     return _app._client
 
 
+def _resolve_input(
+    input_csv: str | None, artifact_id: str | None
+) -> tuple[pd.DataFrame | UUID, int]:
+    """Resolve input to DataFrame or UUID, return (input_data, row_count).
+
+    row_count is 0 when using artifact_id (actual count comes from progress API).
+    """
+    if artifact_id is not None:
+        return UUID(artifact_id), 0
+    assert input_csv is not None  # guaranteed by model validator
+    df = pd.read_csv(input_csv)
+    return df, len(df)
+
+
 @mcp.tool(
     name="everyrow_agent",
     structured_output=False,
@@ -76,6 +90,10 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     requested research fields for each row. Agents run in parallel to save
     time and are optimized to find accurate answers at minimum cost.
 
+    If the input data is already an artifact from a previous everyrow operation,
+    pass its artifact_id instead of input_csv to avoid re-uploading.
+    The artifact_id is returned in the results of every completed operation.
+
     Examples:
     - "Find this company's latest funding round and lead investors"
     - "Research the CEO's background and previous companies"
@@ -89,7 +107,7 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    input_data, row_count = _resolve_input(params.input_csv, params.artifact_id)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -97,7 +115,7 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
-        kwargs: dict[str, Any] = {"task": params.task, "session": session, "input": df}
+        kwargs: dict[str, Any] = {"task": params.task, "session": session, "input": input_data}
         if response_model:
             kwargs["response_model"] = response_model
         cohort_task = await agent_map_async(**kwargs)
@@ -106,7 +124,7 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             task_id,
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
-            total=len(df),
+            total=row_count,
             completed=0,
             failed=0,
             running=0,
@@ -114,11 +132,12 @@ async def everyrow_agent(params: AgentInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
+    count_str = f"{row_count} agents" if row_count > 0 else "artifact"
     return [
         TextContent(
             type="text",
             text=(
-                f"Submitted: {len(df)} agents starting.\n"
+                f"Submitted: {count_str} starting.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
@@ -242,7 +261,7 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    input_data, row_count = _resolve_input(params.input_csv, params.artifact_id)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -253,7 +272,7 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
         cohort_task = await rank_async(
             task=params.task,
             session=session,
-            input=df,
+            input=input_data,
             field_name=params.field_name,
             field_type=params.field_type,
             response_model=response_model,
@@ -264,7 +283,7 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             task_id,
             task_type=PublicTaskType.RANK,
             session_url=session_url,
-            total=len(df),
+            total=row_count,
             completed=0,
             failed=0,
             running=0,
@@ -272,11 +291,12 @@ async def everyrow_rank(params: RankInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
+    count_str = f"{row_count} rows" if row_count > 0 else "artifact"
     return [
         TextContent(
             type="text",
             text=(
-                f"Submitted: {len(df)} rows for ranking.\n"
+                f"Submitted: {count_str} for ranking.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
@@ -328,7 +348,7 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    input_data, row_count = _resolve_input(params.input_csv, params.artifact_id)
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
@@ -339,7 +359,7 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
         cohort_task = await screen_async(
             task=params.task,
             session=session,
-            input=df,
+            input=input_data,
             response_model=response_model,
         )
         task_id = str(cohort_task.task_id)
@@ -347,7 +367,7 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             task_id,
             task_type=PublicTaskType.SCREEN,
             session_url=session_url,
-            total=len(df),
+            total=row_count,
             completed=0,
             failed=0,
             running=0,
@@ -355,11 +375,12 @@ async def everyrow_screen(params: ScreenInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
+    count_str = f"{row_count} rows" if row_count > 0 else "artifact"
     return [
         TextContent(
             type="text",
             text=(
-                f"Submitted: {len(df)} rows for screening.\n"
+                f"Submitted: {count_str} for screening.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
@@ -407,21 +428,21 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    df = pd.read_csv(params.input_csv)
+    input_data, row_count = _resolve_input(params.input_csv, params.artifact_id)
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await dedupe_async(
             equivalence_relation=params.equivalence_relation,
             session=session,
-            input=df,
+            input=input_data,
         )
         task_id = str(cohort_task.task_id)
         _write_task_state(
             task_id,
             task_type=PublicTaskType.DEDUPE,
             session_url=session_url,
-            total=len(df),
+            total=row_count,
             completed=0,
             failed=0,
             running=0,
@@ -429,11 +450,12 @@ async def everyrow_dedupe(params: DedupeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
+    count_str = f"{row_count} rows" if row_count > 0 else "artifact"
     return [
         TextContent(
             type="text",
             text=(
-                f"Submitted: {len(df)} rows for deduplication.\n"
+                f"Submitted: {count_str} for deduplication.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
@@ -492,16 +514,16 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     client = _get_client()
 
     _clear_task_state()
-    left_df = pd.read_csv(params.left_csv)
-    right_df = pd.read_csv(params.right_csv)
+    left_data, left_count = _resolve_input(params.left_csv, params.left_artifact_id)
+    right_data, _right_count = _resolve_input(params.right_csv, params.right_artifact_id)
 
     async with create_session(client=client) as session:
         session_url = session.get_url()
         cohort_task = await merge_async(
             task=params.task,
             session=session,
-            left_table=left_df,
-            right_table=right_df,
+            left_table=left_data,
+            right_table=right_data,
             merge_on_left=params.merge_on_left,
             merge_on_right=params.merge_on_right,
             use_web_search=params.use_web_search,
@@ -512,7 +534,7 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             task_id,
             task_type=PublicTaskType.MERGE,
             session_url=session_url,
-            total=len(left_df),
+            total=left_count,
             completed=0,
             failed=0,
             running=0,
@@ -520,11 +542,12 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
             started_at=datetime.now(UTC),
         )
 
+    count_str = f"{left_count} left rows" if left_count > 0 else "artifact"
     return [
         TextContent(
             type="text",
             text=(
-                f"Submitted: {len(left_df)} left rows for merging.\n"
+                f"Submitted: {count_str} for merging.\n"
                 f"Session: {session_url}\n"
                 f"Task ID: {task_id}\n\n"
                 f"Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}')."
@@ -634,11 +657,16 @@ async def everyrow_progress(  # noqa: PLR0912
                 completed_msg = (
                     f"Completed: {completed}/{total} ({failed} failed) in {elapsed_s}s."
                 )
+            artifact_id = status_response.artifact_id
+            artifact_line = ""
+            if isinstance(artifact_id, UUID):
+                artifact_line = f"Artifact ID: {artifact_id}\n"
             return [
                 TextContent(
                     type="text",
                     text=(
                         f"{completed_msg}\n"
+                        f"{artifact_line}"
                         f"Call everyrow_results(task_id='{task_id}', output_path='/path/to/output.csv') to save the output."
                     ),
                 )
@@ -736,13 +764,18 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
         save_result_to_csv(df, output_file)
         # Task state file deleted by PostToolUse hook (everyrow-track-results.sh)
 
+        artifact_id = status_response.artifact_id
+        artifact_line = ""
+        if isinstance(artifact_id, UUID):
+            artifact_line = f"Artifact ID: {artifact_id}\n"
+
         return [
             TextContent(
                 type="text",
                 text=(
-                    f"Saved {len(df)} rows to {output_file}\n\n"
-                    "Tip: For multi-step pipelines, custom response models, or preview mode, "
-                    "ask your AI assistant to write Python using the everyrow SDK."
+                    f"Saved {len(df)} rows to {output_file}\n"
+                    f"{artifact_line}\n"
+                    "Tip: Pass this artifact_id to subsequent operations to avoid re-uploading data."
                 ),
             )
         ]
