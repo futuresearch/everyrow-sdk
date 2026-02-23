@@ -547,18 +547,21 @@ async def everyrow_merge(params: MergeInput) -> list[TextContent]:
     ),
 )
 async def everyrow_forecast(params: ForecastInput) -> list[TextContent]:
-    """Run a multi-dimensional probability forecast on each row of a CSV.
+    """Forecast the probability of binary questions from a CSV file.
 
-    For each row, dispatches 6 parallel research agents to investigate:
-    1. Current state & timeline
-    2. Historical base rates
-    3. Key influencing factors
-    4. Expert & market opinions
-    5. Arguments for the outcome
-    6. Arguments against the outcome
+    For each row, use multiple research agents to gather the relevant information.
+    Then feed this information to an ensemble of forecasters and synthesize their
+    predictions.
 
-    Then two forecasting models (Gemini + Opus Thinking) synthesize all research into
-    a probability (0-100%, median of both) and rationale for each row.
+    The CSV file may contain additional columns with context and resolution criteria
+    for each question. The entire row's contents will be passed to the research
+    agents and forecasters.
+
+    Example:
+    - Task: "Forecast the likelihood of a yes answer to the given question."
+    - Questions in CSV file:
+        1. "Will the price of Bitcoin be higher one year from now compared to today?"
+        2. "Will the world population peak before 2100?"
 
     Output columns added: `rationale` (str) and `probability` (int, 0-100).
 

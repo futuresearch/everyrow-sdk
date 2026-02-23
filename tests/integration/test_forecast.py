@@ -36,4 +36,6 @@ async def test_forecast_returns_probability_and_rationale():
 
     assert int(prob) == prob, f"Probability should be integer, got {prob}"
     assert 3 <= prob <= 97, f"Probability {prob}% outside reasonable range [3, 97]"
-    assert len(str(rationale)) > 200, f"Rationale too short: {len(str(rationale))} chars"
+    assert len(str(rationale)) > 200, (
+        f"Rationale too short: {len(str(rationale))} chars"
+    )

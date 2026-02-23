@@ -51,7 +51,7 @@
     },
     {
       "name": "everyrow_forecast",
-      "description": "Run a multi-dimensional probability forecast on each row of a CSV."
+      "description": "Forecast the probability of binary questions from a CSV file."
     },
     {
       "name": "everyrow_single_agent",

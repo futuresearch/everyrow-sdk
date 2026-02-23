@@ -270,7 +270,11 @@ class ForecastInput(BaseModel):
         "Each row in the input CSV should contain the question/scenario to forecast.",
         min_length=1,
     )
-    input_csv: str = Field(..., description="Absolute path to the input CSV file.")
+    input_csv: str = Field(
+        ...,
+        description="Absolute path to the input CSV file containing a binary "
+        "question and optional resolution criteria on each row.",
+    )
 
     @field_validator("input_csv")
     @classmethod
