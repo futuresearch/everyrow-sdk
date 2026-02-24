@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────
 
-REDIS_DB = 13
 HEALTH_CHECK_INTERVAL = 30
 
 PROGRESS_POLL_DELAY = 12
@@ -46,7 +45,7 @@ def create_redis_client(
     *,
     host: str = "localhost",
     port: int = 6379,
-    db: int = REDIS_DB,
+    db: int = settings.redis_db,
     password: str | None = None,
     sentinel_endpoints: str | None = None,
     sentinel_master_name: str | None = None,

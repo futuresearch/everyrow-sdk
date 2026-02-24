@@ -2,7 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from everyrow_mcp.redis_store import REDIS_DB, build_key, create_redis_client
+from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import build_key, create_redis_client
 
 
 class TestBuildKey:
@@ -57,7 +58,7 @@ class TestCreateRedisClient:
         result = create_redis_client(
             sentinel_endpoints="host1:26379,host2:26379",
             sentinel_master_name="mymaster",
-            db=REDIS_DB,
+            db=settings.redis_db,
         )
 
         assert result is mock_master
@@ -67,7 +68,7 @@ class TestCreateRedisClient:
         assert ("host2", 26379) in sentinels
         mock_sentinel.master_for.assert_called_once_with(
             "mymaster",
-            db=REDIS_DB,
+            db=settings.redis_db,
             password=None,
             decode_responses=True,
             health_check_interval=30,
