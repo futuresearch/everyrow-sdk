@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 
+import httpx
 from mcp.types import TextContent, ToolAnnotations
 
 from everyrow_mcp.app import mcp
@@ -29,6 +30,20 @@ from everyrow_mcp.sheets_models import (
 logger = logging.getLogger(__name__)
 
 
+def _error_message(e: Exception) -> str:
+    """Format a user-friendly error message from a Google API exception."""
+    if isinstance(e, httpx.HTTPStatusError):
+        status = e.response.status_code
+        if status == 403:
+            return "Permission denied. Check that the spreadsheet is shared with you."
+        if status == 404:
+            return "Spreadsheet not found. Check the spreadsheet ID or URL."
+        if status == 429:
+            return "Rate limited by Google API. Please try again in a moment."
+        return f"Google API error (HTTP {status}): {e.response.text}"
+    return f"Error: {e!r}"
+
+
 @mcp.tool(
     name="sheets_list",
     annotations=ToolAnnotations(
@@ -41,11 +56,14 @@ logger = logging.getLogger(__name__)
 )
 async def sheets_list(params: SheetsListInput) -> list[TextContent]:
     """List the user's Google Sheets, optionally filtered by name."""
-    token = await get_google_token()
-    async with GoogleSheetsClient(token) as client:
-        files = await client.list_spreadsheets(
-            query=params.query, max_results=params.max_results
-        )
+    try:
+        token = await get_google_token()
+        async with GoogleSheetsClient(token) as client:
+            files = await client.list_spreadsheets(
+                query=params.query, max_results=params.max_results
+            )
+    except Exception as e:
+        return [TextContent(type="text", text=_error_message(e))]
 
     if not files:
         msg = "No spreadsheets found"
@@ -83,9 +101,14 @@ async def sheets_read(params: SheetsReadInput) -> list[TextContent]:
       everyrow_agent(input_json=data, task="Research each company")
       sheets_write(spreadsheet_id="...", data=enriched_results)
     """
-    token = await get_google_token()
-    async with GoogleSheetsClient(token) as client:
-        values = await client.read_range(params.spreadsheet_id, params.range)
+    try:
+        token = await get_google_token()
+        async with GoogleSheetsClient(token) as client:
+            values = await client.read_range(
+                params.spreadsheet_id, cell_range=params.range
+            )
+    except Exception as e:
+        return [TextContent(type="text", text=_error_message(e))]
 
     records = values_to_records(values)
 
@@ -127,36 +150,41 @@ async def sheets_write(params: SheetsWriteInput) -> list[TextContent]:
 
     Use append=True to add rows after existing data instead of overwriting.
     """
-    token = await get_google_token()
-    values = records_to_values(params.data)
+    try:
+        token = await get_google_token()
+        values = records_to_values(params.data)
 
-    async with GoogleSheetsClient(token) as client:
-        if params.append:
-            result = await client.append_range(
-                params.spreadsheet_id, params.range, values
-            )
-            updated_range = result.get("updates", {}).get("updatedRange", params.range)
-            updated_rows = result.get("updates", {}).get(
-                "updatedRows", len(params.data)
-            )
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Appended {updated_rows} rows to {updated_range}.",
+        async with GoogleSheetsClient(token) as client:
+            if params.append:
+                result = await client.append_range(
+                    params.spreadsheet_id, cell_range=params.range, values=values
                 )
-            ]
-        else:
-            result = await client.write_range(
-                params.spreadsheet_id, params.range, values
-            )
-            updated_range = result.get("updatedRange", params.range)
-            updated_rows = result.get("updatedRows", len(params.data) + 1)
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Wrote {updated_rows} rows (including header) to {updated_range}.",
+                updated_range = result.get("updates", {}).get(
+                    "updatedRange", params.range
                 )
-            ]
+                updated_rows = result.get("updates", {}).get(
+                    "updatedRows", len(params.data)
+                )
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Appended {updated_rows} rows to {updated_range}.",
+                    )
+                ]
+            else:
+                result = await client.write_range(
+                    params.spreadsheet_id, cell_range=params.range, values=values
+                )
+                updated_range = result.get("updatedRange", params.range)
+                updated_rows = result.get("updatedRows", len(params.data) + 1)
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Wrote {updated_rows} rows (including header) to {updated_range}.",
+                    )
+                ]
+    except Exception as e:
+        return [TextContent(type="text", text=_error_message(e))]
 
 
 @mcp.tool(
@@ -174,20 +202,23 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
 
     Returns the spreadsheet ID and URL.
     """
-    token = await get_google_token()
+    try:
+        token = await get_google_token()
 
-    async with GoogleSheetsClient(token) as client:
-        metadata = await client.create_spreadsheet(params.title)
-        spreadsheet_id = metadata["spreadsheetId"]
-        url = metadata.get(
-            "spreadsheetUrl",
-            f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}",
-        )
+        async with GoogleSheetsClient(token) as client:
+            metadata = await client.create_spreadsheet(params.title)
+            spreadsheet_id = metadata["spreadsheetId"]
+            url = metadata.get(
+                "spreadsheetUrl",
+                f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}",
+            )
 
-        # Optionally populate with initial data
-        if params.data:
-            values = records_to_values(params.data)
-            await client.write_range(spreadsheet_id, "Sheet1", values)
+            # Optionally populate with initial data
+            if params.data:
+                values = records_to_values(params.data)
+                await client.write_range(spreadsheet_id, "Sheet1", values)
+    except Exception as e:
+        return [TextContent(type="text", text=_error_message(e))]
 
     result = {
         "spreadsheet_id": spreadsheet_id,
@@ -217,10 +248,13 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
 )
 async def sheets_info(params: SheetsInfoInput) -> list[TextContent]:
     """Get metadata about a Google Sheet: title, sheet names, and dimensions."""
-    token = await get_google_token()
+    try:
+        token = await get_google_token()
 
-    async with GoogleSheetsClient(token) as client:
-        metadata = await client.get_spreadsheet_metadata(params.spreadsheet_id)
+        async with GoogleSheetsClient(token) as client:
+            metadata = await client.get_spreadsheet_metadata(params.spreadsheet_id)
+    except Exception as e:
+        return [TextContent(type="text", text=_error_message(e))]
 
     title = metadata.get("properties", {}).get("title", "Unknown")
     sheets = []

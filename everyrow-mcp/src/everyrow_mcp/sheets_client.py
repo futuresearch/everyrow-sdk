@@ -41,7 +41,8 @@ async def get_google_token() -> str:
 
     redis = get_redis_client()
 
-    # Try to get the stored token
+    # NOTE: single-tenant — "current" key is shared. If multi-tenancy is
+    # needed, key by session/user ID instead.
     token_key = build_key("google_token", "current")
     token_data = await redis.get(token_key)
     if token_data:
@@ -147,14 +148,14 @@ class GoogleSheetsClient:
         await self.close()
 
     async def read_range(
-        self, spreadsheet_id: str, range: str = "Sheet1"
+        self, spreadsheet_id: str, cell_range: str = "Sheet1"
     ) -> list[list[str]]:
         """Read values from a spreadsheet range.
 
         Returns a 2D list of strings (rows x columns).
         """
         resp = await self._client.get(
-            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{range}",
+            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{cell_range}",
             params={"valueRenderOption": "FORMATTED_VALUE"},
         )
         resp.raise_for_status()
@@ -164,12 +165,12 @@ class GoogleSheetsClient:
     async def write_range(
         self,
         spreadsheet_id: str,
-        range: str,
+        cell_range: str,
         values: list[list[str]],
     ) -> dict[str, Any]:
         """Write values to a spreadsheet range (overwrite)."""
         resp = await self._client.put(
-            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{range}",
+            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{cell_range}",
             params={"valueInputOption": "USER_ENTERED"},
             json={"values": values},
         )
@@ -179,12 +180,12 @@ class GoogleSheetsClient:
     async def append_range(
         self,
         spreadsheet_id: str,
-        range: str,
+        cell_range: str,
         values: list[list[str]],
     ) -> dict[str, Any]:
         """Append values after existing data in a range."""
         resp = await self._client.post(
-            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{range}:append",
+            f"{SHEETS_API_BASE}/{spreadsheet_id}/values/{cell_range}:append",
             params={
                 "valueInputOption": "USER_ENTERED",
                 "insertDataOption": "INSERT_ROWS",

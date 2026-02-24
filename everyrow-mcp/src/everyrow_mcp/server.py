@@ -145,7 +145,7 @@ def main():
             "sheets_create",
             "sheets_info",
         ):
-            mcp._tool_manager._tools.pop(name, None)
+            mcp._tool_manager.remove_tool(name)
 
     mcp.run(transport=transport.value)
 
