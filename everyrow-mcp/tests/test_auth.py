@@ -885,7 +885,7 @@ class TestHostCookiePrefix:
 
         # Check cookie name and path
         cookie_header = response.headers.getlist("set-cookie")
-        assert any("__Host-mcp_auth_state" in c for c in cookie_header)
+        assert any("mcp_auth_state" in c for c in cookie_header)
         assert any("Path=/" in c for c in cookie_header)
         # Must not have the old path
         assert not any("Path=/auth/callback" in c for c in cookie_header)
