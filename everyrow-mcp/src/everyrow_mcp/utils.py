@@ -65,6 +65,9 @@ def _validate_hostname(hostname: str) -> None:
     # Direct IP literal — validate without DNS resolution
     try:
         ip = ipaddress.ip_address(hostname)
+        # Unwrap IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 → 127.0.0.1)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
         if any(ip in net for net in _BLOCKED_NETWORKS):
             raise ValueError(f"Connection to blocked IP: {hostname}")
         return
