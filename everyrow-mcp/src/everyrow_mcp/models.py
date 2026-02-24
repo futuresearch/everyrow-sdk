@@ -165,10 +165,13 @@ class _SingleSourceInput(BaseModel):
     def validate_data_size(
         cls, v: list[dict[str, Any]] | None
     ) -> list[dict[str, Any]] | None:
-        if v is not None and len(v) > settings.max_inline_rows:
-            raise ValueError(
-                f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
-            )
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
@@ -346,10 +349,13 @@ class MergeInput(BaseModel):
     def validate_data_size(
         cls, v: list[dict[str, Any]] | None
     ) -> list[dict[str, Any]] | None:
-        if v is not None and len(v) > settings.max_inline_rows:
-            raise ValueError(
-                f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
-            )
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
