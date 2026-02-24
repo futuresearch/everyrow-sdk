@@ -625,28 +625,16 @@ class TestCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_running_task(self):
-        """Test cancelling a running task returns success with REVOKED status."""
+        """Test cancelling a running task returns success message."""
         mock_client = _make_mock_client()
-        mock_client._base_url = "https://everyrow.io/api/v0"
-        mock_client.token = "test-token"
-        mock_client.prefix = "Bearer"
-        mock_client.auth_header_name = "Authorization"
         task_id = str(uuid4())
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"task_id": task_id, "status": "REVOKED"}
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
             patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
-            patch("everyrow_mcp.tools.httpx.AsyncClient") as mock_httpx_cls,
+            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
         ):
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=None)
-            mock_httpx_cls.return_value = mock_http
+            mock_cancel.return_value = None
 
             params = CancelInput(task_id=task_id)
             result = await everyrow_cancel(params)
@@ -654,93 +642,63 @@ class TestCancel:
         text = result[0].text
         assert task_id in text
         assert "cancelled" in text.lower()
-        assert "REVOKED" in text
         mock_clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cancel_already_terminated_task(self):
-        """Test cancelling an already terminated task returns graceful message."""
-        mock_client = _make_mock_client()
-        mock_client._base_url = "https://everyrow.io/api/v0"
-        mock_client.token = "test-token"
-        mock_client.prefix = "Bearer"
-        mock_client.auth_header_name = "Authorization"
-        task_id = str(uuid4())
+        """Test cancelling an already terminated task returns an error message."""
+        from everyrow.constants import EveryrowError
 
-        mock_response = MagicMock()
-        mock_response.status_code = 409
-        mock_response.json.return_value = {
-            "detail": f"Task {task_id} is already COMPLETED"
-        }
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
             patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
-            patch("everyrow_mcp.tools.httpx.AsyncClient") as mock_httpx_cls,
+            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
         ):
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=None)
-            mock_httpx_cls.return_value = mock_http
+            mock_cancel.side_effect = EveryrowError(f"Task {task_id} is already COMPLETED")
 
             params = CancelInput(task_id=task_id)
             result = await everyrow_cancel(params)
 
         text = result[0].text
         assert task_id in text
-        assert "already" in text.lower()
-        mock_clear.assert_called_once()
+        assert "Error" in text
+        mock_clear.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_cancel_task_not_found(self):
-        """Test cancelling a nonexistent task returns not found message."""
-        mock_client = _make_mock_client()
-        mock_client._base_url = "https://everyrow.io/api/v0"
-        mock_client.token = "test-token"
-        mock_client.prefix = "Bearer"
-        mock_client.auth_header_name = "Authorization"
-        task_id = str(uuid4())
+        """Test cancelling a nonexistent task returns an error message."""
+        from everyrow.constants import EveryrowError
 
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.json.return_value = {"detail": "Not found"}
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
-            patch("everyrow_mcp.tools.httpx.AsyncClient") as mock_httpx_cls,
+            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
         ):
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=None)
-            mock_httpx_cls.return_value = mock_http
+            mock_cancel.side_effect = EveryrowError("Task not found")
 
             params = CancelInput(task_id=task_id)
             result = await everyrow_cancel(params)
 
         text = result[0].text
+        assert "Error" in text
         assert "not found" in text.lower()
 
     @pytest.mark.asyncio
     async def test_cancel_api_error(self):
         """Test cancel with unexpected error returns error message."""
         mock_client = _make_mock_client()
-        mock_client._base_url = "https://everyrow.io/api/v0"
-        mock_client.token = "test-token"
-        mock_client.prefix = "Bearer"
-        mock_client.auth_header_name = "Authorization"
         task_id = str(uuid4())
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
-            patch("everyrow_mcp.tools.httpx.AsyncClient") as mock_httpx_cls,
+            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
         ):
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(side_effect=RuntimeError("Network failure"))
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=None)
-            mock_httpx_cls.return_value = mock_http
+            mock_cancel.side_effect = RuntimeError("Network failure")
 
             params = CancelInput(task_id=task_id)
             result = await everyrow_cancel(params)
