@@ -81,6 +81,70 @@ def extract_task_id(submit_text: str) -> str:
     return match.group(1)
 
 
+# ── Inline data fixtures ──────────────────────────────────────
+
+JOBS_DATA = [
+    {
+        "company": "Airtable",
+        "title": "Senior Engineer",
+        "salary": "$185000",
+        "location": "Remote",
+    },
+    {
+        "company": "Vercel",
+        "title": "Lead Engineer",
+        "salary": "Competitive",
+        "location": "NYC",
+    },
+    {
+        "company": "Notion",
+        "title": "Staff Engineer",
+        "salary": "$200000",
+        "location": "San Francisco",
+    },
+    {
+        "company": "Descript",
+        "title": "Principal Engineer",
+        "salary": "$210000",
+        "location": "Remote",
+    },
+    {
+        "company": "Linear",
+        "title": "Software Engineer",
+        "salary": "$160000",
+        "location": "Remote",
+    },
+]
+
+COMPANIES_DATA = [
+    {"name": "TechStart", "industry": "Software", "size": 50},
+    {"name": "AILabs", "industry": "AI/ML", "size": 30},
+    {"name": "DataFlow", "industry": "Data", "size": 100},
+    {"name": "CloudNine", "industry": "Cloud", "size": 75},
+    {"name": "OldBank", "industry": "Finance", "size": 5000},
+]
+
+CONTACTS_DATA = [
+    {"name": "John Smith", "email": "john.smith@acme.com", "company": "Acme Corp"},
+    {"name": "J. Smith", "email": "jsmith@acme.com", "company": "Acme Corporation"},
+    {"name": "Alexandra Butoi", "email": "a.butoi@tech.io", "company": "TechStart"},
+    {"name": "A. Butoi", "email": "alexandra@techstart.io", "company": "TechStart Inc"},
+    {"name": "Mike Johnson", "email": "mike@startup.co", "company": "StartupCo"},
+]
+
+PRODUCTS_DATA = [
+    {"product_name": "Photoshop", "category": "Design", "vendor": "Adobe Systems"},
+    {"product_name": "VSCode", "category": "Development", "vendor": "Microsoft"},
+    {"product_name": "Slack", "category": "Communication", "vendor": "Salesforce"},
+]
+
+SUPPLIERS_DATA = [
+    {"company_name": "Adobe Inc", "approved": True},
+    {"company_name": "Microsoft Corporation", "approved": True},
+    {"company_name": "Salesforce Inc", "approved": True},
+]
+
+
 class TestScreenIntegration:
     """Integration tests for the screen tool."""
 
@@ -88,7 +152,6 @@ class TestScreenIntegration:
     async def test_screen_jobs(
         self,
         real_ctx,
-        jobs_csv: Path,
         tmp_path: Path,
     ):
         """Test screening jobs for remote senior roles."""
@@ -100,7 +163,7 @@ class TestScreenIntegration:
                 2. Senior-level (title includes Senior, Staff, Principal, or Lead)
                 3. Salary disclosed (specific dollar amount, not "Competitive")
             """,
-            input_csv=str(jobs_csv),
+            data=JOBS_DATA,
         )
 
         result = await everyrow_screen(params, real_ctx)
@@ -140,14 +203,13 @@ class TestRankIntegration:
     async def test_rank_companies(
         self,
         real_ctx,
-        companies_csv: Path,
         tmp_path: Path,
     ):
         """Test ranking companies by AI/ML maturity."""
         # 1. Submit the task
         params = RankInput(
             task="Score 0-10 by AI/ML adoption maturity and innovation focus. Higher score = more AI focused.",
-            input_csv=str(companies_csv),
+            data=COMPANIES_DATA,
             field_name="ai_score",
             field_type="float",
             ascending_order=False,  # Highest first
@@ -189,7 +251,6 @@ class TestDedupeIntegration:
     async def test_dedupe_contacts(
         self,
         real_ctx,
-        contacts_csv: Path,
         tmp_path: Path,
     ):
         """Test deduplicating contacts."""
@@ -200,7 +261,7 @@ class TestDedupeIntegration:
                 Consider name abbreviations (J. Smith = John Smith),
                 and company name variations (Acme Corp = Acme Corporation).
             """,
-            input_csv=str(contacts_csv),
+            data=CONTACTS_DATA,
         )
 
         result = await everyrow_dedupe(params, real_ctx)
@@ -246,8 +307,6 @@ class TestMergeIntegration:
     async def test_merge_products_suppliers(
         self,
         real_ctx,
-        products_csv: Path,
-        suppliers_csv: Path,
         tmp_path: Path,
     ):
         """Test merging products with suppliers."""
@@ -257,8 +316,8 @@ class TestMergeIntegration:
                 Match each product to its parent company in the suppliers list.
                 Photoshop is made by Adobe, VSCode by Microsoft, Slack by Salesforce.
             """,
-            left_csv=str(products_csv),
-            right_csv=str(suppliers_csv),
+            left_data=PRODUCTS_DATA,
+            right_data=SUPPLIERS_DATA,
         )
 
         result = await everyrow_merge(params, real_ctx)
@@ -300,20 +359,13 @@ class TestAgentIntegration:
         tmp_path: Path,
     ):
         """Test agent researching companies."""
-        # Create input CSV with 2 companies to minimize cost
-        df = pd.DataFrame(
-            [
-                {"name": "Anthropic"},
-                {"name": "OpenAI"},
-            ]
-        )
-        input_csv = tmp_path / "companies_to_research.csv"
-        df.to_csv(input_csv, index=False)
-
         # 1. Submit the task
         params = AgentInput(
             task="Find the company's headquarters city and approximate employee count.",
-            input_csv=str(input_csv),
+            data=[
+                {"name": "Anthropic"},
+                {"name": "OpenAI"},
+            ],
             response_schema={
                 "properties": {
                     "headquarters": {
