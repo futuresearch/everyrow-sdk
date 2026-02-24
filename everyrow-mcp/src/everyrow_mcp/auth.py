@@ -195,7 +195,7 @@ class EveryRowAuthProvider(
 
     @staticmethod
     def _client_ip(request: Request) -> str:
-        return get_client_ip(request)
+        return get_client_ip(request) or "unknown"
 
     async def _check_rate_limit(self, action: str, client_ip: str) -> None:
         rl_key = build_key("ratelimit", action, client_ip)
