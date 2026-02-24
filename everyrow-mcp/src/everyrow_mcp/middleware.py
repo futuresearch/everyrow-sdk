@@ -15,10 +15,11 @@ from everyrow_mcp.redis_store import build_key
 logger = logging.getLogger(__name__)
 
 
-def get_client_ip(request: Request) -> str:
+def get_client_ip(request: Request) -> str | None:
     """Extract client IP, preferring proxy headers when behind a reverse proxy.
 
     Priority: CF-Connecting-IP (Cloudflare) > X-Forwarded-For > request.client.
+    Returns None if the IP cannot be determined.
     """
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip:
@@ -26,7 +27,7 @@ def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return request.client.host if request.client else None
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -52,6 +53,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         client_ip = get_client_ip(request)
+        if client_ip is None:
+            logger.warning("Could not determine client IP, skipping rate limit")
+            return await call_next(request)
         window_id = str(int(time.time()) // self._window_seconds)
         key = build_key("rate", client_ip, window_id)
 

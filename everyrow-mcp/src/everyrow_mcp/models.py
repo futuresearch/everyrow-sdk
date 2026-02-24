@@ -423,4 +423,9 @@ class HttpResultsInput(BaseModel):
     @field_validator("output_path")
     @classmethod
     def validate_output(cls, v: str | None) -> str | None:
-        return _validate_output_path(v)
+        # Only check file extension, not parent directory existence.
+        # In HTTP mode the path comes from a remote client whose filesystem
+        # is not visible to the server.
+        if v is not None and not v.lower().endswith(".csv"):
+            raise ValueError("output_path must end in .csv")
+        return v
