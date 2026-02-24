@@ -1,6 +1,7 @@
 """MCP tool functions for the everyrow MCP server."""
 
 import asyncio
+import json
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -694,11 +695,20 @@ async def everyrow_results_http(
     if store_response is not None:
         return store_response
 
+    # ── Fallback: return inline preview when Redis is unavailable ──
+    page_df = df.iloc[params.offset : params.offset + params.page_size]
+    preview = page_df.to_dict(orient="records")
+    cols = ", ".join(df.columns)
     return [
         TextContent(
             type="text",
-            text=f"Error: failed to store results for task {task_id}.",
-        )
+            text=json.dumps({"preview": preview, "total": len(df)}),
+        ),
+        TextContent(
+            type="text",
+            text=f"Results: {len(df)} rows, {len(df.columns)} columns ({cols}). "
+            f"Showing {len(page_df)} rows inline (Redis unavailable, no download link).",
+        ),
     ]
 
 
