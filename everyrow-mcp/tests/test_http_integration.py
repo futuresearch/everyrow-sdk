@@ -26,7 +26,6 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from everyrow_mcp import redis_store
-from everyrow_mcp.config import settings
 from everyrow_mcp.routes import api_progress
 from tests.conftest import override_settings
 
@@ -37,7 +36,7 @@ from tests.conftest import override_settings
 def _http_state(fake_redis):
     """Configure settings for HTTP mode and patch Redis."""
     with (
-        override_settings(transport="streamable-http"),
+        override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield
@@ -175,7 +174,7 @@ class TestProgressEndpoint:
         assert body["elapsed_s"] >= 0
         assert "session_url" in body
         # CORS header
-        assert resp.headers["access-control-allow-origin"] == settings.mcp_server_url
+        assert resp.headers["access-control-allow-origin"] == "*"
 
     @pytest.mark.asyncio
     async def test_completed_task_cleans_up_tokens(self, client: httpx.AsyncClient):

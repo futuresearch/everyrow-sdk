@@ -56,7 +56,7 @@ def parse_args() -> InputArgs:
     if input_args.no_auth and not input_args.http:
         parser.error("--no-auth requires --http")
 
-    if input_args.no_auth and not os.environ.get("ALLOW_NO_AUTH"):
+    if input_args.no_auth and os.environ.get("ALLOW_NO_AUTH") != "1":
         print(
             dedent("""ERROR: --no-auth requires the ALLOW_NO_AUTH=1 environment variable.\n
             This prevents accidental unauthenticated deployments in production."""),
@@ -93,6 +93,19 @@ def main():
         )(everyrow_results_http)
 
     if input_args.http:
+        # ── HTTP mode logging ──────────────────────────────────────
+        # INFO level so operational events show up in Cloud Logging.
+        # Format is plain-text; Cloud Logging parses the severity from
+        # the levelname field automatically.
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+            force=True,
+        )
+        # Suppress uvicorn's built-in access logger — our
+        # _RequestLoggingMiddleware provides richer per-request logs.
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
         register_upload_tool(mcp)
 
         if input_args.no_auth:

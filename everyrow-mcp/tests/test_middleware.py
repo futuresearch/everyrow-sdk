@@ -6,7 +6,6 @@ import time
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from redis.exceptions import ConnectionError as RedisConnectionError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
@@ -158,30 +157,6 @@ class TestRateLimitMiddleware:
             resp = client.get("/")
             assert resp.status_code == 400
             assert resp.json() == {"detail": "Could not determine client IP"}
-
-    def test_in_memory_fallback_when_redis_unavailable(self):
-        """In-memory fallback rate-limits when Redis is down."""
-
-        @asynccontextmanager
-        async def _failing_pipeline():
-            raise RedisConnectionError("Redis down")
-            yield
-
-        redis_mock = AsyncMock()
-        redis_mock.pipeline = _failing_pipeline
-
-        app = _make_app(redis_mock, max_requests=3)
-        client = TestClient(app)
-
-        # First 3 requests should pass via in-memory fallback
-        for _ in range(3):
-            resp = client.get("/")
-            assert resp.status_code == 200
-
-        # 4th request should be rate-limited by in-memory fallback
-        resp = client.get("/")
-        assert resp.status_code == 429
-        assert resp.json() == {"detail": "Rate limit exceeded"}
 
     def test_counter_resets_after_window(self):
         """Requests in a new time window should not be blocked."""

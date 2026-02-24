@@ -46,7 +46,7 @@ def sample_df() -> pd.DataFrame:
 def _http_state(fake_redis):
     """Configure settings for HTTP mode and patch Redis."""
     with (
-        override_settings(transport="streamable-http"),
+        override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield

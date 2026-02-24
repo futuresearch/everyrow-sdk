@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 def _cors_headers() -> dict[str, str]:
-    origin = settings.mcp_server_url
-    if not origin:
-        logger.warning(
-            "mcp_server_url is empty; CORS Access-Control-Allow-Origin will be blank"
-        )
+    """CORS headers for widget endpoints.
+
+    MCP App widgets run in sandboxed iframes whose origin will never match
+    the server's own URL.  Because auth is via Bearer tokens (not cookies),
+    a wildcard origin is safe — no ambient credentials are leaked.
+    """
     return {
-        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET",
         "Access-Control-Allow-Headers": "Authorization",
-        "Vary": "Origin",
     }
 
 
@@ -39,7 +39,9 @@ def _validate_uuid(task_id: str) -> JSONResponse | None:
         UUID(task_id)
     except ValueError:
         return JSONResponse(
-            {"error": "Invalid task ID"}, status_code=400, headers=_cors_headers()
+            {"error": "Invalid task ID"},
+            status_code=400,
+            headers=_cors_headers(),
         )
     return None
 
@@ -58,7 +60,13 @@ async def _validate_poll_token(task_id: str, request: Request) -> JSONResponse |
     else:
         # Fall back to query param (for download links)
         provided = request.query_params.get("token", "")
+        if provided:
+            logger.info(
+                "Poll token provided via query param for task %s — prefer Authorization header",
+                task_id,
+            )
     if not expected or not provided or not secrets.compare_digest(provided, expected):
+        logger.warning("Invalid poll token for task %s", task_id)
         return JSONResponse(
             {"error": "Unauthorized"}, status_code=403, headers=_cors_headers()
         )
@@ -109,8 +117,10 @@ async def api_progress(request: Request) -> Response:
         return JSONResponse(
             ts.model_dump(mode="json", exclude=_UI_EXCLUDE), headers=cors
         )
-    except Exception:
-        logger.exception("Progress poll failed for task %s", task_id)
+    except Exception as exc:
+        logger.error(
+            "Progress poll failed for task %s: %s", task_id, type(exc).__name__
+        )
         return JSONResponse(
             {"error": "Internal server error"}, status_code=500, headers=cors
         )

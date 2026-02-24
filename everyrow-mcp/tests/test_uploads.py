@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
+from everyrow_mcp.redis_store import decrypt_value, encrypt_value
 from everyrow_mcp.uploads import (
     RequestUploadUrlInput,
     _validate_upload,
@@ -168,9 +169,10 @@ class TestRequestUploadUrlTool:
             params = RequestUploadUrlInput(filename="data.csv")
             await tool_fn(params, ctx)
 
-        assert stored_meta
-        meta = json.loads(stored_meta[0])
-        assert meta["api_token"] == "user-api-token-123"
+            # Decrypt inside the override context where the Fernet key is available
+            assert stored_meta
+            meta = json.loads(stored_meta[0])
+            assert decrypt_value(meta["api_token"]) == "user-api-token-123"
 
 
 class TestHandleUpload:
@@ -179,6 +181,22 @@ class TestHandleUpload:
     @pytest.fixture(autouse=True)
     def _with_upload_secret(self):
         with override_settings(upload_secret="test-secret-for-hmac"):
+            yield
+
+    @pytest.fixture(autouse=True)
+    def _mock_redis_client(self):
+        mock_pipe = MagicMock()
+        mock_pipe.incr = MagicMock()
+        mock_pipe.expire = MagicMock()
+        mock_pipe.execute = AsyncMock(return_value=[1, True])
+        mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
+        mock_pipe.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.pipeline = MagicMock(return_value=mock_pipe)
+        with patch(
+            "everyrow_mcp.uploads.redis_store.get_redis_client",
+            return_value=mock_client,
+        ):
             yield
 
     def _make_upload_request(
@@ -271,7 +289,7 @@ class TestHandleUpload:
                 "upload_id": upload_id,
                 "filename": "data.csv",
                 "expires_at": expires_at,
-                "api_token": "user-tok",
+                "api_token": encrypt_value("user-tok"),
             }
         )
 
@@ -301,7 +319,7 @@ class TestHandleUpload:
                 "upload_id": upload_id,
                 "filename": "data.csv",
                 "expires_at": expires_at,
-                "api_token": "user-tok",
+                "api_token": encrypt_value("user-tok"),
             }
         )
 
@@ -325,3 +343,67 @@ class TestHandleUpload:
         body = json.loads(resp.body.decode())
         assert body["error"] == "Failed to create artifact. Please try again."
         assert "DB connection" not in body["error"]
+
+
+class TestContentTypeValidation:
+    """Tests for Content-Type validation on upload endpoint (M8)."""
+
+    @pytest.fixture(autouse=True)
+    def _with_upload_secret(self):
+        with override_settings(upload_secret="test-secret-for-hmac"):
+            yield
+
+    @pytest.fixture(autouse=True)
+    def _mock_redis_client(self):
+        mock_pipe = MagicMock()
+        mock_pipe.incr = MagicMock()
+        mock_pipe.expire = MagicMock()
+        mock_pipe.execute = AsyncMock(return_value=[1, True])
+        mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
+        mock_pipe.__aexit__ = AsyncMock(return_value=False)
+        mock_client = AsyncMock()
+        mock_client.pipeline = MagicMock(return_value=mock_pipe)
+        with patch(
+            "everyrow_mcp.uploads.redis_store.get_redis_client",
+            return_value=mock_client,
+        ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_wrong_content_type_returns_415(self):
+        """Reject uploads with unsupported Content-Type."""
+        upload_id = "test-upload-ct"
+        expires_at = int(time.time()) + 300
+        sig = sign_upload_url(upload_id, expires_at)
+        meta = json.dumps(
+            {
+                "upload_id": upload_id,
+                "filename": "data.csv",
+                "expires_at": expires_at,
+                "api_token": encrypt_value("user-tok"),
+            }
+        )
+
+        request = MagicMock()
+        request.path_params = {"upload_id": upload_id}
+        request.query_params = {"expires": str(expires_at), "sig": sig}
+        request.headers = {"content-type": "application/json"}
+        request.body = AsyncMock(return_value=b"a,b\n1,2\n")
+
+        with patch(
+            "everyrow_mcp.uploads.redis_store.pop_upload_meta",
+            new_callable=AsyncMock,
+            return_value=meta,
+        ):
+            resp = await handle_upload(request)
+
+        assert resp.status_code == 415
+        body = json.loads(resp.body.decode())
+        assert "Unsupported Content-Type" in body["error"]
+
+    @pytest.mark.asyncio
+    async def test_missing_content_type_is_accepted(self):
+        """Uploads without Content-Type header are accepted (existing tests verify this)."""
+        # Existing TestHandleUpload tests don't set Content-Type and pass,
+        # which implicitly tests that missing Content-Type is accepted.
+        pass

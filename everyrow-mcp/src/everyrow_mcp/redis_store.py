@@ -71,6 +71,10 @@ def encrypt_value(value: str) -> str:
     """Encrypt a string value for Redis storage. No-op without UPLOAD_SECRET."""
     f = _get_fernet()
     if f is None:
+        if settings.is_http:
+            raise RuntimeError(
+                "UPLOAD_SECRET must be set in HTTP mode — cannot store sensitive values in plaintext."
+            )
         return value
     return f.encrypt(value.encode()).decode()
 
@@ -79,6 +83,10 @@ def decrypt_value(value: str) -> str:
     """Decrypt a string value from Redis. No-op without UPLOAD_SECRET."""
     f = _get_fernet()
     if f is None:
+        if settings.is_http:
+            raise RuntimeError(
+                "UPLOAD_SECRET must be set in HTTP mode — cannot read encrypted values without the key."
+            )
         return value
     return f.decrypt(value.encode()).decode()
 

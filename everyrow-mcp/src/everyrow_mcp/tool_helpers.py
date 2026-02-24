@@ -300,12 +300,19 @@ def write_initial_task_state(
     input_source: str = "unknown",
 ) -> None:
     """Write initial task state file when a task is first submitted."""
+    # Extract user_id for tracing (HTTP mode only).
+    try:
+        access_token = get_access_token()
+        user_id = access_token.client_id if access_token else None
+    except Exception:
+        user_id = None
     logger.info(
-        "Task %s (%s): input_source=%s, total=%d",
+        "Task submitted task_id=%s type=%s source=%s rows=%d user=%s",
         task_id,
         task_type.value,
         input_source,
         total,
+        user_id or "local",
     )
     if settings.is_http:
         return

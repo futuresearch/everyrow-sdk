@@ -282,9 +282,10 @@ async def try_store_result(
             session_url=session_url,
             requested_page_size=page_size,
         )
-    except Exception:
-        logger.exception(
-            "Failed to store results in Redis for task %s, falling back to inline",
+    except Exception as exc:
+        logger.error(
+            "Failed to store results in Redis for task %s, falling back to inline: %s",
             task_id,
+            type(exc).__name__,
         )
         return None

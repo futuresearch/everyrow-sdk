@@ -126,6 +126,11 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info(
+        "everyrow_agent: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -197,6 +202,7 @@ async def everyrow_single_agent(
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info("everyrow_single_agent: task=%.80s", params.task)
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -274,6 +280,11 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_rank: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -358,6 +369,11 @@ async def everyrow_screen(
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_screen: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -435,6 +451,11 @@ async def everyrow_dedupe(
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_dedupe: equivalence=%.80s rows=%s",
+        params.equivalence_relation,
+        len(params.data) if params.data else "artifact",
+    )
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -516,6 +537,12 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_merge: task=%.80s left_rows=%s right_rows=%s",
+        params.task,
+        len(params.left_data) if params.left_data else "artifact",
+        len(params.right_data) if params.right_data else "artifact",
+    )
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -592,6 +619,11 @@ async def everyrow_forecast(
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info(
+        "everyrow_forecast: context=%.80s rows=%s",
+        params.context or "",
+        len(params.data) if params.data else "artifact",
+    )
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -658,6 +690,7 @@ async def everyrow_upload_data(
     artifact_id parameter. The data is stored server-side and can be reused
     across multiple tool calls.
     """
+    logger.info("everyrow_upload_data: source=%.80s", params.source)
     client = _get_client(ctx)
 
     if is_url(params.source):

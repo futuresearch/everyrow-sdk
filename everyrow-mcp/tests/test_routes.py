@@ -15,8 +15,7 @@ from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 
 from everyrow_mcp import redis_store
-from everyrow_mcp.config import settings
-from everyrow_mcp.routes import api_progress
+from everyrow_mcp.routes import _cors_headers, api_progress
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -84,7 +83,7 @@ class TestApiProgress:
         req = FakeRequest(method="OPTIONS", path_params={"task_id": "abc"})
         resp = await api_progress(req)  # pyright: ignore[reportArgumentType]
         assert resp.status_code == 204
-        assert resp.headers["Access-Control-Allow-Origin"] == settings.mcp_server_url
+        assert resp.headers["Access-Control-Allow-Origin"] == "*"
 
     @pytest.mark.asyncio
     async def test_invalid_poll_token_via_header_returns_403(self):
@@ -160,7 +159,7 @@ class TestApiProgress:
         assert body["running"] == 2
         assert "elapsed_s" in body
         assert "session_url" in body
-        assert resp.headers["Access-Control-Allow-Origin"] == settings.mcp_server_url
+        assert resp.headers["Access-Control-Allow-Origin"] == "*"
 
     @pytest.mark.asyncio
     async def test_backward_compat_query_param_for_download(self):
@@ -195,7 +194,7 @@ class TestApiProgress:
         assert body["running"] == 2
         assert "elapsed_s" in body
         assert "session_url" in body
-        assert resp.headers["Access-Control-Allow-Origin"] == settings.mcp_server_url
+        assert resp.headers["Access-Control-Allow-Origin"] == "*"
 
     @pytest.mark.asyncio
     async def test_completed_task_pops_tokens(self):
@@ -248,3 +247,13 @@ class TestApiProgress:
         assert resp.status_code == 500
         body = json.loads(bytes(resp.body).decode())
         assert body["error"] == "Internal server error"
+
+
+class TestCorsHeaders:
+    """Tests for CORS headers on widget endpoints."""
+
+    def test_returns_wildcard_origin(self):
+        headers = _cors_headers()
+        assert headers["Access-Control-Allow-Origin"] == "*"
+        assert headers["Access-Control-Allow-Methods"] == "GET"
+        assert headers["Access-Control-Allow-Headers"] == "Authorization"

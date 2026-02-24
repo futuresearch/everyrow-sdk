@@ -99,12 +99,12 @@ class SupabaseTokenVerifier(TokenVerifier):
             payload = self._decode_jwt(token, signing_key)
 
             if await self._is_revoked(token):
-                logger.debug("Token is revoked")
+                logger.warning("Revoked token presented")
                 return None
 
             sub = payload.get("sub")
             if not sub:
-                logger.debug("JWT missing required 'sub' claim")
+                logger.warning("JWT missing required 'sub' claim")
                 return None
             return AccessToken(
                 token=token,
@@ -116,7 +116,7 @@ class SupabaseTokenVerifier(TokenVerifier):
             logger.warning("JWKS fetch timed out (10s)")
             return None
         except pyjwt.PyJWTError:
-            logger.debug("JWT verification failed")
+            logger.warning("JWT verification failed")
             return None
 
 
@@ -212,7 +212,7 @@ class EveryRowAuthProvider(
         rl_key = build_key("ratelimit", action, client_ip)
         async with self._redis.pipeline() as pipe:
             pipe.incr(rl_key)
-            pipe.expire(rl_key, settings.registration_rate_window, nx=True)
+            pipe.expire(rl_key, settings.registration_rate_window)
             count, _ = await pipe.execute()
         if count > settings.registration_rate_limit:
             raise ValueError(f"{action.title()} rate limit exceeded")
@@ -232,6 +232,7 @@ class EveryRowAuthProvider(
             time=settings.client_registration_ttl,
             value=client_info.model_dump_json(),
         )
+        logger.info("Registered new OAuth client client_id=%s", client_info.client_id)
 
     @staticmethod
     def _supabase_redirect_url(supabase_verifier: str) -> str:
@@ -361,11 +362,16 @@ class EveryRowAuthProvider(
         return f"{settings.mcp_server_url}/auth/start/{state}"
 
     async def handle_start(self, request: Request) -> RedirectResponse:
+        state = request.path_params["state"]
         pending = await self._validate_auth_request(
-            request, "start", request.path_params.get("state")
+            request, "start", state, consume=True
         )
-
-        state = request.path_params.get("state", "")
+        # Re-store so the callback can still find it
+        await self._redis.setex(
+            name=build_key("pending", state),
+            time=settings.pending_auth_ttl,
+            value=pending.model_dump_json(),
+        )
         response = RedirectResponse(url=pending.supabase_redirect_url, status_code=302)
         response.set_cookie(
             key="__Host-mcp_auth_state",
@@ -434,9 +440,9 @@ class EveryRowAuthProvider(
         if code_obj.expires_at and code_obj.expires_at < time.time():
             return None
         if code_obj.client_id != client.client_id:
-            # Re-store so the legitimate client can still use it.
+            # Re-store so the legitimate client can still use it (NX prevents overwrite).
             remaining = max(1, int((code_obj.expires_at or 0) - time.time()))
-            await self._redis.setex(key, remaining, code_data_encrypted)
+            await self._redis.set(key, code_data_encrypted, ex=remaining, nx=True)
             return None
         return code_obj
 
@@ -476,6 +482,7 @@ class EveryRowAuthProvider(
         authorization_code: EveryRowAuthorizationCode,
     ) -> OAuthToken:
         assert client.client_id is not None
+        logger.info("Token exchange successful user=%s", authorization_code.client_id)
         return await self._issue_token_response(
             access_token=authorization_code.supabase_access_token,
             client_id=client.client_id,
@@ -499,8 +506,10 @@ class EveryRowAuthProvider(
             return None
         rt = EveryRowRefreshToken.model_validate_json(decrypt_value(data_encrypted))
         if rt.client_id != client.client_id:
-            # Re-store so the legitimate client can still use it.
-            await self._redis.setex(key, settings.refresh_token_ttl, data_encrypted)
+            # Re-store so the legitimate client can still use it (NX prevents overwrite).
+            await self._redis.set(
+                key, data_encrypted, ex=settings.refresh_token_ttl, nx=True
+            )
             return None
         return rt
 
@@ -524,6 +533,7 @@ class EveryRowAuthProvider(
             )
             raise
         assert client.client_id is not None
+        logger.info("Token refresh successful user=%s", client.client_id)
         return await self._issue_token_response(
             access_token=supa_tokens.access_token,
             client_id=client.client_id,

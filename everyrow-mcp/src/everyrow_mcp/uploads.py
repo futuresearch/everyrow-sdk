@@ -28,10 +28,17 @@ from starlette.responses import JSONResponse
 
 from everyrow_mcp import redis_store
 from everyrow_mcp.config import settings
-from everyrow_mcp.redis_store import decrypt_value, encrypt_value
+from everyrow_mcp.redis_store import build_key, decrypt_value, encrypt_value
 from everyrow_mcp.tool_helpers import EveryRowContext
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "text/plain",
+    "application/octet-stream",
+}
 
 
 # ── Input model ───────────────────────────────────────────────
@@ -131,6 +138,13 @@ def register_upload_tool(mcp: FastMCP) -> None:
         # Get user's API token from the MCP context
         client = ctx.request_context.lifespan_context.client_factory()
         api_token = getattr(client, "token", None) or ""
+        if not api_token:
+            return [
+                TextContent(
+                    type="text",
+                    text="Error: no API token available. Please authenticate first.",
+                )
+            ]
 
         # Store metadata in Redis (token encrypted at rest)
         meta = json.dumps(
@@ -229,12 +243,41 @@ async def handle_upload(request: Request) -> JSONResponse:  # noqa: PLR0911
     assert body is not None and meta is not None  # type narrowing
 
     # Retrieve and decrypt the user's API token
+    content_type = (
+        (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    )
+    if content_type and content_type not in _ALLOWED_CONTENT_TYPES:
+        return JSONResponse(
+            {
+                "error": f"Unsupported Content-Type: {content_type}. Use text/csv or application/octet-stream."
+            },
+            status_code=415,
+        )
+
+    # Retrieve and decrypt the user's API token
     try:
         api_token = decrypt_value(meta.get("api_token", ""))
     except Exception:
+        logger.warning(
+            "Failed to decrypt api_token for upload %s",
+            request.path_params.get("upload_id"),
+        )
         api_token = ""
     if not api_token:
         return JSONResponse({"error": "Upload authorization missing"}, status_code=403)
+
+    token_hash = hashlib.sha256(api_token.encode()).hexdigest()[:16]
+    rl_key = build_key("upload_rate", token_hash)
+    redis_client = redis_store.get_redis_client()
+    async with redis_client.pipeline() as pipe:
+        pipe.incr(rl_key)
+        pipe.expire(rl_key, settings.upload_rate_window)
+        count, _ = await pipe.execute()
+    if count > settings.upload_rate_limit:
+        return JSONResponse(
+            {"error": "Upload rate limit exceeded. Try again later."},
+            status_code=429,
+        )
 
     try:
         df = pd.read_csv(BytesIO(body))  # type: ignore[arg-type]
@@ -266,8 +309,8 @@ async def handle_upload(request: Request) -> JSONResponse:  # noqa: PLR0911
         )
         async with create_session(client=client) as session:
             artifact_id = await create_table_artifact(df, session)
-    except Exception:
-        logger.exception("Failed to create artifact from upload")
+    except Exception as exc:
+        logger.error("Failed to create artifact from upload: %s", type(exc).__name__)
         return JSONResponse(
             {"error": "Failed to create artifact. Please try again."},
             status_code=500,

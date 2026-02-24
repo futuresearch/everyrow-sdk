@@ -33,6 +33,12 @@ import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp import redis_store
 from everyrow_mcp.app import mcp as mcp_app
 from everyrow_mcp.tool_helpers import SessionContext
+from everyrow_mcp.tools import (
+    _RESULTS_ANNOTATIONS,
+    _RESULTS_META,
+    everyrow_results_http,
+    everyrow_results_stdio,
+)
 from tests.conftest import override_settings
 
 # ── Fixtures / helpers ────────────────────────────────────────
@@ -50,14 +56,34 @@ def _fake_access_token():
 
 @pytest.fixture
 def _http_state(fake_redis):
-    """Configure settings for HTTP mode and patch Redis."""
+    """Configure settings for HTTP mode and patch Redis.
+
+    Also swaps everyrow_results from stdio to HTTP variant, matching server.py startup.
+    """
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_http)
+
     with (
-        override_settings(transport="streamable-http"),
+        override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
         patch("everyrow_mcp.tools.get_access_token", _fake_access_token),
         patch("everyrow_mcp.tool_helpers.get_access_token", _fake_access_token),
     ):
         yield
+
+    # Restore stdio variant
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_stdio)
 
 
 @asynccontextmanager

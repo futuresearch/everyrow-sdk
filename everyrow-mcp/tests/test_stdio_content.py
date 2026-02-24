@@ -51,7 +51,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     StdioResultsInput,
 )
-from everyrow_mcp.redis_store import Transport
+from everyrow_mcp.redis_store import Transport, _get_fernet
 from everyrow_mcp.tool_helpers import SessionContext
 from everyrow_mcp.tools import (
     everyrow_agent,
@@ -620,19 +620,24 @@ class TestHttpModeIncludesWidgets:
         )
         fake_token = MagicMock()
         fake_token.client_id = "test-user-123"
-        with (
-            patches[0],
-            patches[1],
-            patch.object(settings, "transport", Transport.HTTP),
-            patch.object(redis_store, "get_redis_client", return_value=fake_redis),
-            patch(
-                "everyrow_mcp.tool_helpers.get_access_token",
-                return_value=fake_token,
-            ),
-        ):
-            result = await everyrow_agent(
-                AgentInput(task="Find HQ", data=[{"name": "TechStart"}]), ctx
-            )
+        _get_fernet.cache_clear()
+        try:
+            with (
+                patches[0],
+                patches[1],
+                patch.object(settings, "transport", Transport.HTTP),
+                patch.object(settings, "upload_secret", "test-secret"),
+                patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+                patch(
+                    "everyrow_mcp.tool_helpers.get_access_token",
+                    return_value=fake_token,
+                ),
+            ):
+                result = await everyrow_agent(
+                    AgentInput(task="Find HQ", data=[{"name": "TechStart"}]), ctx
+                )
+        finally:
+            _get_fernet.cache_clear()
 
         assert len(result) == 2
         widget = json.loads(result[0].text)
