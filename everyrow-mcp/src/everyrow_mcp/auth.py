@@ -346,6 +346,7 @@ class EveryRowAuthProvider(
         state = secrets.token_urlsafe(32)
         supabase_verifier = secrets.token_urlsafe(32)
 
+        assert client.client_id is not None
         pending = PendingAuth(
             client_id=client.client_id,
             params=params,
@@ -364,10 +365,11 @@ class EveryRowAuthProvider(
             request, "start", request.path_params.get("state")
         )
 
+        state = request.path_params.get("state", "")
         response = RedirectResponse(url=pending.supabase_redirect_url, status_code=302)
         response.set_cookie(
             key="mcp_auth_state",
-            value=request.path_params.get("state"),
+            value=state,
             max_age=settings.pending_auth_ttl,
             httponly=True,
             samesite="lax",
@@ -472,6 +474,7 @@ class EveryRowAuthProvider(
         client: OAuthClientInformationFull,
         authorization_code: EveryRowAuthorizationCode,
     ) -> OAuthToken:
+        assert client.client_id is not None
         return await self._issue_token_response(
             access_token=authorization_code.supabase_access_token,
             client_id=client.client_id,
@@ -519,6 +522,7 @@ class EveryRowAuthProvider(
                 value=refresh_token.model_dump_json(),
             )
             raise
+        assert client.client_id is not None
         return await self._issue_token_response(
             access_token=supa_tokens.access_token,
             client_id=client.client_id,

@@ -27,8 +27,8 @@ on:
       - "uv.lock"
 
 env:
-  GKE_ZONE: ${{ vars.BETA_CLUSTER_REGION }}
-  GKE_NAME: ${{ vars.BETA_CLUSTER_NAME }}
+  GKE_ZONE: ${{ secrets.BETA_CLUSTER_REGION }}
+  GKE_NAME: ${{ secrets.BETA_CLUSTER_NAME }}
   MCP_IMAGE_NAME: ${{ vars.GCP_REGISTRY_NAME }}/${{ vars.GCP_PROJECT_NAME }}/delphos/everyrow-mcp
 
 permissions:
@@ -75,6 +75,8 @@ jobs:
         run: uv sync --directory everyrow-mcp
       - name: Run ruff
         run: uv run --directory everyrow-mcp ruff check
+      - name: Run basedpyright
+        run: uv run --directory everyrow-mcp basedpyright --project .
       - name: Run tests
         run: uv run --directory everyrow-mcp pytest tests
 

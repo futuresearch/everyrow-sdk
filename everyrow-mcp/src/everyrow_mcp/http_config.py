@@ -49,6 +49,7 @@ def configure_http_mode(
             )
 
     redis_client = get_redis_client()
+    auth_provider: EveryRowAuthProvider | None = None
     if no_auth:
         lifespan = no_auth_http_lifespan
     else:
@@ -65,7 +66,7 @@ def configure_http_mode(
     mcp.settings.port = port
 
     _register_widgets(mcp, mcp_server_url)
-    _register_routes(mcp, redis_client, auth_provider if not no_auth else None)
+    _register_routes(mcp, redis_client, auth_provider)
     _add_middleware(mcp, redis_client, rate_limit=not no_auth)
 
 
@@ -103,7 +104,7 @@ def _register_routes(
 
     async def _health(_request: Request) -> Response:
         try:
-            await redis.ping()
+            await redis.ping()  # pyright: ignore[reportGeneralTypeIssues]
         except Exception:
             return JSONResponse(
                 {"status": "unhealthy", "redis": "unreachable"}, status_code=503

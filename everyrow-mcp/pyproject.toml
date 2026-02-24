@@ -36,9 +36,10 @@ dev = [
 ]
 
 [tool.basedpyright]
-venvPath = "."
+venvPath = ".."
 venv = ".venv"
-include = ["src", "tests"]
+include = ["src"]
+extraPaths = ["src", "../src"]
 typeCheckingMode = "standard"
 
 [tool.ruff]
