@@ -154,6 +154,8 @@ async def _check_redirect(response: httpx.Response) -> None:
             try:
                 _validate_url_target(location)
             except ValueError:
+                # TooManyRedirects aborts the redirect chain — httpx
+                # has no "redirect rejected" error type.
                 raise httpx.TooManyRedirects(
                     f"Redirect to blocked address: {location}",
                     request=response.request,

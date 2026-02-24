@@ -75,7 +75,7 @@ def configure_http_mode(
             "UPLOAD_SECRET must be set in HTTP mode for HMAC signing. "
             'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
         )
-    if settings.is_http and not settings.redis_password:
+    if settings.is_http and not no_auth and not settings.redis_password:
         logger.warning(
             "REDIS_PASSWORD is not set — Redis is unauthenticated. "
             "Set REDIS_PASSWORD for production deployments."
