@@ -36,7 +36,7 @@ dev = [
 ]
 
 [tool.basedpyright]
-venvPath = "."
+venvPath = ".."
 venv = ".venv"
 include = ["src", "tests"]
 typeCheckingMode = "standard"

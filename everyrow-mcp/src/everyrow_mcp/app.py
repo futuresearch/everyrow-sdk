@@ -50,7 +50,7 @@ async def http_lifespan(_server: FastMCP):
     across sessions. Process exit handles cleanup.
     """
     redis_client = get_redis_client()
-    await redis_client.ping()
+    await redis_client.ping()  # pyright: ignore[reportGeneralTypeIssues]
 
     def _http_client_factory() -> AuthenticatedClient:
         access_token = get_access_token()
@@ -73,7 +73,7 @@ async def http_lifespan(_server: FastMCP):
 async def no_auth_http_lifespan(_server: FastMCP):
     """HTTP no-auth mode: singleton client from API key, verify Redis."""
     redis_client = get_redis_client()
-    await redis_client.ping()
+    await redis_client.ping()  # pyright: ignore[reportGeneralTypeIssues]
 
     with _create_sdk_client() as client:
         response = await get_billing(client=client)

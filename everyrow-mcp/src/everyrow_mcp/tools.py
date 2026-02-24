@@ -679,7 +679,7 @@ async def everyrow_results_http(
     # ── Fetch from API ────────────────────────────────────────────
     try:
         df, session_id = await _fetch_task_result(client, task_id)
-        session_url = get_session_url(session_id) if session_id else ""
+        session_url = get_session_url(UUID(session_id)) if session_id else ""
     except TaskNotReady as e:
         return [
             TextContent(

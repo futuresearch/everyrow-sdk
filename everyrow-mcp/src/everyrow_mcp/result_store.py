@@ -16,6 +16,7 @@ import io
 import json
 import logging
 import math
+from typing import Any
 
 import pandas as pd
 from mcp.types import TextContent
@@ -26,7 +27,7 @@ from everyrow_mcp.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_records(records: list[dict]) -> list[dict]:
+def _sanitize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Replace NaN/Inf float values with None for valid JSON serialization.
 
     pandas ``to_dict(orient="records")`` preserves ``float('nan')`` which
@@ -54,9 +55,9 @@ def _estimate_tokens(text: str) -> int:
 
 
 def clamp_page_to_budget(
-    preview_records: list[dict],
+    preview_records: list[dict[str, Any]],
     page_size: int,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict[str, Any]], int]:
     estimated = _estimate_tokens(json.dumps(preview_records))
     if estimated <= settings.token_budget:
         return preview_records, page_size
@@ -86,7 +87,7 @@ def clamp_page_to_budget(
 def _build_result_response(
     task_id: str,
     csv_url: str,
-    preview_records: list[dict],
+    preview_records: list[dict[str, Any]],
     total: int,
     columns: list[str],
     offset: int,
@@ -242,7 +243,7 @@ async def try_store_result(
         columns = list(df.columns)
 
         # Store base metadata
-        meta = {"total": total, "columns": columns}
+        meta: dict[str, Any] = {"total": total, "columns": columns}
         if session_url:
             meta["session_url"] = session_url
         await redis_store.store_result_meta(task_id, json.dumps(meta))

@@ -75,6 +75,8 @@ jobs:
         run: uv sync --directory everyrow-mcp
       - name: Run ruff
         run: uv run --directory everyrow-mcp ruff check
+      - name: Run basedpyright
+        run: uv run --directory everyrow-mcp basedpyright --project .
       - name: Run tests
         run: uv run --directory everyrow-mcp pytest tests
 
