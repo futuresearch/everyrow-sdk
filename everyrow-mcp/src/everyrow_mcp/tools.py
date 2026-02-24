@@ -42,7 +42,11 @@ from everyrow_mcp.models import (
     StdioResultsInput,
     _schema_to_model,
 )
-from everyrow_mcp.result_store import try_cached_result, try_store_result
+from everyrow_mcp.result_store import (
+    _sanitize_records,
+    try_cached_result,
+    try_store_result,
+)
 from everyrow_mcp.tool_helpers import (
     EveryRowContext,
     TaskNotReady,
@@ -711,7 +715,7 @@ async def everyrow_results_http(
 
     # ── Fallback: return inline preview when Redis is unavailable ──
     page_df = df.iloc[params.offset : params.offset + params.page_size]
-    preview = page_df.to_dict(orient="records")
+    preview = _sanitize_records(page_df.to_dict(orient="records"))
     cols = ", ".join(df.columns)
     return [
         TextContent(
