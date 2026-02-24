@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: "main"
+      deploy_staging:
+        description: "Deploy to staging"
+        type: boolean
+        required: false
+        default: false
   push:
     branches: ["main"]
     paths:
@@ -118,7 +123,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: [setup, build-and-push]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_staging == true)
 
     steps:
       - uses: actions/checkout@v4
@@ -147,15 +154,34 @@ jobs:
           version: '3.11.0'
 
       - name: Decrypt secrets
-        run: sops -d everyrow-mcp/deploy/chart/secrets.enc.yaml > everyrow-mcp/deploy/chart/values.secrets.yaml
+        run: |
+          sops -d everyrow-mcp/deploy/chart/secrets.enc.yaml > everyrow-mcp/deploy/chart/values.secrets.yaml
+          sops -d everyrow-mcp/deploy/chart/secrets.staging.enc.yaml > everyrow-mcp/deploy/chart/values.secrets.staging.yaml
 
-      - name: Deploy Helm chart
+      - name: Deploy to production
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.deploy_staging == true)
         working-directory: everyrow-mcp/deploy/chart
         run: |
           helm upgrade --install everyrow-mcp . \
             -n everyrow-mcp \
             -f values.yaml \
             -f values.secrets.yaml \
+            --set-string releaseId="${{ needs.setup.outputs.sha_short }}" \
+            --create-namespace \
+            --wait \
+            --atomic \
+            --timeout 5m
+
+      - name: Deploy to staging
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_staging == true
+        working-directory: everyrow-mcp/deploy/chart
+        run: |
+          helm upgrade --install everyrow-mcp-staging . \
+            -n everyrow-mcp-staging \
+            -f values.yaml \
+            -f values.secrets.yaml \
+            -f values.staging.yaml \
+            -f values.secrets.staging.yaml \
             --set-string releaseId="${{ needs.setup.outputs.sha_short }}" \
             --create-namespace \
             --wait \

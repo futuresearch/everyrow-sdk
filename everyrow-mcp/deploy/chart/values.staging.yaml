@@ -1,0 +1,12 @@
+# Staging overrides — layered on top of values.yaml via:
+#   helm upgrade everyrow-mcp-staging . -n everyrow-mcp-staging \
+#     -f values.yaml -f values.secrets.yaml \
+#     -f values.staging.yaml -f values.secrets.staging.yaml
+
+env:
+  MCP_SERVER_URL: "https://mcp-staging.everyrow.io"
+  SUPABASE_URL: "https://jmraczchpxwbrnngyjuf.supabase.co"
+  REDIS_DB: "14"
+
+httproute:
+  host: mcp-staging.everyrow.io
