@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from everyrow_mcp.config import settings
 from everyrow_mcp.utils import validate_csv_path
 
 JSON_TYPE_MAP = {
@@ -25,10 +26,6 @@ JSON_TYPE_MAP = {
     "array": list,
     "object": dict,
 }
-
-MAX_INLINE_ROWS = 50_000
-MAX_INLINE_DATA_BYTES = 10 * 1024 * 1024  # 10 MB
-MAX_SCHEMA_PROPERTIES = 50
 
 
 def _validate_response_schema(schema: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -56,10 +53,10 @@ def _validate_response_schema(schema: dict[str, Any] | None) -> dict[str, Any] |
             "response_schema must include a non-empty top-level 'properties' object"
         )
 
-    if len(properties) > MAX_SCHEMA_PROPERTIES:
+    if len(properties) > settings.max_schema_properties:
         raise ValueError(
             f"response_schema has {len(properties)} properties "
-            f"(max {MAX_SCHEMA_PROPERTIES})"
+            f"(max {settings.max_schema_properties})"
         )
 
     for field_name, field_def in properties.items():
@@ -160,12 +157,14 @@ class _SingleSourceInput(BaseModel):
     ) -> str | list[dict[str, Any]] | None:
         if v is None:
             return v
-        if isinstance(v, str) and len(v) > MAX_INLINE_DATA_BYTES:
+        if isinstance(v, str) and len(v) > settings.max_inline_data_bytes:
             raise ValueError(
-                f"Inline data exceeds {MAX_INLINE_DATA_BYTES // (1024 * 1024)} MB limit"
+                f"Inline data exceeds {settings.max_inline_data_bytes // (1024 * 1024)} MB limit"
             )
-        if isinstance(v, list) and len(v) > MAX_INLINE_ROWS:
-            raise ValueError(f"Inline data has {len(v)} rows (max {MAX_INLINE_ROWS})")
+        if isinstance(v, list) and len(v) > settings.max_inline_rows:
+            raise ValueError(
+                f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+            )
         return v
 
     @model_validator(mode="after")
