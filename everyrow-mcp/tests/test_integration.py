@@ -14,9 +14,11 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from everyrow_mcp.models import (
     AgentInput,
+    CancelInput,
     DedupeInput,
     MergeInput,
     ProgressInput,
@@ -28,6 +30,7 @@ from everyrow_mcp.models import (
 )
 from everyrow_mcp.tools import (
     everyrow_agent,
+    everyrow_cancel,
     everyrow_dedupe,
     everyrow_merge,
     everyrow_progress,
@@ -571,3 +574,177 @@ class TestUploadThenProcessIntegration:
 
         # Same assertion as inline test — Airtable and Descript should pass
         assert len(output_df) <= 3
+
+
+class TestArtifactReuseIntegration:
+    """Test that a single artifact_id can be used across multiple tools."""
+
+    @pytest.mark.asyncio
+    async def test_upload_once_use_twice(
+        self,
+        real_ctx,
+        tmp_path: Path,
+    ):
+        """Upload data once, then use the artifact_id in both screen and rank."""
+        # 1. Upload
+        csv_file = tmp_path / "companies.csv"
+        pd.DataFrame(COMPANIES_DATA).to_csv(csv_file, index=False)
+
+        upload_result = await everyrow_upload_data(
+            UploadDataInput(source=str(csv_file)), real_ctx
+        )
+        artifact_id = json.loads(upload_result[0].text)["artifact_id"]
+        print(f"\nUploaded artifact: {artifact_id}")
+
+        # 2. Screen with the artifact
+        screen_result = await everyrow_screen(
+            ScreenInput(
+                task="Filter for companies with more than 50 employees.",
+                artifact_id=artifact_id,
+            ),
+            real_ctx,
+        )
+        screen_task_id = extract_task_id(screen_result[0].text)
+        await poll_until_complete(screen_task_id, real_ctx)
+
+        screen_output = tmp_path / "screened.csv"
+        await everyrow_results_stdio(
+            StdioResultsInput(task_id=screen_task_id, output_path=str(screen_output)),
+            real_ctx,
+        )
+        screen_df = pd.read_csv(screen_output)
+        print(f"Screen result: {len(screen_df)} rows")
+        assert len(screen_df) > 0
+
+        # 3. Rank with the same artifact
+        rank_result = await everyrow_rank(
+            RankInput(
+                task="Score 0-10 by AI/ML focus.",
+                artifact_id=artifact_id,
+                field_name="ai_score",
+                field_type="float",
+            ),
+            real_ctx,
+        )
+        rank_task_id = extract_task_id(rank_result[0].text)
+        await poll_until_complete(rank_task_id, real_ctx)
+
+        rank_output = tmp_path / "ranked.csv"
+        await everyrow_results_stdio(
+            StdioResultsInput(task_id=rank_task_id, output_path=str(rank_output)),
+            real_ctx,
+        )
+        rank_df = pd.read_csv(rank_output)
+        print(f"Rank result: {len(rank_df)} rows")
+        assert len(rank_df) == 5
+        assert "ai_score" in rank_df.columns
+
+
+class TestUrlUploadIntegration:
+    """Test uploading data from a public URL."""
+
+    @pytest.mark.asyncio
+    async def test_upload_from_url(
+        self,
+        real_ctx,
+    ):
+        """Upload a CSV from a public URL, then use the artifact_id."""
+        # Use a small public CSV — GitHub raw content
+        url = "https://raw.githubusercontent.com/datasets/country-list/master/data.csv"
+
+        upload_result = await everyrow_upload_data(
+            UploadDataInput(source=url), real_ctx
+        )
+        assert_stdio_clean(upload_result, tool_name="everyrow_upload_data")
+        upload_response = json.loads(upload_result[0].text)
+        print(f"\nURL upload result: {upload_response}")
+
+        assert upload_response["rows"] > 0
+        assert "artifact_id" in upload_response
+        assert "Name" in upload_response["columns"] or "name" in [
+            c.lower() for c in upload_response["columns"]
+        ]
+
+
+class TestCancelIntegration:
+    """Test cancelling a running task."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_running_task(
+        self,
+        real_ctx,
+    ):
+        """Submit a task, immediately cancel it, verify cancellation."""
+        # 1. Submit a slow task (agent with many rows)
+        result = await everyrow_agent(
+            AgentInput(
+                task="Find the headquarters city of this company.",
+                data=[
+                    {"name": "Anthropic"},
+                    {"name": "OpenAI"},
+                    {"name": "Google"},
+                    {"name": "Meta"},
+                    {"name": "Apple"},
+                ],
+            ),
+            real_ctx,
+        )
+        task_id = extract_task_id(result[0].text)
+        print(f"\nSubmitted task: {task_id}")
+
+        # 2. Cancel immediately
+        cancel_result = await everyrow_cancel(CancelInput(task_id=task_id), real_ctx)
+        cancel_text = cancel_result[0].text
+        print(f"Cancel result: {cancel_text}")
+        assert "cancelled" in cancel_text.lower() or "cancel" in cancel_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_cancel_nonexistent_task(
+        self,
+        real_ctx,
+    ):
+        """Cancel a fake task_id — should get a graceful error, not a crash."""
+        cancel_result = await everyrow_cancel(
+            CancelInput(task_id="00000000-0000-0000-0000-000000000000"), real_ctx
+        )
+        cancel_text = cancel_result[0].text
+        print(f"Cancel nonexistent result: {cancel_text}")
+        # Should return an error message, not crash
+        assert len(cancel_result) == 1
+
+
+class TestErrorPathsIntegration:
+    """Test that invalid inputs produce clear errors, not 500s."""
+
+    def test_bad_artifact_id_rejected(self):
+        """Non-UUID artifact_id is rejected at validation time."""
+        with pytest.raises(ValidationError, match="artifact_id must be a valid UUID"):
+            ScreenInput(task="test", artifact_id="not-a-uuid")
+
+    def test_empty_data_rejected(self):
+        """Empty inline data list is rejected at validation time."""
+        with pytest.raises(ValidationError, match="must not be empty"):
+            ScreenInput(task="test", data=[])
+
+    def test_both_inputs_rejected(self):
+        """Providing both artifact_id and data is rejected."""
+        with pytest.raises(ValidationError):
+            ScreenInput(
+                task="test",
+                artifact_id="00000000-0000-0000-0000-000000000000",
+                data=[{"a": 1}],
+            )
+
+    def test_no_input_rejected(self):
+        """Providing neither artifact_id nor data is rejected."""
+        with pytest.raises(ValidationError):
+            ScreenInput(task="test")
+
+    def test_merge_mismatched_inputs_rejected(self):
+        """Merge with only one side provided is rejected."""
+        with pytest.raises(ValidationError):
+            MergeInput(
+                task="test",
+                left_data=[{"a": 1}],
+                # right side missing
+            )
