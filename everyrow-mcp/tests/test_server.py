@@ -35,6 +35,7 @@ from everyrow_mcp.server import (
     _schema_to_model,
     everyrow_agent,
     everyrow_cancel,
+    everyrow_list_sessions,
     everyrow_progress,
     everyrow_results,
     everyrow_single_agent,
@@ -619,6 +620,80 @@ class TestResults:
         output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]
+
+
+class TestListSessions:
+    """Tests for everyrow_list_sessions."""
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_returns_sessions(self):
+        """Test that list_sessions returns formatted session info."""
+        mock_client = _make_mock_client()
+        mock_sessions = [
+            MagicMock(
+                session_id=uuid4(),
+                name="My Session",
+                created_at=datetime(2025, 6, 1, 12, 0, tzinfo=UTC),
+                updated_at=datetime(2025, 6, 1, 13, 0, tzinfo=UTC),
+                get_url=lambda: "https://everyrow.io/sessions/abc",
+            ),
+            MagicMock(
+                session_id=uuid4(),
+                name="Another Session",
+                created_at=datetime(2025, 6, 2, 10, 0, tzinfo=UTC),
+                updated_at=datetime(2025, 6, 2, 11, 0, tzinfo=UTC),
+                get_url=lambda: "https://everyrow.io/sessions/def",
+            ),
+        ]
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.list_sessions",
+                new_callable=AsyncMock,
+                return_value=mock_sessions,
+            ),
+        ):
+            result = await everyrow_list_sessions()
+
+        text = result[0].text
+        assert "2 session(s)" in text
+        assert "My Session" in text
+        assert "Another Session" in text
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_empty(self):
+        """Test that list_sessions handles no sessions."""
+        mock_client = _make_mock_client()
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.list_sessions",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+        ):
+            result = await everyrow_list_sessions()
+
+        assert "No sessions found" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_api_error(self):
+        """Test that list_sessions handles API errors gracefully."""
+        mock_client = _make_mock_client()
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.list_sessions",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("API error"),
+            ),
+        ):
+            result = await everyrow_list_sessions()
+
+        assert "Error listing sessions" in result[0].text
 
 
 class TestCancel:

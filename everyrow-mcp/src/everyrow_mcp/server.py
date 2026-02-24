@@ -30,6 +30,7 @@ from everyrow_mcp.tools import (  # noqa: F401
     everyrow_agent,
     everyrow_cancel,
     everyrow_dedupe,
+    everyrow_list_sessions,
     everyrow_merge,
     everyrow_progress,
     everyrow_rank,
