@@ -1,6 +1,9 @@
 """Utility functions for the everyrow MCP server."""
 
+import json
+from io import StringIO
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -104,6 +107,61 @@ def resolve_output_path(output_path: str, input_path: str, prefix: str) -> Path:
 
     input_name = Path(input_path).stem
     return out / f"{prefix}_{input_name}.csv"
+
+
+def load_data(
+    *,
+    data: str | list[dict[str, Any]] | None = None,
+    input_csv: str | None = None,
+) -> pd.DataFrame:
+    """Load tabular data from inline data or a local CSV file path.
+
+    Exactly one of ``data`` or ``input_csv`` must be provided.
+
+    Args:
+        data: Inline data — either a CSV string or a JSON array of objects
+              (``list[dict]``).  When a string starting with ``[`` is passed it
+              is parsed as JSON first; otherwise it is treated as CSV.
+        input_csv: Absolute path to a CSV file on disk (stdio mode only).
+
+    Returns:
+        DataFrame with the loaded data.
+
+    Raises:
+        ValueError: If no source or multiple sources are provided, or if data is empty.
+    """
+    sources = sum(1 for s in (data, input_csv) if s is not None)
+    if sources != 1:
+        raise ValueError("Provide exactly one of data, input_csv.")
+
+    if input_csv:
+        return pd.read_csv(input_csv)
+
+    # data is not None at this point
+    if isinstance(data, list):
+        df = pd.DataFrame(data)
+        if df.empty:
+            raise ValueError("data produced an empty DataFrame.")
+        return df
+
+    # str — auto-detect JSON array vs CSV
+    assert isinstance(data, str)
+    stripped = data.strip()
+    if stripped.startswith("["):
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, list):
+                df = pd.DataFrame(parsed)
+                if df.empty:
+                    raise ValueError("data produced an empty DataFrame.")
+                return df
+        except json.JSONDecodeError:
+            pass  # fall through to CSV
+
+    df = pd.read_csv(StringIO(data))
+    if df.empty:
+        raise ValueError("data produced an empty DataFrame.")
+    return df
 
 
 def save_result_to_csv(df: pd.DataFrame, path: Path) -> None:

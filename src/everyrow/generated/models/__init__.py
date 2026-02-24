@@ -16,6 +16,9 @@ from .dedupe_operation_input_type_2 import DedupeOperationInputType2
 from .dedupe_operation_strategy import DedupeOperationStrategy
 from .error_response import ErrorResponse
 from .error_response_details_type_0 import ErrorResponseDetailsType0
+from .forecast_operation import ForecastOperation
+from .forecast_operation_input_type_1_item import ForecastOperationInputType1Item
+from .forecast_operation_input_type_2 import ForecastOperationInputType2
 from .health_response import HealthResponse
 from .http_validation_error import HTTPValidationError
 from .insufficient_balance_error import InsufficientBalanceError
@@ -39,6 +42,8 @@ from .screen_operation import ScreenOperation
 from .screen_operation_input_type_1_item import ScreenOperationInputType1Item
 from .screen_operation_input_type_2 import ScreenOperationInputType2
 from .screen_operation_response_schema_type_0 import ScreenOperationResponseSchemaType0
+from .session_list_item import SessionListItem
+from .session_list_response import SessionListResponse
 from .session_response import SessionResponse
 from .single_agent_operation import SingleAgentOperation
 from .single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
@@ -70,6 +75,9 @@ __all__ = (
     "DedupeOperationStrategy",
     "ErrorResponse",
     "ErrorResponseDetailsType0",
+    "ForecastOperation",
+    "ForecastOperationInputType1Item",
+    "ForecastOperationInputType2",
     "HealthResponse",
     "HTTPValidationError",
     "InsufficientBalanceError",
@@ -93,6 +101,8 @@ __all__ = (
     "ScreenOperationInputType1Item",
     "ScreenOperationInputType2",
     "ScreenOperationResponseSchemaType0",
+    "SessionListItem",
+    "SessionListResponse",
     "SessionResponse",
     "SingleAgentOperation",
     "SingleAgentOperationInputType1Item",
