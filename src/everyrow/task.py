@@ -208,26 +208,6 @@ async def cancel_task(
     handle_response(response.parsed)
 
 
-def cancel_task_sync(
-    task_id: UUID, client: AuthenticatedClient
-) -> None:
-    """Cancel a running task by its ID (synchronous).
-
-    Args:
-        task_id: The UUID of the task to cancel.
-        client: An authenticated client.
-
-    Raises:
-        EveryrowError: If the task is not found, already in a terminal state, or another error occurs.
-    """
-    response = cancel_task_tasks_task_id_cancel_post.sync_detailed(
-        task_id=task_id, client=client
-    )
-    if response.status_code == 200:
-        return
-    handle_response(response.parsed)
-
-
 async def get_task_status(
     task_id: UUID, client: AuthenticatedClient
 ) -> TaskStatusResponse:
