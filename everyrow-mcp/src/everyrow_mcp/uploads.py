@@ -221,7 +221,7 @@ async def _validate_upload(  # noqa: PLR0911
     return body, meta, None
 
 
-async def handle_upload(request: Request) -> JSONResponse:
+async def handle_upload(request: Request) -> JSONResponse:  # noqa: PLR0911
     """PUT /api/uploads/{upload_id} — receive an uploaded file and create an artifact."""
     body, meta, error = await _validate_upload(request)
     if error is not None:
@@ -237,7 +237,7 @@ async def handle_upload(request: Request) -> JSONResponse:
         return JSONResponse({"error": "Upload authorization missing"}, status_code=403)
 
     try:
-        df = pd.read_csv(BytesIO(body), nrows=settings.max_upload_rows)  # type: ignore[arg-type]
+        df = pd.read_csv(BytesIO(body))  # type: ignore[arg-type]
     except Exception as exc:
         logger.warning("CSV parse failed for upload: %s", exc)
         return JSONResponse(
@@ -247,6 +247,15 @@ async def handle_upload(request: Request) -> JSONResponse:
 
     if df.empty:
         return JSONResponse({"error": "CSV is empty"}, status_code=400)
+
+    if len(df) > settings.max_upload_rows:
+        return JSONResponse(
+            {
+                "error": f"CSV has {len(df)} rows (max {settings.max_upload_rows}). "
+                "Reduce the file size and try again."
+            },
+            status_code=413,
+        )
 
     try:
         client = AuthenticatedClient(
