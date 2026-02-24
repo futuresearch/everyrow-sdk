@@ -56,9 +56,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         key = build_key("rate", client_ip, window_id)
 
         try:
-            count = await self._redis.incr(key)
-            if count == 1:
-                await self._redis.expire(key, self._window_seconds)
+            async with self._redis.pipeline() as pipe:
+                pipe.incr(key)
+                pipe.expire(key, self._window_seconds, nx=True)
+                count, _ = await pipe.execute()
 
             if count > self._max_requests:
                 ttl = await self._redis.ttl(key)

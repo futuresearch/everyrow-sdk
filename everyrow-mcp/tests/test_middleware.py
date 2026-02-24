@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -38,7 +39,7 @@ def _make_app(
 
 
 def _make_redis_mock() -> AsyncMock:
-    """Dict-backed async Redis mock for INCR/EXPIRE/TTL."""
+    """Dict-backed async Redis mock with pipeline support."""
     store: dict[str, int] = {}
     ttls: dict[str, int] = {}
 
@@ -48,12 +49,44 @@ def _make_redis_mock() -> AsyncMock:
         store[key] = store.get(key, 0) + 1
         return store[key]
 
-    async def _expire(key, ttl):
+    async def _expire(key, ttl, *, nx=False):
+        if nx and key in ttls:
+            return 0
         ttls[key] = ttl
+        return 1
 
     async def _ttl(key):
         return ttls.get(key, -1)
 
+    # Pipeline: collects commands, executes them in order
+    @asynccontextmanager
+    async def _pipeline():
+        commands: list[tuple] = []
+
+        pipe = MagicMock()
+
+        def _pipe_incr(key):
+            commands.append(("incr", key))
+
+        def _pipe_expire(key, ttl, *, nx=False):
+            commands.append(("expire", key, ttl, nx))
+
+        pipe.incr = _pipe_incr
+        pipe.expire = _pipe_expire
+
+        async def _execute():
+            results = []
+            for cmd in commands:
+                if cmd[0] == "incr":
+                    results.append(await _incr(cmd[1]))
+                elif cmd[0] == "expire":
+                    results.append(await _expire(cmd[1], cmd[2], nx=cmd[3]))
+            return results
+
+        pipe.execute = _execute
+        yield pipe
+
+    mock.pipeline = _pipeline
     mock.incr = AsyncMock(side_effect=_incr)
     mock.expire = AsyncMock(side_effect=_expire)
     mock.ttl = AsyncMock(side_effect=_ttl)
