@@ -585,10 +585,10 @@ class TestToolSchemas:
         schema = HttpResultsInput.model_json_schema()
         assert "output_spreadsheet_title" in schema["properties"]
 
-    def test_stdio_results_schema_includes_output_spreadsheet_title(self):
-        """StdioResultsInput schema includes output_spreadsheet_title for Google Sheets export."""
+    def test_stdio_results_schema_excludes_output_spreadsheet_title(self):
+        """StdioResultsInput must not expose output_spreadsheet_title (requires HTTP OAuth)."""
         schema = StdioResultsInput.model_json_schema()
-        assert "output_spreadsheet_title" in schema["properties"]
+        assert "output_spreadsheet_title" not in schema["properties"]
 
     @pytest.mark.parametrize(
         "tool_name,def_name",

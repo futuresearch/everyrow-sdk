@@ -125,8 +125,9 @@ async def _write_results_to_sheet(
 
     token = await get_google_token()
     async with GoogleSheetsClient(token) as client:
-        # Guard: check for existing sheets with the same title
-        existing = await client.list_spreadsheets(query=title, max_results=5)
+        # Best-effort duplicate guard (TOCTOU race is inherent to the
+        # Drive API — two concurrent creates can both pass this check).
+        existing = await client.list_spreadsheets(query=title, max_results=50)
         for f in existing:
             if f.get("name") == title:
                 raise ValueError(
@@ -1129,18 +1130,6 @@ async def everyrow_results_stdio(
                 text=f"Error retrieving results for task {task_id}. Please try again.",
             )
         ]
-
-    # ── Google Sheets output ─────────────────────────────────────
-    if params.output_spreadsheet_title:
-        try:
-            return await _write_results_to_sheet(df, params.output_spreadsheet_title)
-        except Exception as e:
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Failed to write results to Google Sheet: {e!r}",
-                )
-            ]
 
     output_file = Path(params.output_path)
     save_result_to_csv(df, output_file)
