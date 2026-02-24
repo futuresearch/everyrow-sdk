@@ -69,6 +69,11 @@ def _resolve_input(params) -> UUID | pd.DataFrame:
     return pd.DataFrame(params.data)
 
 
+def _input_source(params) -> str:
+    """Return a label describing which input field was used."""
+    return "artifact_id" if params.artifact_id else "data"
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,6 +131,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
             total=total,
+            input_source=_input_source(params),
         )
 
     return await create_tool_response(
@@ -199,6 +205,7 @@ async def everyrow_single_agent(
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
             total=1,
+            input_source="single_agent",
         )
 
     return await create_tool_response(
@@ -273,6 +280,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
             task_type=PublicTaskType.RANK,
             session_url=session_url,
             total=total,
+            input_source=_input_source(params),
         )
 
     return await create_tool_response(
@@ -353,6 +361,7 @@ async def everyrow_screen(
             task_type=PublicTaskType.SCREEN,
             session_url=session_url,
             total=total,
+            input_source=_input_source(params),
         )
 
     return await create_tool_response(
@@ -424,6 +433,7 @@ async def everyrow_dedupe(
             task_type=PublicTaskType.DEDUPE,
             session_url=session_url,
             total=total,
+            input_source=_input_source(params),
         )
 
     return await create_tool_response(
@@ -514,11 +524,14 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         )
         task_id = str(cohort_task.task_id)
         total = len(left_input) if isinstance(left_input, pd.DataFrame) else 0
+        left_src = "artifact_id" if params.left_artifact_id else "data"
+        right_src = "artifact_id" if params.right_artifact_id else "data"
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.MERGE,
             session_url=session_url,
             total=total,
+            input_source=f"left={left_src}, right={right_src}",
         )
 
     return await create_tool_response(
@@ -588,6 +601,7 @@ async def everyrow_forecast(
             task_type=PublicTaskType.FORECAST,
             session_url=session_url,
             total=total,
+            input_source=_input_source(params),
         )
 
     return await create_tool_response(
