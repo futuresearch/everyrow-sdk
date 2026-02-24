@@ -126,7 +126,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
         session_url=session_url,
         label=f"Submitted: {total} agents starting."
         if total
-        else "Submitted: agents starting.",
+        else "Submitted: agents starting (artifact).",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
@@ -275,7 +275,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         session_url=session_url,
         label=f"Submitted: {total} rows for ranking."
         if total
-        else "Submitted: rows for ranking.",
+        else "Submitted: artifact for ranking.",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
@@ -356,7 +356,7 @@ async def everyrow_screen(
         session_url=session_url,
         label=f"Submitted: {total} rows for screening."
         if total
-        else "Submitted: rows for screening.",
+        else "Submitted: artifact for screening.",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
@@ -428,7 +428,7 @@ async def everyrow_dedupe(
         session_url=session_url,
         label=f"Submitted: {total} rows for deduplication."
         if total
-        else "Submitted: rows for deduplication.",
+        else "Submitted: artifact for deduplication.",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
@@ -515,7 +515,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         session_url=session_url,
         label=f"Submitted: {total} left rows for merging."
         if total
-        else "Submitted: rows for merging.",
+        else "Submitted: artifacts for merging.",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
@@ -585,7 +585,7 @@ async def everyrow_forecast(
         session_url=session_url,
         label=f"Submitted: {total} rows for forecasting (6 research dimensions + dual forecaster per row)."
         if total
-        else "Submitted: rows for forecasting.",
+        else "Submitted: artifact for forecasting.",
         token=client.token,
         total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
