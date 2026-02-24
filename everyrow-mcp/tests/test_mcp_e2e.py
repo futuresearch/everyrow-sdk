@@ -54,10 +54,8 @@ def _http_state(fake_redis):
     with (
         override_settings(transport="streamable-http"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
-        patch(
-            "mcp.server.auth.middleware.auth_context.get_access_token",
-            _fake_access_token,
-        ),
+        patch("everyrow_mcp.tools.get_access_token", _fake_access_token),
+        patch("everyrow_mcp.tool_helpers.get_access_token", _fake_access_token),
     ):
         yield
 

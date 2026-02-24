@@ -25,6 +25,7 @@ from everyrow.ops import (
 )
 from everyrow.session import create_session, get_session_url, list_sessions
 from everyrow.task import cancel_task
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
@@ -84,10 +85,6 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
                 text="Access denied: task ownership could not be verified.",
             )
         ]
-
-    from mcp.server.auth.middleware.auth_context import (  # noqa: PLC0415
-        get_access_token,
-    )
 
     access_token = get_access_token()
     user_id = access_token.client_id if access_token else None
@@ -643,7 +640,7 @@ async def everyrow_forecast(
 async def everyrow_upload_data(
     params: UploadDataInput, ctx: EveryRowContext
 ) -> list[TextContent]:
-    """Upload data from a URL. Returns an artifact_id for use in processing tools.
+    """Upload data from a URL or local file. Returns an artifact_id for use in processing tools.
 
     Use this tool to ingest data before calling everyrow_agent, everyrow_screen,
     everyrow_rank, everyrow_dedupe, everyrow_merge, or everyrow_forecast.

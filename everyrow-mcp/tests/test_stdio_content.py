@@ -626,7 +626,7 @@ class TestHttpModeIncludesWidgets:
             patch.object(settings, "transport", Transport.HTTP),
             patch.object(redis_store, "get_redis_client", return_value=fake_redis),
             patch(
-                "mcp.server.auth.middleware.auth_context.get_access_token",
+                "everyrow_mcp.tool_helpers.get_access_token",
                 return_value=fake_token,
             ),
         ):

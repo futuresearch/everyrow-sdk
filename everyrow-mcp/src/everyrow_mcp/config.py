@@ -37,8 +37,13 @@ class Settings(BaseSettings):
 
     trust_proxy_headers: bool = Field(
         default=False,
-        description="Trust X-Forwarded-For and CF-Connecting-IP headers for client IP. "
-        "Enable only when behind a trusted reverse proxy (e.g. Cloudflare).",
+        description="Trust the header named by trusted_ip_header for client IP. "
+        "Enable only when behind a trusted reverse proxy.",
+    )
+    trusted_ip_header: str = Field(
+        default="X-Forwarded-For",
+        description="HTTP header containing the real client IP. "
+        "Use 'CF-Connecting-IP' behind Cloudflare, 'X-Forwarded-For' behind GKE/nginx.",
     )
 
     # HTTP-only settings — unused in stdio mode

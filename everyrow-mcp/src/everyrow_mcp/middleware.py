@@ -28,19 +28,17 @@ _SECURITY_HEADERS: list[tuple[bytes, bytes]] = [
 
 
 def get_client_ip(request: Request) -> str | None:
-    """Extract client IP, preferring proxy headers only when trusted.
+    """Extract client IP from the configured trusted header.
 
-    Only reads CF-Connecting-IP / X-Forwarded-For when
-    ``settings.trust_proxy_headers`` is True (i.e. running behind a known
-    reverse proxy like Cloudflare). Otherwise uses the direct connection IP.
+    Only reads the header named by ``settings.trusted_ip_header`` when
+    ``settings.trust_proxy_headers`` is True. For multi-value headers
+    like X-Forwarded-For, takes the first (leftmost) IP.
+    Otherwise uses the direct connection IP.
     """
     if settings.trust_proxy_headers:
-        cf_ip = request.headers.get("cf-connecting-ip")
-        if cf_ip:
-            return cf_ip.strip()
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
+        value = request.headers.get(settings.trusted_ip_header.lower())
+        if value:
+            return value.split(",")[0].strip()
     return request.client.host if request.client else None
 
 

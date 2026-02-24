@@ -24,6 +24,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 from everyrow.generated.types import Unset
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from mcp.types import TextContent
@@ -97,10 +98,6 @@ async def _submission_ui_json(
     # owner is recorded, so a silent failure here would lock the user out
     # of their own task.
     if settings.is_http:
-        from mcp.server.auth.middleware.auth_context import (  # noqa: PLC0415
-            get_access_token,
-        )
-
         access_token = get_access_token()
         if not access_token or not access_token.client_id:
             raise RuntimeError(
