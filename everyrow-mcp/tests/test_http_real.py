@@ -9,7 +9,7 @@ API calls to the everyrow backend. They exercise the full pipeline:
 Requirements:
     - EVERYROW_API_KEY must be set
     - RUN_INTEGRATION_TESTS=1
-    - Redis running on localhost:6379
+    - redis-server binary on PATH (auto-started by conftest)
 
 Run with: pytest tests/test_http_real.py -v -s
 """
@@ -27,7 +27,6 @@ from unittest.mock import patch
 import httpx
 import pandas as pd
 import pytest
-import redis.asyncio
 from everyrow.api_utils import create_client
 from starlette.applications import Starlette
 from starlette.routing import Route
@@ -49,34 +48,15 @@ pytestmark = pytest.mark.skipif(
     reason="Integration tests are skipped by default. Set RUN_INTEGRATION_TESTS=1 to run.",
 )
 
-REDIS_TEST_DB = 15
-
-
 # ── Fixtures ───────────────────────────────────────────────────
 
 
 @pytest.fixture
-async def real_redis():
-    """Connect to real Redis on db=15, flush before/after each test."""
-    client = redis.asyncio.Redis(
-        host="localhost", port=6379, db=REDIS_TEST_DB, decode_responses=True
-    )
-    try:
-        await client.ping()
-    except redis.ConnectionError:
-        pytest.skip("Redis not reachable on localhost:6379")
-    await client.flushdb()
-    yield client
-    await client.flushdb()
-    await client.aclose()
-
-
-@pytest.fixture
-def _http_mode(real_redis):
-    """Configure settings for HTTP mode with real Redis."""
+def _http_mode(fake_redis):
+    """Configure settings for HTTP mode with the shared test Redis."""
     with (
         override_settings(transport="streamable-http"),
-        patch.object(redis_store, "get_redis_client", return_value=real_redis),
+        patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield
 

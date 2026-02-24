@@ -80,10 +80,14 @@ class SupabaseTokenVerifier(TokenVerifier):
             )
 
     def _decode_jwt(self, token: str, signing_key) -> dict[str, Any]:
+        # Use the algorithm from the JWKS key (e.g. ES256, RS256) rather
+        # than hardcoding, since Supabase may use any asymmetric algorithm.
+        jwk_data = getattr(signing_key, "_jwk_data", None) or {}
+        alg = jwk_data.get("alg", "RS256")
         return pyjwt.decode(
             token,
             signing_key.key,
-            algorithms=["RS256"],
+            algorithms=[alg],
             issuer=self._issuer,
             audience=self._audience,
             options={"require": ["exp", "sub", "iss", "aud"]},
@@ -366,7 +370,7 @@ class EveryRowAuthProvider(
             value=request.path_params.get("state"),
             max_age=settings.pending_auth_ttl,
             httponly=True,
-            samesite="strict",
+            samesite="lax",
             secure=True,
             path="/auth/callback",
         )
@@ -405,7 +409,7 @@ class EveryRowAuthProvider(
             "mcp_auth_state",
             path="/auth/callback",
             httponly=True,
-            samesite="strict",
+            samesite="lax",
             secure=True,
         )
         return response

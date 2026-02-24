@@ -78,6 +78,7 @@ def verifier(rsa_keypair, mock_redis):
     mock_signing_key.key = public_key.public_bytes(
         Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
     )
+    mock_signing_key._jwk_data = {"alg": "RS256"}
     verifier._jwks_client = MagicMock()
     verifier._jwks_client.get_signing_key_from_jwt = MagicMock(
         return_value=mock_signing_key
@@ -194,17 +195,15 @@ class TestSupabaseTokenVerifier:
             assert v._issuer == "https://my-project.supabase.co/auth/v1"
 
     @pytest.mark.asyncio
-    async def test_algorithm_from_header_not_private_attr(
-        self, rsa_keypair, mock_redis
-    ):
-        """verify_token reads alg from the JWT header, not signing_key._algorithm."""
+    async def test_algorithm_falls_back_to_rs256(self, rsa_keypair, mock_redis):
+        """verify_token falls back to RS256 when _jwk_data has no alg."""
         private_key, public_key = rsa_keypair
         token = _make_jwt(private_key)
 
         verifier = SupabaseTokenVerifier(SUPABASE_URL, redis=mock_redis)
 
-        # Signing key with NO _algorithm attr
-        mock_signing_key = MagicMock(spec=[])  # empty spec = no attributes
+        # Signing key with no _jwk_data attribute
+        mock_signing_key = MagicMock(spec=[])
         mock_signing_key.key = public_key.public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
@@ -228,6 +227,7 @@ class TestSupabaseTokenVerifier:
         mock_signing_key.key = public_key.public_bytes(
             Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
         )
+        mock_signing_key._jwk_data = {"alg": "RS256"}
         verifier._jwks_client = MagicMock()
         verifier._jwks_client.get_signing_key_from_jwt = MagicMock(
             return_value=mock_signing_key
