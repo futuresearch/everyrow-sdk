@@ -39,7 +39,8 @@ services:
       REDIS_DB: "13"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       EVERYROW_API_URL: "https://everyrow.io/api/v0"
-      TRUST_PROXY_HEADERS: "true"  # Behind Cloudflare tunnel
+      TRUST_PROXY_HEADERS: "true"
+      TRUSTED_IP_HEADER: "CF-Connecting-IP"  # Cloudflare tunnel
     deploy:
       resources:
         limits:
