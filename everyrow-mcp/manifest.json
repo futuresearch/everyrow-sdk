@@ -64,6 +64,10 @@
     {
       "name": "everyrow_results",
       "description": "Retrieve results from a completed everyrow task and save them to a CSV."
+    },
+    {
+      "name": "everyrow_cancel",
+      "description": "Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."
     }
   ],
   "user_config": {

@@ -334,3 +334,11 @@ class ResultsInput(BaseModel):
     def validate_output(cls, v: str) -> str:
         validate_csv_output_path(v)
         return v
+
+
+class CancelInput(BaseModel):
+    """Input for cancelling a running task."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task_id: str = Field(..., description="The task ID to cancel.")

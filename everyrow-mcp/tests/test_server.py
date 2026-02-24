@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import pandas as pd
 import pytest
+from everyrow.constants import EveryrowError
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_result_response import TaskResultResponse
@@ -24,6 +25,7 @@ from pydantic import ValidationError
 
 from everyrow_mcp.server import (
     AgentInput,
+    CancelInput,
     MergeInput,
     ProgressInput,
     RankInput,
@@ -32,6 +34,7 @@ from everyrow_mcp.server import (
     SingleAgentInput,
     _schema_to_model,
     everyrow_agent,
+    everyrow_cancel,
     everyrow_progress,
     everyrow_results,
     everyrow_single_agent,
@@ -616,3 +619,120 @@ class TestResults:
         output_df = pd.read_csv(output_file)
         assert len(output_df) == 2
         assert list(output_df.columns) == ["name", "answer"]
+
+
+class TestCancel:
+    """Tests for everyrow_cancel."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_running_task(self):
+        """Test cancelling a running task returns success message."""
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
+        ):
+            mock_cancel.return_value = None
+
+            params = CancelInput(task_id=task_id)
+            result = await everyrow_cancel(params)
+
+        text = result[0].text
+        assert task_id in text
+        assert "cancelled" in text.lower()
+        mock_clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_already_terminated_task(self):
+        """Test cancelling an already terminated task clears state and returns an error message."""
+
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
+        ):
+            mock_cancel.side_effect = EveryrowError(
+                f"Task {task_id} is already COMPLETED"
+            )
+
+            params = CancelInput(task_id=task_id)
+            result = await everyrow_cancel(params)
+
+        text = result[0].text
+        assert task_id in text
+        assert "Error" in text
+        mock_clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_task_not_found(self):
+        """Test cancelling a nonexistent task clears state and returns an error message."""
+
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
+        ):
+            mock_cancel.side_effect = EveryrowError("Task not found")
+
+            params = CancelInput(task_id=task_id)
+            result = await everyrow_cancel(params)
+
+        text = result[0].text
+        assert "Error" in text
+        assert "not found" in text.lower()
+        mock_clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_api_error(self):
+        """Test cancel with unexpected error returns error message."""
+        mock_client = _make_mock_client()
+        task_id = str(uuid4())
+
+        with (
+            patch("everyrow_mcp.app._client", mock_client),
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
+        ):
+            mock_cancel.side_effect = RuntimeError("Network failure")
+
+            params = CancelInput(task_id=task_id)
+            result = await everyrow_cancel(params)
+
+        text = result[0].text
+        assert "Error" in text
+        assert "Network failure" in text
+
+    @pytest.mark.asyncio
+    async def test_cancel_without_client(self):
+        """Test cancel when MCP server is not initialized."""
+        with patch("everyrow_mcp.app._client", None):
+            params = CancelInput(task_id=str(uuid4()))
+            result = await everyrow_cancel(params)
+
+        assert "not initialized" in result[0].text
+
+    def test_cancel_input_validation(self):
+        """Test CancelInput strips whitespace and forbids extra fields."""
+        # Whitespace stripping
+        inp = CancelInput(task_id="  abc-123  ")
+        assert inp.task_id == "abc-123"
+
+        # Extra fields forbidden
+        with pytest.raises(ValidationError):
+            CancelInput(task_id="abc", extra_field="x")  # type: ignore[call-arg]

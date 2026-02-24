@@ -16,6 +16,7 @@ from everyrow_mcp.app import (  # noqa: F401
 )
 from everyrow_mcp.models import (  # noqa: F401
     AgentInput,
+    CancelInput,
     DedupeInput,
     MergeInput,
     ProgressInput,
@@ -27,6 +28,7 @@ from everyrow_mcp.models import (  # noqa: F401
 )
 from everyrow_mcp.tools import (  # noqa: F401
     everyrow_agent,
+    everyrow_cancel,
     everyrow_dedupe,
     everyrow_merge,
     everyrow_progress,

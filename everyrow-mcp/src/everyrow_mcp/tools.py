@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pandas as pd
 from everyrow.api_utils import handle_response
+from everyrow.constants import EveryrowError
 from everyrow.generated.api.tasks import (
     get_task_result_tasks_task_id_result_get,
     get_task_status_tasks_task_id_status_get,
@@ -28,6 +29,7 @@ from everyrow.ops import (
     single_agent_async,
 )
 from everyrow.session import create_session, get_session_url
+from everyrow.task import cancel_task
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
@@ -40,6 +42,7 @@ from everyrow_mcp.app import (
 )
 from everyrow_mcp.models import (
     AgentInput,
+    CancelInput,
     DedupeInput,
     ForecastInput,
     MergeInput,
@@ -823,3 +826,47 @@ async def everyrow_results(params: ResultsInput) -> list[TextContent]:
 
     except Exception as e:
         return [TextContent(type="text", text=f"Error retrieving results: {e!r}")]
+
+
+@mcp.tool(
+    name="everyrow_cancel",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Cancel a Running Task",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_cancel(params: CancelInput) -> list[TextContent]:
+    """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    if _app._client is None:
+        return [TextContent(type="text", text="Error: MCP server not initialized.")]
+    client = _app._client
+
+    task_id = params.task_id
+    try:
+        await cancel_task(task_id=UUID(task_id), client=client)
+        _clear_task_state()
+        return [
+            TextContent(
+                type="text",
+                text=f"Cancelled task {task_id}.",
+            )
+        ]
+    except EveryrowError as e:
+        _clear_task_state()
+        return [
+            TextContent(
+                type="text",
+                text=f"Error cancelling task {task_id}: {e!r}",
+            )
+        ]
+    except Exception as e:
+        return [
+            TextContent(
+                type="text",
+                text=f"Error cancelling task {task_id}: {e!r}",
+            )
+        ]
