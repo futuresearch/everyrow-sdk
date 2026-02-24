@@ -82,9 +82,7 @@ class EveryrowTask[T: BaseModel]:
             )
         return await get_task_status(self.task_id, client)
 
-    async def cancel(
-        self, client: AuthenticatedClient | None = None
-    ) -> None:
+    async def cancel(self, client: AuthenticatedClient | None = None) -> None:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before cancelling")
         client = client or self._client
@@ -188,9 +186,7 @@ async def await_task_completion(
     return status_response
 
 
-async def cancel_task(
-    task_id: UUID, client: AuthenticatedClient
-) -> None:
+async def cancel_task(task_id: UUID, client: AuthenticatedClient) -> None:
     """Cancel a running task by its ID.
 
     Args:
@@ -308,9 +304,7 @@ class MergeTask:
             )
         return await get_task_status(self.task_id, client)
 
-    async def cancel(
-        self, client: AuthenticatedClient | None = None
-    ) -> None:
+    async def cancel(self, client: AuthenticatedClient | None = None) -> None:
         if self.task_id is None:
             raise EveryrowError("Task must be submitted before cancelling")
         client = client or self._client
