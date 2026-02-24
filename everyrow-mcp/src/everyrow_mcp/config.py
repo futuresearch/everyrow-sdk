@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # Upload settings (HTTP mode only)
     upload_secret: str = Field(
         default="",
-        description="HMAC-SHA256 secret for signing upload URLs. Auto-generated if empty.",
+        description="HMAC-SHA256 secret for signing upload URLs. Required in HTTP mode.",
     )
     upload_url_ttl: int = Field(
         default=300,

@@ -59,7 +59,7 @@ from everyrow_mcp.tool_helpers import (
     create_tool_response,
     write_initial_task_state,
 )
-from everyrow_mcp.utils import _is_url, fetch_csv_from_url, save_result_to_csv
+from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -621,7 +621,7 @@ async def everyrow_upload_data(
     """
     client = _get_client(ctx)
 
-    if _is_url(params.source):
+    if is_url(params.source):
         df = await fetch_csv_from_url(params.source)
     else:
         df = pd.read_csv(params.source)

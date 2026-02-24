@@ -6,9 +6,8 @@ import pandas as pd
 import pytest
 
 from everyrow_mcp.utils import (
-    _is_url,
     _normalise_google_sheets_url,
-    load_data,
+    is_url,
     resolve_output_path,
     save_result_to_csv,
     validate_csv_path,
@@ -101,61 +100,6 @@ class TestResolveOutputPath:
             assert result == tmp_path / f"{prefix}_test.csv"
 
 
-class TestLoadData:
-    """Tests for load_data (internal helper, still used by upload_data)."""
-
-    def test_load_from_csv_file(self, tmp_path: Path):
-        """Test loading from a CSV file path."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n3,4\n")
-        df = load_data(input_csv=str(csv_file))
-        assert list(df.columns) == ["a", "b"]
-        assert len(df) == 2
-
-    def test_load_from_csv_string(self):
-        """Test loading from an inline CSV string."""
-        df = load_data(data="name,score\nAlice,10\nBob,20\n")
-        assert list(df.columns) == ["name", "score"]
-        assert len(df) == 2
-
-    def test_load_from_json_list(self):
-        """Test loading from a list of dicts."""
-        records = [{"x": 1, "y": "a"}, {"x": 2, "y": "b"}]
-        df = load_data(data=records)
-        assert list(df.columns) == ["x", "y"]
-        assert len(df) == 2
-
-    def test_load_from_json_string(self):
-        """Test loading from a JSON array string (auto-detected)."""
-        df = load_data(data='[{"col": "val1"}, {"col": "val2"}]')
-        assert list(df.columns) == ["col"]
-        assert len(df) == 2
-
-    def test_rejects_no_source(self):
-        """Test that no source raises ValueError."""
-        with pytest.raises(ValueError, match="Provide exactly one of"):
-            load_data()
-
-    def test_rejects_both_sources(self, tmp_path: Path):
-        """Test that both sources raises ValueError."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a\n1\n")
-        with pytest.raises(ValueError, match="Provide exactly one of"):
-            load_data(data="a\n1\n", input_csv=str(csv_file))
-
-    def test_empty_json_list_raises(self):
-        """Test that empty list raises ValueError."""
-        with pytest.raises(ValueError, match="empty DataFrame"):
-            load_data(data=[])
-
-    def test_json_string_fallback_to_csv(self):
-        """A string starting with '[' that isn't valid JSON falls back to CSV."""
-        # This is a CSV string that happens to start with [
-        # It will fail JSON parse and fall through to CSV
-        df = load_data(data="[col]\nval1\nval2\n")
-        assert len(df) == 2
-
-
 class TestSaveResultToCsv:
     """Tests for save_result_to_csv."""
 
@@ -174,19 +118,19 @@ class TestSaveResultToCsv:
 
 
 class TestIsUrl:
-    """Tests for _is_url."""
+    """Tests for is_url."""
 
     def test_http_url(self):
-        assert _is_url("http://example.com") is True
+        assert is_url("http://example.com") is True
 
     def test_https_url(self):
-        assert _is_url("https://example.com/data.csv") is True
+        assert is_url("https://example.com/data.csv") is True
 
     def test_local_path(self):
-        assert _is_url("/Users/test/data.csv") is False
+        assert is_url("/Users/test/data.csv") is False
 
     def test_relative_path(self):
-        assert _is_url("data.csv") is False
+        assert is_url("data.csv") is False
 
 
 class TestValidateUrl:

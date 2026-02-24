@@ -18,7 +18,7 @@ from pydantic import (
 )
 
 from everyrow_mcp.config import settings
-from everyrow_mcp.utils import _is_url, validate_csv_path, validate_url
+from everyrow_mcp.utils import is_url, validate_csv_path, validate_url
 
 JSON_TYPE_MAP = {
     "string": str,
@@ -429,7 +429,7 @@ class UploadDataInput(BaseModel):
     @field_validator("source")
     @classmethod
     def validate_source(cls, v: str) -> str:
-        if _is_url(v):
+        if is_url(v):
             return validate_url(v)
         # Local path
         if settings.is_http:
