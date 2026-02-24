@@ -6,11 +6,13 @@ import pandas as pd
 import pytest
 
 from everyrow_mcp.utils import (
-    load_data,
+    _normalise_google_sheets_url,
+    is_url,
     resolve_output_path,
     save_result_to_csv,
     validate_csv_path,
     validate_output_path,
+    validate_url,
 )
 
 
@@ -98,61 +100,6 @@ class TestResolveOutputPath:
             assert result == tmp_path / f"{prefix}_test.csv"
 
 
-class TestLoadData:
-    """Tests for load_data."""
-
-    def test_load_from_csv_file(self, tmp_path: Path):
-        """Test loading from a CSV file path."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n3,4\n")
-        df = load_data(input_csv=str(csv_file))
-        assert list(df.columns) == ["a", "b"]
-        assert len(df) == 2
-
-    def test_load_from_csv_string(self):
-        """Test loading from an inline CSV string."""
-        df = load_data(data="name,score\nAlice,10\nBob,20\n")
-        assert list(df.columns) == ["name", "score"]
-        assert len(df) == 2
-
-    def test_load_from_json_list(self):
-        """Test loading from a list of dicts."""
-        records = [{"x": 1, "y": "a"}, {"x": 2, "y": "b"}]
-        df = load_data(data=records)
-        assert list(df.columns) == ["x", "y"]
-        assert len(df) == 2
-
-    def test_load_from_json_string(self):
-        """Test loading from a JSON array string (auto-detected)."""
-        df = load_data(data='[{"col": "val1"}, {"col": "val2"}]')
-        assert list(df.columns) == ["col"]
-        assert len(df) == 2
-
-    def test_rejects_no_source(self):
-        """Test that no source raises ValueError."""
-        with pytest.raises(ValueError, match="Provide exactly one of"):
-            load_data()
-
-    def test_rejects_both_sources(self, tmp_path: Path):
-        """Test that both sources raises ValueError."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a\n1\n")
-        with pytest.raises(ValueError, match="Provide exactly one of"):
-            load_data(data="a\n1\n", input_csv=str(csv_file))
-
-    def test_empty_json_list_raises(self):
-        """Test that empty list raises ValueError."""
-        with pytest.raises(ValueError, match="empty DataFrame"):
-            load_data(data=[])
-
-    def test_json_string_fallback_to_csv(self):
-        """A string starting with '[' that isn't valid JSON falls back to CSV."""
-        # This is a CSV string that happens to start with [
-        # It will fail JSON parse and fall through to CSV
-        df = load_data(data="[col]\nval1\nval2\n")
-        assert len(df) == 2
-
-
 class TestSaveResultToCsv:
     """Tests for save_result_to_csv."""
 
@@ -168,3 +115,79 @@ class TestSaveResultToCsv:
         loaded = pd.read_csv(output_path)
         assert list(loaded.columns) == ["a", "b"]
         assert len(loaded) == 3
+
+
+class TestIsUrl:
+    """Tests for is_url."""
+
+    def test_http_url(self):
+        assert is_url("http://example.com") is True
+
+    def test_https_url(self):
+        assert is_url("https://example.com/data.csv") is True
+
+    def test_local_path(self):
+        assert is_url("/Users/test/data.csv") is False
+
+    def test_relative_path(self):
+        assert is_url("data.csv") is False
+
+
+class TestValidateUrl:
+    """Tests for validate_url."""
+
+    def test_valid_https(self):
+        url = "https://example.com/data.csv"
+        assert validate_url(url) == url
+
+    def test_valid_http(self):
+        url = "http://example.com/data.csv"
+        assert validate_url(url) == url
+
+    def test_rejects_ftp(self):
+        with pytest.raises(ValueError, match="http or https"):
+            validate_url("ftp://example.com/data.csv")
+
+    def test_rejects_no_host(self):
+        with pytest.raises(ValueError, match="no host"):
+            validate_url("https://")
+
+
+class TestNormaliseGoogleSheetsUrl:
+    """Tests for _normalise_google_sheets_url."""
+
+    def test_edit_url_to_export(self):
+        url = "https://docs.google.com/spreadsheets/d/1abc/edit"
+        result = _normalise_google_sheets_url(url)
+        assert result == "https://docs.google.com/spreadsheets/d/1abc/export?format=csv"
+
+    def test_edit_url_with_gid(self):
+        url = "https://docs.google.com/spreadsheets/d/1abc/edit#gid=123"
+        result = _normalise_google_sheets_url(url)
+        assert (
+            result
+            == "https://docs.google.com/spreadsheets/d/1abc/export?format=csv&gid=123"
+        )
+
+    def test_already_export_url(self):
+        url = "https://docs.google.com/spreadsheets/d/1abc/export?format=csv"
+        result = _normalise_google_sheets_url(url)
+        assert result == url
+
+    def test_pub_url_to_export(self):
+        url = "https://docs.google.com/spreadsheets/d/1abc/pub?output=html"
+        result = _normalise_google_sheets_url(url)
+        assert result == "https://docs.google.com/spreadsheets/d/1abc/export?format=csv"
+
+    def test_pub_url_with_gid(self):
+        url = "https://docs.google.com/spreadsheets/d/1abc/pub?gid=456&single=true"
+        result = _normalise_google_sheets_url(url)
+        assert (
+            result
+            == "https://docs.google.com/spreadsheets/d/1abc/export?format=csv&gid=456"
+        )
+
+    def test_non_google_url_unchanged(self):
+        url = "https://example.com/data.csv"
+        result = _normalise_google_sheets_url(url)
+        assert result == url

@@ -285,8 +285,16 @@ def write_initial_task_state(
     task_type: PublicTaskType,
     session_url: str,
     total: int,
+    input_source: str = "unknown",
 ) -> None:
     """Write initial task state file when a task is first submitted."""
+    logger.info(
+        "Task %s (%s): input_source=%s, total=%d",
+        task_id,
+        task_type.value,
+        input_source,
+        total,
+    )
     if settings.is_http:
         return
     _write_task_state_file(

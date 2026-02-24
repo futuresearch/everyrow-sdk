@@ -1,9 +1,11 @@
 """Input models and schema helpers for everyrow MCP tools."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
+import pandas as pd
 from jsonschema import SchemaError
 from jsonschema.validators import validator_for
 from pydantic import (
@@ -16,7 +18,7 @@ from pydantic import (
 )
 
 from everyrow_mcp.config import settings
-from everyrow_mcp.utils import validate_csv_path
+from everyrow_mcp.utils import is_url, validate_csv_path, validate_url
 
 JSON_TYPE_MAP = {
     "string": str,
@@ -26,6 +28,11 @@ JSON_TYPE_MAP = {
     "array": list,
     "object": dict,
 }
+
+
+class InputDataMode(StrEnum):
+    dataframe = "DATAFRAME"
+    artifact_id = "ARTIFACT_ID"
 
 
 def _validate_response_schema(schema: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -134,47 +141,61 @@ def _check_exactly_one(
 class _SingleSourceInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    input_csv: str | None = Field(
+    artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to CSV file (local/stdio mode only).",
+        description="Artifact ID (UUID) from upload_data or request_upload_url.",
     )
-    data: str | list[dict[str, Any]] | None = Field(
+    data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data — CSV string or JSON array of objects.",
+        description="Inline data as a list of row objects.",
     )
 
-    @field_validator("input_csv")
+    @field_validator("artifact_id")
     @classmethod
-    def validate_input_csv(cls, v: str | None) -> str | None:
+    def validate_artifact_id(cls, v: str | None) -> str | None:
         if v is not None:
-            validate_csv_path(v)
+            try:
+                UUID(v)
+            except ValueError as exc:
+                raise ValueError(f"artifact_id must be a valid UUID: {v}") from exc
         return v
 
     @field_validator("data")
     @classmethod
     def validate_data_size(
-        cls, v: str | list[dict[str, Any]] | None
-    ) -> str | list[dict[str, Any]] | None:
-        if v is None:
-            return v
-        if isinstance(v, str) and len(v) > settings.max_inline_data_bytes:
-            raise ValueError(
-                f"Inline data exceeds {settings.max_inline_data_bytes // (1024 * 1024)} MB limit"
-            )
-        if isinstance(v, list) and len(v) > settings.max_inline_rows:
-            raise ValueError(
-                f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
-            )
+        cls, v: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
     def check_input_source(self):
         _check_exactly_one(
-            values=(self.input_csv, self.data),
-            field_names=("input_csv", "data"),
+            values=(self.artifact_id, self.data),
+            field_names=("artifact_id", "data"),
             label="Input",
         )
         return self
+
+    @property
+    def _input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.artifact_id is not None:
+            return UUID(self.artifact_id)
+        return pd.DataFrame(self.data)
 
 
 class AgentInput(_SingleSourceInput):
@@ -276,23 +297,23 @@ class MergeInput(BaseModel):
     )
 
     # LEFT table
-    left_csv: str | None = Field(
+    left_artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to the left CSV (local/stdio mode only).",
+        description="Artifact ID (UUID) for the left table, from upload_data or request_upload_url.",
     )
-    left_data: str | list[dict[str, Any]] | None = Field(
+    left_data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data for the left table — CSV string or JSON array of objects.",
+        description="Inline data for the left table as a list of row objects.",
     )
 
     # RIGHT table
-    right_csv: str | None = Field(
+    right_artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to the right CSV (local/stdio mode only).",
+        description="Artifact ID (UUID) for the right table, from upload_data or request_upload_url.",
     )
-    right_data: str | list[dict[str, Any]] | None = Field(
+    right_data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data for the right table — CSV string or JSON array of objects.",
+        description="Inline data for the right table as a list of row objects.",
     )
 
     merge_on_left: str | None = Field(
@@ -313,26 +334,71 @@ class MergeInput(BaseModel):
         description="Relationship type: many_to_one (default) or one_to_one.",
     )
 
-    @field_validator("left_csv", "right_csv")
+    @field_validator("left_artifact_id", "right_artifact_id")
     @classmethod
-    def validate_csv_paths(cls, v: str | None) -> str | None:
+    def validate_artifact_ids(cls, v: str | None) -> str | None:
         if v is not None:
-            validate_csv_path(v)
+            try:
+                UUID(v)
+            except ValueError as exc:
+                raise ValueError(f"artifact_id must be a valid UUID: {v}") from exc
+        return v
+
+    @field_validator("left_data", "right_data")
+    @classmethod
+    def validate_data_size(
+        cls, v: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
     def check_sources(self) -> "MergeInput":
         _check_exactly_one(
-            values=(self.left_csv, self.left_data),
-            field_names=("left_csv", "left_data"),
+            values=(self.left_artifact_id, self.left_data),
+            field_names=("left_artifact_id", "left_data"),
             label="Left table",
         )
         _check_exactly_one(
-            values=(self.right_csv, self.right_data),
-            field_names=("right_csv", "right_data"),
+            values=(self.right_artifact_id, self.right_data),
+            field_names=("right_artifact_id", "right_data"),
             label="Right table",
         )
         return self
+
+    @property
+    def _left_input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.left_artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _left_aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.left_artifact_id is not None:
+            return UUID(self.left_artifact_id)
+        return pd.DataFrame(self.left_data)
+
+    @property
+    def _right_input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.right_artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _right_aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.right_artifact_id is not None:
+            return UUID(self.right_artifact_id)
+        return pd.DataFrame(self.right_data)
 
 
 class ForecastInput(_SingleSourceInput):
@@ -346,6 +412,33 @@ class ForecastInput(_SingleSourceInput):
         "(e.g. 'Focus on EU regulatory sources' or 'Assume resolution by end of 2027'). "
         "Leave empty when the rows are self-contained.",
     )
+
+
+class UploadDataInput(BaseModel):
+    """Input for the upload_data tool."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    source: str = Field(
+        ...,
+        description="Data source: http(s) URL (Google Sheets/Drive supported) "
+        "or absolute local file path (stdio mode only).",
+        min_length=1,
+    )
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        if is_url(v):
+            return validate_url(v)
+        # Local path
+        if settings.is_http:
+            raise ValueError(
+                "Local file paths are not supported in HTTP mode. "
+                "Use a URL or request_upload_url instead."
+            )
+        validate_csv_path(v)
+        return v
 
 
 class SingleAgentInput(BaseModel):

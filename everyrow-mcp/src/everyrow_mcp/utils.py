@@ -1,11 +1,104 @@
 """Utility functions for the everyrow MCP server."""
 
 import json
+import re
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 import pandas as pd
+
+
+def is_url(value: str) -> bool:
+    """Check if a string looks like an HTTP(S) URL."""
+    return value.startswith("http://") or value.startswith("https://")
+
+
+def validate_url(url: str) -> str:
+    """Validate and normalise an HTTP(S) URL.
+
+    Returns the URL unchanged (after basic validation).
+
+    Raises:
+        ValueError: If the URL scheme is not http/https or the URL has no host.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"URL must use http or https scheme: {url}")
+    if not parsed.netloc:
+        raise ValueError(f"URL has no host: {url}")
+    return url
+
+
+def _normalise_google_sheets_url(url: str) -> str:
+    """Convert a Google Sheets URL to its CSV export variant.
+
+    Handles:
+    - ``/edit...`` → ``/export?format=csv``
+    - ``/pub...`` → ``/export?format=csv``
+    - Already has ``/export?format=csv`` → unchanged
+    """
+    if "docs.google.com/spreadsheets" not in url:
+        return url
+
+    # Already an export URL
+    if "/export" in url and "format=csv" in url:
+        return url
+
+    # /edit, /pub, or bare doc URL → /export?format=csv
+    match = re.match(r"(https://docs\.google\.com/spreadsheets/d/[^/]+)", url)
+    if match:
+        base = match.group(1)
+        # Extract gid if present
+        gid_match = re.search(r"gid=(\d+)", url)
+        if gid_match:
+            return f"{base}/export?format=csv&gid={gid_match.group(1)}"
+        return f"{base}/export?format=csv"
+
+    return url
+
+
+async def fetch_csv_from_url(url: str) -> pd.DataFrame:
+    """Fetch CSV data from a URL and return a DataFrame.
+
+    Automatically normalises Google Sheets URLs to their CSV export endpoint.
+
+    Raises:
+        ValueError: If the response cannot be parsed as CSV.
+        httpx.HTTPStatusError: On non-2xx responses.
+    """
+    url = _normalise_google_sheets_url(url)
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "")
+
+    # Try CSV first
+    try:
+        df = pd.read_csv(StringIO(response.text))
+        if df.empty:
+            raise ValueError(f"URL returned empty CSV data (headers only): {url}")
+        return df
+    except ValueError:
+        raise
+    except Exception:
+        pass
+
+    # Try JSON array
+    try:
+        data = json.loads(response.text)
+        if isinstance(data, list) and data:
+            return pd.DataFrame(data)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    raise ValueError(
+        f"Could not parse response from {url} as CSV or JSON. "
+        f"Content-Type: {content_type}"
+    )
 
 
 def validate_csv_path(path: str) -> None:
@@ -107,61 +200,6 @@ def resolve_output_path(output_path: str, input_path: str, prefix: str) -> Path:
 
     input_name = Path(input_path).stem
     return out / f"{prefix}_{input_name}.csv"
-
-
-def load_data(
-    *,
-    data: str | list[dict[str, Any]] | None = None,
-    input_csv: str | None = None,
-) -> pd.DataFrame:
-    """Load tabular data from inline data or a local CSV file path.
-
-    Exactly one of ``data`` or ``input_csv`` must be provided.
-
-    Args:
-        data: Inline data — either a CSV string or a JSON array of objects
-              (``list[dict]``).  When a string starting with ``[`` is passed it
-              is parsed as JSON first; otherwise it is treated as CSV.
-        input_csv: Absolute path to a CSV file on disk (stdio mode only).
-
-    Returns:
-        DataFrame with the loaded data.
-
-    Raises:
-        ValueError: If no source or multiple sources are provided, or if data is empty.
-    """
-    sources = sum(1 for s in (data, input_csv) if s is not None)
-    if sources != 1:
-        raise ValueError("Provide exactly one of data, input_csv.")
-
-    if input_csv:
-        return pd.read_csv(input_csv)
-
-    # data is not None at this point
-    if isinstance(data, list):
-        df = pd.DataFrame(data)
-        if df.empty:
-            raise ValueError("data produced an empty DataFrame.")
-        return df
-
-    # str — auto-detect JSON array vs CSV
-    assert isinstance(data, str)
-    stripped = data.strip()
-    if stripped.startswith("["):
-        try:
-            parsed = json.loads(stripped)
-            if isinstance(parsed, list):
-                df = pd.DataFrame(parsed)
-                if df.empty:
-                    raise ValueError("data produced an empty DataFrame.")
-                return df
-        except json.JSONDecodeError:
-            pass  # fall through to CSV
-
-    df = pd.read_csv(StringIO(data))
-    if df.empty:
-        raise ValueError("data produced an empty DataFrame.")
-    return df
 
 
 def save_result_to_csv(df: pd.DataFrame, path: Path) -> None:
