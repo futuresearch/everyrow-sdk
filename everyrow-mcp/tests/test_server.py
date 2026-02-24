@@ -632,7 +632,9 @@ class TestCancel:
         with (
             patch("everyrow_mcp.app._client", mock_client),
             patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
-            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
         ):
             mock_cancel.return_value = None
 
@@ -646,7 +648,7 @@ class TestCancel:
 
     @pytest.mark.asyncio
     async def test_cancel_already_terminated_task(self):
-        """Test cancelling an already terminated task returns an error message."""
+        """Test cancelling an already terminated task clears state and returns an error message."""
         from everyrow.constants import EveryrowError
 
         mock_client = _make_mock_client()
@@ -655,9 +657,13 @@ class TestCancel:
         with (
             patch("everyrow_mcp.app._client", mock_client),
             patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
-            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
         ):
-            mock_cancel.side_effect = EveryrowError(f"Task {task_id} is already COMPLETED")
+            mock_cancel.side_effect = EveryrowError(
+                f"Task {task_id} is already COMPLETED"
+            )
 
             params = CancelInput(task_id=task_id)
             result = await everyrow_cancel(params)
@@ -665,11 +671,11 @@ class TestCancel:
         text = result[0].text
         assert task_id in text
         assert "Error" in text
-        mock_clear.assert_not_called()
+        mock_clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cancel_task_not_found(self):
-        """Test cancelling a nonexistent task returns an error message."""
+        """Test cancelling a nonexistent task clears state and returns an error message."""
         from everyrow.constants import EveryrowError
 
         mock_client = _make_mock_client()
@@ -677,7 +683,10 @@ class TestCancel:
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
-            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
+            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
         ):
             mock_cancel.side_effect = EveryrowError("Task not found")
 
@@ -687,6 +696,7 @@ class TestCancel:
         text = result[0].text
         assert "Error" in text
         assert "not found" in text.lower()
+        mock_clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cancel_api_error(self):
@@ -696,7 +706,9 @@ class TestCancel:
 
         with (
             patch("everyrow_mcp.app._client", mock_client),
-            patch("everyrow_mcp.tools.cancel_task", new_callable=AsyncMock) as mock_cancel,
+            patch(
+                "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
+            ) as mock_cancel,
         ):
             mock_cancel.side_effect = RuntimeError("Network failure")
 

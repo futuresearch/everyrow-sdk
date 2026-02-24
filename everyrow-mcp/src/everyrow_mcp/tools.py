@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pandas as pd
 from everyrow.api_utils import handle_response
+from everyrow.constants import EveryrowError
 from everyrow.generated.api.tasks import (
     get_task_result_tasks_task_id_result_get,
     get_task_status_tasks_task_id_status_get,
@@ -778,6 +779,14 @@ async def everyrow_cancel(params: CancelInput) -> list[TextContent]:
             TextContent(
                 type="text",
                 text=f"Cancelled task {task_id}.",
+            )
+        ]
+    except EveryrowError as e:
+        _clear_task_state()
+        return [
+            TextContent(
+                type="text",
+                text=f"Error cancelling task {task_id}: {e!r}",
             )
         ]
     except Exception as e:
