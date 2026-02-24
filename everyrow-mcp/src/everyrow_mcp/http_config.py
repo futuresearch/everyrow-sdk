@@ -22,6 +22,7 @@ from everyrow_mcp.middleware import RateLimitMiddleware
 from everyrow_mcp.redis_store import get_redis_client
 from everyrow_mcp.routes import api_download, api_progress
 from everyrow_mcp.templates import RESULTS_HTML, SESSION_HTML
+from everyrow_mcp.uploads import handle_upload
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ def _register_routes(
     mcp.custom_route("/api/results/{task_id}/download", ["GET", "OPTIONS"])(
         api_download
     )
+    mcp.custom_route("/api/uploads/{upload_id}", ["PUT"])(handle_upload)
 
     async def _health(_request: Request) -> Response:
         return JSONResponse({"status": "ok"})
