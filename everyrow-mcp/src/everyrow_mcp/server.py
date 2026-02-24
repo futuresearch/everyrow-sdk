@@ -76,7 +76,9 @@ def main():
 
     # tools.py registers everyrow_results_stdio by default.
     # Override with the HTTP variant when running in HTTP mode.
+    # ToolManager.add_tool() is a no-op for existing names, so remove first.
     if transport == Transport.HTTP:
+        mcp._tool_manager.remove_tool("everyrow_results")
         mcp.tool(
             name="everyrow_results",
             structured_output=False,
