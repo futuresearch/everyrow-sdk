@@ -7,13 +7,26 @@ const BLOG_DIR = path.join(process.cwd(), "..", "docs", "blog");
 export interface BlogPostMeta {
   slug: string;
   title: string;
+  subtitle: string;
   description: string;
   date: string;
-  author: string;
+  authors: string[];
+  tags: string[];
 }
 
 export interface BlogPost extends BlogPostMeta {
   content: string;
+}
+
+function extractMeta(data: Record<string, unknown>, slug: string): Omit<BlogPostMeta, "slug"> {
+  return {
+    title: (data.title as string) || slug,
+    subtitle: (data.subtitle as string) || "",
+    description: (data.description as string) || "",
+    date: (data.date as string) || "",
+    authors: (data.authors as string[]) || [],
+    tags: (data.tags as string[]) || [],
+  };
 }
 
 export function getAllBlogPosts(): BlogPostMeta[] {
@@ -32,13 +45,7 @@ export function getAllBlogPosts(): BlogPostMeta[] {
     const { data } = matter(fileContent);
     const slug = file.replace(/\.mdx?$/, "");
 
-    posts.push({
-      slug,
-      title: data.title || slug,
-      description: data.description || "",
-      date: data.date || "",
-      author: data.author || "",
-    });
+    posts.push({ slug, ...extractMeta(data, slug) });
   }
 
   // Sort by date, newest first
@@ -53,14 +60,7 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
       const fileContent = fs.readFileSync(fullPath, "utf-8");
       const { data, content } = matter(fileContent);
 
-      return {
-        slug,
-        title: data.title || slug,
-        description: data.description || "",
-        date: data.date || "",
-        author: data.author || "",
-        content,
-      };
+      return { slug, ...extractMeta(data, slug), content };
     }
   }
 

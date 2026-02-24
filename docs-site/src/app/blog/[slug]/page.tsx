@@ -36,15 +36,6 @@ export async function generateMetadata({ params }: PageProps) {
   };
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = await params;
   const post = getBlogPostBySlug(slug);
@@ -59,8 +50,10 @@ export default async function BlogPostPage({ params }: PageProps) {
     <DocsLayout navigation={navigation}>
       <article className="blog-post">
         <div className="blog-post-meta">
-          {post.date && <time dateTime={post.date}>{formatDate(post.date)}</time>}
-          {post.author && <span className="blog-post-author">{post.author}</span>}
+          {post.date && <span>{post.date}</span>}
+          {post.authors.length > 0 && (
+            <span className="blog-post-author">{post.authors.join(", ")}</span>
+          )}
         </div>
         <MDXContent source={post.content} />
       </article>

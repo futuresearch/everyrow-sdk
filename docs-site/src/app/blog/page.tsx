@@ -20,15 +20,6 @@ export const metadata: Metadata = {
   },
 };
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00");
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 export default async function BlogPage() {
   const navigation = getNavigation();
   const posts = getAllBlogPosts();
@@ -47,8 +38,8 @@ export default async function BlogPage() {
             className="blog-listing-card"
           >
             <div className="blog-listing-card-meta">
-              {post.date && <time dateTime={post.date}>{formatDate(post.date)}</time>}
-              {post.author && <span>{post.author}</span>}
+              {post.date && <span>{post.date}</span>}
+              {post.authors.length > 0 && <span>{post.authors.join(", ")}</span>}
             </div>
             <h2 className="blog-listing-card-title">{post.title}</h2>
             {post.description && (

@@ -1,8 +1,19 @@
 ---
 title: "The Hidden Incompatibilities Between LLM Providers"
-description: "Each LLM provider has its own opinions about what valid means for JSON Schema, tool calling, caching, and temperature. Here are the quirks we've found running tens of thousands of LLM calls per day across Anthropic, Google, and OpenAI."
-date: "2026-02-24"
-author: "Robert Gambee"
+subtitle: "What we learned building a system that interchangably supports Anthropic, Google and OpenAI"
+date: "February 24, 2026"
+description: "LLM APIs look interchangeable on paper. In practice, they diverge in subtle ways that break your code. We document the provider-specific quirks we've hit while running thousands of LLM calls per day across Anthropic, Google, and OpenAI."
+authors:
+  - "Robert Gambee"
+tags:
+  - "LLMs"
+  - "AI Infrastructure"
+  - "Anthropic"
+  - "Google Gemini"
+  - "OpenAI"
+  - "JSON Schema"
+  - "Tool Calling"
+  - "AI Engineering"
 ---
 
 # The Hidden Incompatibilities Between LLM Providers
