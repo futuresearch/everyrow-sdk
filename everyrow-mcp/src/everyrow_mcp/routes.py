@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import csv
 import io
 import logging
 import secrets
 from uuid import UUID
 
+import pandas as pd
 from everyrow.api_utils import handle_response
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.client import AuthenticatedClient
@@ -16,6 +16,7 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp import redis_store
 from everyrow_mcp.config import settings
+from everyrow_mcp.result_store import _sanitize_records
 from everyrow_mcp.tool_helpers import _UI_EXCLUDE, TaskState
 
 logger = logging.getLogger(__name__)
@@ -295,8 +296,8 @@ async def api_download(request: Request) -> Response:  # noqa: PLR0911
     # Return JSON array if requested (used by the widget for full data fetch).
     fmt = request.query_params.get("format", "csv")
     if fmt == "json":
-        reader = csv.DictReader(io.StringIO(csv_text))
-        records = list(reader)
+        df = pd.read_csv(io.StringIO(csv_text))
+        records = _sanitize_records(df.to_dict(orient="records"))
         return JSONResponse(records, headers=cors)
 
     safe_prefix = "".join(c for c in task_id[:8] if c.isalnum() or c == "-")

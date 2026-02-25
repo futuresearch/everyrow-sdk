@@ -292,10 +292,9 @@ async def try_store_result(
 
         csv_url, poll_token = await _get_csv_url(task_id, mcp_server_url)
         if csv_url is None:
-            logger.warning(
-                "Poll token expired for task %s, cannot build download URL", task_id
+            raise RuntimeError(
+                f"Poll token expired for task {task_id}, cannot build download URL"
             )
-            return None
 
         preview_records, effective_page_size = clamp_page_to_budget(
             preview_records=preview_records,
