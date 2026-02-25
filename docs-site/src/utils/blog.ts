@@ -9,7 +9,7 @@ export interface BlogPostMeta {
   title: string;
   subtitle: string;
   description: string;
-  date: string;
+  date: Date;
   authors: string[];
   tags: string[];
 }
@@ -23,7 +23,7 @@ function extractMeta(data: Record<string, unknown>, slug: string): Omit<BlogPost
     title: (data.title as string) || slug,
     subtitle: (data.subtitle as string) || "",
     description: (data.description as string) || "",
-    date: (data.date as string) || "",
+    date: data.date instanceof Date ? data.date : new Date(data.date as string),
     authors: (data.authors as string[]) || [],
     tags: (data.tags as string[]) || [],
   };
@@ -49,7 +49,7 @@ export function getAllBlogPosts(): BlogPostMeta[] {
   }
 
   // Sort by date, newest first
-  return posts.sort((a, b) => b.date.localeCompare(a.date));
+  return posts.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
 export function getBlogPostBySlug(slug: string): BlogPost | null {
@@ -65,6 +65,15 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
   }
 
   return null;
+}
+
+export function formatDate(date: Date): string {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export function getBlogPostSlugs(): string[] {

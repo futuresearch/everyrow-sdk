@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DocsLayout } from "@/components/DocsLayout";
 import { getNavigation } from "@/utils/docs";
-import { getAllBlogPosts } from "@/utils/blog";
+import { getAllBlogPosts, formatDate } from "@/utils/blog";
 
 export const metadata: Metadata = {
   title: "Blog - Everyrow",
@@ -38,7 +38,7 @@ export default async function BlogPage() {
             className="blog-listing-card"
           >
             <div className="blog-listing-card-meta">
-              {post.date && <span>{post.date}</span>}
+              {post.date && <span>{formatDate(post.date)}</span>}
               {post.authors.length > 0 && <span>{post.authors.join(", ")}</span>}
             </div>
             <h2 className="blog-listing-card-title">{post.title}</h2>

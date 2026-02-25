@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { DocsLayout } from "@/components/DocsLayout";
 import { MDXContent } from "@/components/MDXContent";
 import { getNavigation } from "@/utils/docs";
-import { getBlogPostBySlug, getBlogPostSlugs } from "@/utils/blog";
+import { getBlogPostBySlug, getBlogPostSlugs, formatDate } from "@/utils/blog";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -50,7 +50,7 @@ export default async function BlogPostPage({ params }: PageProps) {
     <DocsLayout navigation={navigation}>
       <article className="blog-post">
         <div className="blog-post-meta">
-          {post.date && <span>{post.date}</span>}
+          {post.date && <span>{formatDate(post.date)}</span>}
           {post.authors.length > 0 && (
             <span className="blog-post-author">{post.authors.join(", ")}</span>
           )}
