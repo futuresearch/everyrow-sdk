@@ -359,7 +359,6 @@ async def fetch_csv_from_url(url: str) -> pd.DataFrame:
     )
 
 
-
 def validate_csv_path(path: str) -> None:
     """Validate that a CSV file exists and is readable.
 
