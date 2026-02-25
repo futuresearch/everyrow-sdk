@@ -46,7 +46,7 @@ CHECKED_DOMAINS: set[str] = {
 # Each URL must be listed explicitly — new links to the same domain will
 # error until added here, so broken links don't slip through unnoticed.
 SKIPPED_URLS: set[str] = {
-    "https://ai.google.dev/gemini-api/docs/gemini-3#temperature",
+    "https://ai.google.dev/gemini-api/docs/gemini-3",
     "https://ai.google.dev/gemini-api/docs/structured-output",
     "https://arxiv.org/abs/2506.21558",
     "https://clinicaltrials.gov/",
@@ -73,8 +73,7 @@ SKIPPED_URLS: set[str] = {
     "https://hugovk.github.io/top-pypi-packages/",
     "https://jqlang.org/",
     "https://pip.pypa.io/en/stable/",
-    "https://platform.claude.com/docs/en/build-with-claude/extended-thinking#extended-thinking-with-tool-use",
-    "https://platform.claude.com/docs/en/build-with-claude/extended-thinking#feature-compatibility",
+    "https://platform.claude.com/docs/en/build-with-claude/extended-thinking",
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
     "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
 }
