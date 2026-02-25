@@ -38,6 +38,18 @@ deployment:
 secrets:
   enabled: true
 
+# NetworkPolicy: restrict pod ingress/egress.
+# gatewayNamespace must match the namespace where gateway data-plane proxy
+# pods run — verify with: kubectl get pods -A | grep gateway
+networkPolicy:
+  enabled: true
+  gatewayNamespace: gke-managed-system
+  redisPort: 6379
+  redisSelector:
+    - podSelector:
+        matchLabels:
+          app: redis
+
 tolerations:
   - key: "hyperdiskonly"
     operator: "Equal"

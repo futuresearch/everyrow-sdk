@@ -14,8 +14,8 @@ The everyrow-mcp server has **strong application-level security** (SSRF protecti
 |----------|-------|
 | Critical | 2 |
 | High | 4 |
-| Medium | 5 |
-| Low | 4 |
+| Medium | 4 |
+| Low | 5 |
 
 ---
 
@@ -58,7 +58,12 @@ spec:
     - Egress
 
 ---
-# 2. Allow MCP pod ingress only from the gateway namespace
+# 2. Allow MCP pod ingress only from the gateway proxy namespace.
+#
+# IMPORTANT: The HTTPRoute references shared-tls-gateway in cert-manager,
+# but the data-plane proxy pods that forward traffic may run in a different
+# namespace (e.g. gke-managed-system, envoy-gateway-system).
+# Verify with: kubectl get pods -A | grep gateway
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -73,7 +78,8 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: cert-manager
+              # Update to match your actual gateway proxy namespace:
+              kubernetes.io/metadata.name: gke-managed-system
       ports:
         - port: 8000
           protocol: TCP
@@ -91,8 +97,13 @@ spec:
   policyTypes:
     - Egress
   egress:
-    - to:  # DNS
-        - namespaceSelector: {}
+    - to:  # DNS — restricted to CoreDNS in kube-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
       ports:
         - port: 53
           protocol: UDP
@@ -162,12 +173,13 @@ Add to `/everyrow-mcp/deploy/chart/templates/deployment.yaml` after line 23:
     spec:
       securityContext:
         runAsNonRoot: true
-        fsGroup: 65534
+        runAsUser: 10000   # Must match Dockerfile: useradd -u 10000 mcp
+        runAsGroup: 10000
+        fsGroup: 10000
       containers:
         - name: {{ .Release.Name }}
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 65534
+            allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
@@ -254,7 +266,7 @@ The build-and-push job pushes the container image directly to the registry witho
 Add a scanning step between build and push in `deploy-mcp.yaml`:
 ```yaml
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.28.0  # pin to SHA in production per L2
         with:
           image-ref: ${{ env.MCP_IMAGE_NAME }}:${{ needs.setup.outputs.sha_short }}
           severity: CRITICAL,HIGH
@@ -353,11 +365,11 @@ Log the Redis-specific detail server-side instead.
 
 ### M3. CORS Wildcard Origin on Data Endpoints
 
-**Severity:** Medium
+**Severity:** Low (downgraded — Bearer token auth means CORS restrictions add limited value)
 **File:** `/everyrow-mcp/src/everyrow_mcp/routes.py` (lines 22–33)
 
 **Description:**
-The progress and download endpoints use `Access-Control-Allow-Origin: *`. The code comments correctly note that Bearer token auth (not cookies) makes this safe from ambient credential attacks. However, a wildcard origin combined with the query-param token fallback (line 62) means any website can construct download links if a poll token leaks:
+The progress and download endpoints use `Access-Control-Allow-Origin: *`. The code comments at `routes.py:22–28` correctly justify this: auth uses Bearer tokens (not cookies), so CORS restrictions don't prevent ambient credential attacks. The wildcard combined with the query-param token fallback (line 62) means any website can construct download links if a poll token leaks, but this is a narrow risk given the short-lived, per-task nature of poll tokens:
 
 ```python
 def _cors_headers() -> dict[str, str]:
@@ -503,8 +515,14 @@ Remove `latest` tag from CI builds. Set `values.yaml` default to a sentinel valu
 **Description:**
 No PodDisruptionBudget exists. With `replicaCount: 1`, a node drain or cluster upgrade will cause downtime. A PDB would signal to the cluster that at least one replica must remain available.
 
+**Important caveat:** A `minAvailable: 1` PDB with only 1 replica will **block voluntary disruptions entirely** (node drains, cluster upgrades). You must increase `replicaCount` to at least 2 *before* applying this PDB, otherwise cluster maintenance operations will stall.
+
 **Recommended Fix:**
-Add `templates/pdb.yaml`:
+First increase replicas (`values.yaml`):
+```yaml
+replicaCount: 2
+```
+Then add `templates/pdb.yaml`:
 ```yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -516,7 +534,6 @@ spec:
     matchLabels:
       app: {{ .Release.Name }}
 ```
-Consider increasing `replicaCount` to at least 2 for high availability.
 
 ---
 
@@ -576,7 +593,6 @@ The following controls are well-implemented and deserve recognition:
 | ID | Finding | Effort |
 |----|---------|--------|
 | M2 | Genericize health endpoint error messages | ~15 min |
-| M3 | Restrict CORS origin | ~30 min |
 | M4 | Improve rate limiter (sliding window, per-user) | ~4 hours |
 | L1 | Pin base images to SHA digests | ~30 min |
 | L2 | Pin GitHub Actions to commit SHAs | ~1 hour |
@@ -589,7 +605,9 @@ The following controls are well-implemented and deserve recognition:
 
 | File | Security Role |
 |------|---------------|
-| `everyrow-mcp/deploy/chart/templates/deployment.yaml` | K8s pod definition (missing securityContext) |
+| `everyrow-mcp/deploy/chart/templates/deployment.yaml` | K8s pod definition (securityContext added) |
+| `everyrow-mcp/deploy/chart/templates/networkpolicy.yaml` | NetworkPolicy (default-deny + allow rules) |
+| `everyrow-mcp/deploy/chart/templates/serviceaccount.yaml` | Dedicated ServiceAccount (no token mount) |
 | `everyrow-mcp/deploy/chart/templates/service.yaml` | ClusterIP service (internal only) |
 | `everyrow-mcp/deploy/chart/templates/httproute.yaml` | Gateway API ingress routing |
 | `everyrow-mcp/deploy/chart/templates/secrets.yaml` | K8s Secret from SOPS values |
