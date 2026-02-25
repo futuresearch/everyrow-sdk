@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # Matches the 44-char alphanumeric spreadsheet ID in a Google Sheets URL
 _SHEETS_URL_RE = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
 
+# A1 notation range validation
+_A1_RANGE_RE = re.compile(r"^[A-Za-z0-9_' !:$]+$")
+_MAX_RANGE_LENGTH = 200
+
 
 def _extract_spreadsheet_id(v: str) -> str:
     """Accept a full Google Sheets URL or a bare spreadsheet ID.
@@ -29,6 +33,18 @@ def _extract_spreadsheet_id(v: str) -> str:
     raise ValueError(
         f"Invalid spreadsheet_id: expected a Google Sheets URL or a bare spreadsheet ID, got {v!r}"
     )
+
+
+def _validate_a1_range(v: str) -> str:
+    """Validate an A1 notation range string."""
+    if len(v) > _MAX_RANGE_LENGTH:
+        raise ValueError(f"Range too long ({len(v)} chars, max {_MAX_RANGE_LENGTH})")
+    if not _A1_RANGE_RE.fullmatch(v):
+        raise ValueError(
+            "Invalid range: contains disallowed characters. "
+            "Use A1 notation (e.g. 'Sheet1!A1:D10')."
+        )
+    return v
 
 
 class SheetsReadInput(BaseModel):
@@ -52,6 +68,11 @@ class SheetsReadInput(BaseModel):
     @classmethod
     def extract_id(cls, v: str) -> str:
         return _extract_spreadsheet_id(v)
+
+    @field_validator("range")
+    @classmethod
+    def validate_range(cls, v: str) -> str:
+        return _validate_a1_range(v)
 
 
 class SheetsWriteInput(BaseModel):
@@ -83,6 +104,11 @@ class SheetsWriteInput(BaseModel):
     @classmethod
     def extract_id(cls, v: str) -> str:
         return _extract_spreadsheet_id(v)
+
+    @field_validator("range")
+    @classmethod
+    def validate_range(cls, v: str) -> str:
+        return _validate_a1_range(v)
 
 
 class SheetsCreateInput(BaseModel):

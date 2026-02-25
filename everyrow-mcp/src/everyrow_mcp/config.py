@@ -129,6 +129,12 @@ class Settings(BaseSettings):
         default=False,
         description="Enable Google Sheets tools (requires HTTP mode with Google OAuth)",
     )
+    sheets_rate_limit: PositiveInt = Field(
+        default=60, description="Max sheets ops per user per rate window"
+    )
+    sheets_rate_window: PositiveInt = Field(
+        default=60, description="Sheets rate limit window in seconds"
+    )
     everyrow_api_key: str | None = Field(default=None, repr=False)
     google_sheets_credentials_json: str | None = Field(
         default=None,

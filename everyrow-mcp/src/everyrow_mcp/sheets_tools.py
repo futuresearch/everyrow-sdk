@@ -10,9 +10,12 @@ import json
 import logging
 
 import httpx
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import TextContent, ToolAnnotations
 
 from everyrow_mcp.app import mcp
+from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import build_key, get_redis_client
 from everyrow_mcp.sheets_client import (
     GoogleSheetsClient,
     get_google_token,
@@ -40,8 +43,48 @@ def _error_message(e: Exception) -> str:
             return "Spreadsheet not found. Check the spreadsheet ID or URL."
         if status == 429:
             return "Rate limited by Google API. Please try again in a moment."
-        return f"Google API error (HTTP {status}): {e.response.text}"
-    return f"Error: {e!r}"
+        return f"Google API error (HTTP {status}). Please try again."
+    return f"Sheets operation failed ({type(e).__name__}). Please try again."
+
+
+async def _check_sheets_rate_limit() -> list[TextContent] | None:
+    """Enforce per-user rate limiting on sheets operations.
+
+    Returns an error response if the rate limit is exceeded, or ``None`` if OK.
+    Only active in HTTP mode; always returns ``None`` for stdio.
+    Fail-open if Redis is unavailable.
+    """
+    if not settings.is_http:
+        return None
+
+    try:
+        access_token = get_access_token()
+        user_id = access_token.client_id if access_token else "anonymous"
+        redis = get_redis_client()
+        rl_key = build_key("ratelimit", "sheets", user_id)
+        async with redis.pipeline() as pipe:
+            pipe.incr(rl_key)
+            pipe.expire(rl_key, settings.sheets_rate_window, nx=True)
+            count, _ = await pipe.execute()
+        if count > settings.sheets_rate_limit:
+            return [
+                TextContent(
+                    type="text",
+                    text="Sheets rate limit exceeded. Please wait before trying again.",
+                )
+            ]
+    except Exception:
+        logger.debug("Sheets rate limit check failed (fail-open)", exc_info=True)
+    return None
+
+
+def _audit_user_id() -> str:
+    """Best-effort user ID for audit logs."""
+    try:
+        token = get_access_token()
+        return token.client_id if token else "unknown"
+    except Exception:
+        return "unknown"
 
 
 @mcp.tool(
@@ -56,6 +99,8 @@ def _error_message(e: Exception) -> str:
 )
 async def sheets_list(params: SheetsListInput) -> list[TextContent]:
     """List the user's Google Sheets, optionally filtered by name."""
+    if denied := await _check_sheets_rate_limit():
+        return denied
     try:
         token = await get_google_token()
         async with GoogleSheetsClient(token) as client:
@@ -101,6 +146,8 @@ async def sheets_read(params: SheetsReadInput) -> list[TextContent]:
       everyrow_agent(input_json=data, task="Research each company")
       sheets_write(spreadsheet_id="...", data=enriched_results)
     """
+    if denied := await _check_sheets_rate_limit():
+        return denied
     try:
         token = await get_google_token()
         async with GoogleSheetsClient(token) as client:
@@ -133,7 +180,7 @@ async def sheets_read(params: SheetsReadInput) -> list[TextContent]:
     annotations=ToolAnnotations(
         title="Write to Google Sheet",
         readOnlyHint=False,
-        destructiveHint=False,
+        destructiveHint=True,
         idempotentHint=False,
         openWorldHint=True,
     ),
@@ -150,6 +197,8 @@ async def sheets_write(params: SheetsWriteInput) -> list[TextContent]:
 
     Use append=True to add rows after existing data instead of overwriting.
     """
+    if denied := await _check_sheets_rate_limit():
+        return denied
     try:
         token = await get_google_token()
         values = records_to_values(params.data)
@@ -165,6 +214,12 @@ async def sheets_write(params: SheetsWriteInput) -> list[TextContent]:
                 updated_rows = result.get("updates", {}).get(
                     "updatedRows", len(params.data)
                 )
+                logger.info(
+                    "AUDIT sheets_write user=%s spreadsheet=%s rows=%s append=true",
+                    _audit_user_id(),
+                    params.spreadsheet_id,
+                    updated_rows,
+                )
                 return [
                     TextContent(
                         type="text",
@@ -177,6 +232,12 @@ async def sheets_write(params: SheetsWriteInput) -> list[TextContent]:
                 )
                 updated_range = result.get("updatedRange", params.range)
                 updated_rows = result.get("updatedRows", len(params.data) + 1)
+                logger.info(
+                    "AUDIT sheets_write user=%s spreadsheet=%s rows=%s append=false",
+                    _audit_user_id(),
+                    params.spreadsheet_id,
+                    updated_rows,
+                )
                 return [
                     TextContent(
                         type="text",
@@ -202,6 +263,8 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
 
     Returns the spreadsheet ID and URL.
     """
+    if denied := await _check_sheets_rate_limit():
+        return denied
     try:
         token = await get_google_token()
 
@@ -219,6 +282,13 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
                 await client.write_range(spreadsheet_id, "Sheet1", values)
     except Exception as e:
         return [TextContent(type="text", text=_error_message(e))]
+
+    logger.info(
+        "AUDIT sheets_create user=%s spreadsheet=%s rows=%s",
+        _audit_user_id(),
+        spreadsheet_id,
+        len(params.data) if params.data else 0,
+    )
 
     result = {
         "spreadsheet_id": spreadsheet_id,
@@ -248,6 +318,8 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
 )
 async def sheets_info(params: SheetsInfoInput) -> list[TextContent]:
     """Get metadata about a Google Sheet: title, sheet names, and dimensions."""
+    if denied := await _check_sheets_rate_limit():
+        return denied
     try:
         token = await get_google_token()
 

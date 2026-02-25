@@ -20,10 +20,6 @@ from everyrow_mcp.tools import (
 )
 from everyrow_mcp.uploads import register_upload_tool
 
-# Only register sheets tools when enabled (requires HTTP mode + Google OAuth)
-if settings.enable_sheets_tools:
-    import everyrow_mcp.sheets_tools  # noqa: F401
-
 
 class InputArgs(BaseModel):
     http: bool = False
@@ -83,6 +79,10 @@ def main():
     transport = Transport.HTTP if input_args.http else Transport.STDIO
     settings.transport = transport.value
     mcp._mcp_server.instructions = get_instructions(is_http=input_args.http)
+
+    # Register sheets tools after transport is set (they require HTTP mode)
+    if settings.enable_sheets_tools and settings.is_http:
+        import everyrow_mcp.sheets_tools  # noqa: F401, PLC0415
 
     # tools.py registers everyrow_results_stdio by default.
     # Override with the HTTP variant when running in HTTP mode.

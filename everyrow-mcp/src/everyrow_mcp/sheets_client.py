@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
 import httpx
 
-from everyrow_mcp.redis_store import build_key, get_redis_client
+from everyrow_mcp.redis_store import (
+    build_key,
+    decrypt_value,
+    encrypt_value,
+    get_redis_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +28,14 @@ SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
 DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
 
 # Google token TTL and refresh buffer
-GOOGLE_TOKEN_TTL = 3600  # 1 hour
+GOOGLE_TOKEN_TTL_DEFAULT = 3600  # 1 hour
 GOOGLE_TOKEN_REFRESH_BUFFER = 300  # refresh 5 min before expiry
-GOOGLE_TOKEN_REDIS_TTL = 3600  # store for 1 hour in Redis
 
 
 # ── Token resolution ──────────────────────────────────────────────────
 
 
-async def get_google_token() -> str:
+async def get_google_token(user_id: str | None = None) -> str:
     """Resolve a valid Google access token from Redis.
 
     The token is stored during the OAuth callback when the user logs in
@@ -38,15 +43,25 @@ async def get_google_token() -> str:
 
     Only available in HTTP mode — sheets tools are removed in stdio mode.
     """
+    if user_id is None:
+        from mcp.server.auth.middleware.auth_context import (  # noqa: PLC0415
+            get_access_token,
+        )
+
+        access_token = get_access_token()
+        user_id = access_token.client_id if access_token else None
+        if not user_id:
+            raise RuntimeError(
+                "No authenticated user. The user must log in with Google "
+                "(with Sheets scopes) to use Google Sheets tools."
+            )
 
     redis = get_redis_client()
 
-    # NOTE: single-tenant — "current" key is shared. If multi-tenancy is
-    # needed, key by session/user ID instead.
-    token_key = build_key("google_token", "current")
-    token_data = await redis.get(token_key)
-    if token_data:
-        data = json.loads(token_data)
+    token_key = build_key("google_token", user_id)
+    raw = await redis.get(token_key)
+    if raw:
+        data = json.loads(decrypt_value(raw))
         expires_at = data.get("expires_at", 0)
         if time.time() < expires_at - GOOGLE_TOKEN_REFRESH_BUFFER:
             return data["access_token"]
@@ -55,11 +70,9 @@ async def get_google_token() -> str:
         refresh_token = data.get("refresh_token")
         if refresh_token:
             try:
-                return await _refresh_google_token_http(refresh_token)
-            except Exception:
-                logger.warning(
-                    "Failed to refresh Google token, using existing", exc_info=True
-                )
+                return await _refresh_google_token_http(refresh_token, user_id)
+            except Exception as e:
+                logger.warning("Failed to refresh Google token: %s", type(e).__name__)
                 if time.time() < expires_at:
                     return data["access_token"]
 
@@ -69,7 +82,7 @@ async def get_google_token() -> str:
     )
 
 
-async def _refresh_google_token_http(refresh_token: str) -> str:
+async def _refresh_google_token_http(refresh_token: str, user_id: str) -> str:
     """Refresh a Google access token using the Supabase-stored refresh token."""
     from everyrow_mcp.config import settings  # noqa: PLC0415
 
@@ -88,11 +101,14 @@ async def _refresh_google_token_http(refresh_token: str) -> str:
 
     provider_token = data.get("provider_token", "")
     provider_refresh_token = data.get("provider_refresh_token", refresh_token)
+    expires_in = data.get("expires_in")
 
     if not provider_token:
         raise RuntimeError("Supabase refresh did not return a Google provider_token")
 
-    await store_google_token("current", provider_token, provider_refresh_token)
+    await store_google_token(
+        user_id, provider_token, provider_refresh_token, expires_in=expires_in
+    )
     return provider_token
 
 
@@ -100,26 +116,31 @@ async def store_google_token(
     user_id: str,
     access_token: str,
     refresh_token: str | None = None,
+    *,
+    expires_in: int | None = None,
 ) -> None:
     """Store Google access token in Redis with TTL."""
     try:
         redis = get_redis_client()
     except Exception:
-        return
+        logger.error("Failed to obtain Redis client for Google token storage")
+        raise
+    ttl = expires_in if expires_in and expires_in > 0 else GOOGLE_TOKEN_TTL_DEFAULT
     try:
-        data = {
+        data: dict[str, Any] = {
             "access_token": access_token,
-            "expires_at": time.time() + GOOGLE_TOKEN_TTL,
+            "expires_at": time.time() + ttl,
         }
         if refresh_token:
             data["refresh_token"] = refresh_token
         await redis.setex(
             build_key("google_token", user_id),
-            GOOGLE_TOKEN_REDIS_TTL,
-            json.dumps(data),
+            ttl,
+            encrypt_value(json.dumps(data)),
         )
     except Exception:
-        logger.warning("Failed to store Google token in Redis for %s", user_id)
+        logger.error("Failed to store Google token in Redis for %s", user_id)
+        raise
 
 
 # ── Sheets API client ─────────────────────────────────────────────────
@@ -224,8 +245,7 @@ class GoogleSheetsClient:
         """
         q = "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
         if query:
-            # Escape single quotes in the user's query
-            safe_query = query.replace("'", "\\'")
+            safe_query = re.sub(r"[^a-zA-Z0-9 ]", "", query)
             q += f" and name contains '{safe_query}'"
 
         resp = await self._client.get(

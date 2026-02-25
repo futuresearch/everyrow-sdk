@@ -1219,10 +1219,11 @@ async def everyrow_results_http(
         try:
             return await _write_results_to_sheet(df, params.output_spreadsheet_title)
         except Exception as e:
+            logger.exception("Failed to write results to Google Sheet")
             return [
                 TextContent(
                     type="text",
-                    text=f"Failed to write results to Google Sheet: {e!r}",
+                    text=f"Failed to write results to Google Sheet ({type(e).__name__}). Please try again.",
                 )
             ]
 

@@ -246,7 +246,7 @@ class EveryRowAuthProvider(
                     'code_challenge_method': 's256',
                     'scopes': (
                         'https://www.googleapis.com/auth/spreadsheets '
-                        'https://www.googleapis.com/auth/drive.readonly'
+                        'https://www.googleapis.com/auth/drive.metadata.readonly'
                     ),
                 }
             )
@@ -479,9 +479,15 @@ class EveryRowAuthProvider(
         if google_access_token:
             from everyrow_mcp.sheets_client import store_google_token  # noqa: PLC0415
 
-            await store_google_token(
-                "current", google_access_token, google_refresh_token or None
-            )
+            try:
+                await store_google_token(
+                    jwt_claims.get("sub", "unknown"),
+                    google_access_token,
+                    google_refresh_token or None,
+                    expires_in=expires_in,
+                )
+            except Exception:
+                logger.warning("Could not store Google token during token issue")
 
         rt_str = secrets.token_urlsafe(32)
         rt = EveryRowRefreshToken(

@@ -26,12 +26,25 @@ from everyrow_mcp.sheets_models import (
     _extract_spreadsheet_id,
 )
 from everyrow_mcp.sheets_tools import (
+    _error_message,
     sheets_create,
     sheets_info,
     sheets_list,
     sheets_read,
     sheets_write,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limit():
+    """Disable rate limiting for all tool tests."""
+    with patch(
+        "everyrow_mcp.sheets_tools._check_sheets_rate_limit",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        yield
+
 
 # ── Model validation tests ───────────────────────────────────────────
 
@@ -568,3 +581,150 @@ class TestSheetsListTool:
 
         call_params = mock_get.call_args[1]["params"]
         assert call_params["pageSize"] == "5"
+
+
+# ── Range validation tests (M1) ─────────────────────────────────────
+
+
+class TestRangeValidation:
+    """Test A1 notation range validation on SheetsReadInput and SheetsWriteInput."""
+
+    _VALID_ID = "abc123def456ghi789jkl012mno345pqr678stu901v"
+
+    def test_simple_range(self):
+        inp = SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1!A1:D10")
+        assert inp.range == "Sheet1!A1:D10"
+
+    def test_sheet_name_only(self):
+        inp = SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1")
+        assert inp.range == "Sheet1"
+
+    def test_quoted_sheet_name(self):
+        inp = SheetsReadInput(spreadsheet_id=self._VALID_ID, range="'My Sheet'!A1:B5")
+        assert inp.range == "'My Sheet'!A1:B5"
+
+    def test_absolute_refs(self):
+        inp = SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1!$A$1:$D$10")
+        assert inp.range == "Sheet1!$A$1:$D$10"
+
+    def test_column_range(self):
+        inp = SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1!B:B")
+        assert inp.range == "Sheet1!B:B"
+
+    def test_rejects_url_significant_chars(self):
+        with pytest.raises(Exception, match="Invalid range"):
+            SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1/../etc/passwd")
+
+    def test_rejects_path_traversal(self):
+        with pytest.raises(Exception, match="Invalid range"):
+            SheetsReadInput(spreadsheet_id=self._VALID_ID, range="../../secret")
+
+    def test_rejects_semicolons(self):
+        with pytest.raises(Exception, match="Invalid range"):
+            SheetsReadInput(spreadsheet_id=self._VALID_ID, range="Sheet1;DROP TABLE")
+
+    def test_rejects_too_long(self):
+        with pytest.raises(Exception, match="Range too long"):
+            SheetsReadInput(spreadsheet_id=self._VALID_ID, range="A" * 201)
+
+    def test_write_input_validates_too(self):
+        with pytest.raises(Exception, match="Invalid range"):
+            SheetsWriteInput(
+                spreadsheet_id=self._VALID_ID,
+                range="Sheet1/../hack",
+                data=[{"a": "1"}],
+            )
+
+    def test_write_input_valid(self):
+        inp = SheetsWriteInput(
+            spreadsheet_id=self._VALID_ID,
+            range="Sheet1!A1:B5",
+            data=[{"a": "1"}],
+        )
+        assert inp.range == "Sheet1!A1:B5"
+
+
+# ── Error message sanitization tests (H1) ────────────────────────────
+
+
+class TestErrorMessageSanitization:
+    """Ensure error messages don't leak internal details."""
+
+    def test_http_500_no_response_body(self):
+        """HTTP 500 error should not include response body."""
+        resp = httpx.Response(
+            status_code=500,
+            text="Internal server error with secret details",
+            request=httpx.Request("GET", "https://sheets.googleapis.com/test"),
+        )
+        exc = httpx.HTTPStatusError("error", request=resp.request, response=resp)
+        msg = _error_message(exc)
+        assert "secret details" not in msg
+        assert "500" in msg
+        assert "Please try again" in msg
+
+    def test_catchall_no_repr(self):
+        """Catch-all should not include full repr of the exception."""
+        exc = RuntimeError("sensitive internal state: token=abc123")
+        msg = _error_message(exc)
+        assert "sensitive internal state" not in msg
+        assert "token=abc123" not in msg
+        assert "RuntimeError" in msg
+        assert "Please try again" in msg
+
+    def test_known_statuses_unchanged(self):
+        """403/404/429 messages should remain user-friendly."""
+        for status, keyword in [
+            (403, "Permission"),
+            (404, "not found"),
+            (429, "Rate limited"),
+        ]:
+            resp = httpx.Response(
+                status_code=status,
+                text="details",
+                request=httpx.Request("GET", "https://example.com"),
+            )
+            exc = httpx.HTTPStatusError("err", request=resp.request, response=resp)
+            msg = _error_message(exc)
+            assert keyword in msg
+            assert "details" not in msg
+
+
+# ── Drive query sanitization tests (M6) ──────────────────────────────
+
+
+class TestDriveQuerySanitization:
+    """Ensure special characters are stripped from Drive API queries."""
+
+    @pytest.mark.asyncio
+    async def test_special_chars_stripped(self):
+        """Quotes and special chars should be removed from the query."""
+        mock_resp = _mock_response({"files": []})
+
+        with patch.object(
+            httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=mock_resp
+        ) as mock_get:
+            async with GoogleSheetsClient("fake-token") as client:
+                await client.list_spreadsheets(query="Budget' OR 1=1--")
+
+        call_params = mock_get.call_args[1]["params"]
+        q = call_params["q"]
+        # Extract just the user query part from: ... name contains 'SANITIZED'
+        # The sanitized result should be "Budget OR 11" (only alphanum + spaces)
+        assert "name contains 'Budget OR 11'" in q
+        # Injection chars must not survive
+        assert "1=1--" not in q
+
+    @pytest.mark.asyncio
+    async def test_clean_query_passes_through(self):
+        """Alphanumeric queries with spaces should pass through."""
+        mock_resp = _mock_response({"files": []})
+
+        with patch.object(
+            httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=mock_resp
+        ) as mock_get:
+            async with GoogleSheetsClient("fake-token") as client:
+                await client.list_spreadsheets(query="Budget 2024")
+
+        call_params = mock_get.call_args[1]["params"]
+        assert "Budget 2024" in call_params["q"]
