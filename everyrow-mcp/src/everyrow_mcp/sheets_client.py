@@ -301,5 +301,10 @@ def records_to_values(records: list[dict[str, Any]]) -> list[list[str]]:
 
     rows = [headers]
     for record in records:
-        rows.append([str(record.get(h, "")) for h in headers])
+        rows.append(
+            [
+                str(v) if v is not None else ""
+                for v in (record.get(h, "") for h in headers)
+            ]
+        )
     return rows

@@ -194,6 +194,13 @@ class TestRecordsToValues:
         values = records_to_values(records)
         assert values[2] == ["3", ""]
 
+    def test_none_values_become_empty(self):
+        """None values (e.g. from pandas NaN) should become empty strings, not 'None'."""
+        records = [{"name": "Alice", "age": None}, {"name": None, "age": "30"}]
+        values = records_to_values(records)
+        assert values[1] == ["Alice", ""]
+        assert values[2] == ["", "30"]
+
 
 # ── Client tests (mocked httpx) ─────────────────────────────────────
 
