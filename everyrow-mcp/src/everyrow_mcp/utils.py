@@ -250,7 +250,7 @@ class _SSRFSafeTransport(httpx.AsyncBaseTransport):
         # presents the right certificate.
         extensions = dict(request.extensions)
         if request.url.scheme == "https":
-            extensions["sni_hostname"] = hostname.encode("ascii")
+            extensions["sni_hostname"] = hostname.encode("idna")
 
         pinned_request = httpx.Request(
             method=request.method,
