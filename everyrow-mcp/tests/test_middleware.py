@@ -233,3 +233,40 @@ class TestBodySizeLimitMiddleware:
         client = TestClient(app)
         resp = client.put("/api/uploads/abc", content=b"x" * 10)
         assert resp.status_code == 200
+
+    def test_multiple_path_prefixes(self):
+        """BodySizeLimitMiddleware enforces limits on all configured paths."""
+
+        async def _handler(request: Request):
+            body = await request.body()
+            return PlainTextResponse(f"received {len(body)} bytes")
+
+        inner = Starlette(
+            routes=[
+                Route("/api/uploads/{upload_id}", _handler, methods=["PUT"]),
+                Route("/mcp", _handler, methods=["POST"]),
+                Route("/other", _handler, methods=["POST"]),
+            ],
+        )
+        app = BodySizeLimitMiddleware(
+            inner,
+            max_bytes=10,
+            path_prefixes=("/api/uploads/", "/mcp"),
+        )
+        client = TestClient(app)
+
+        # Upload path — enforced
+        resp = client.put("/api/uploads/abc", content=b"x" * 50)
+        assert resp.status_code == 413
+
+        # MCP path — enforced
+        resp = client.post("/mcp", content=b"x" * 50)
+        assert resp.status_code == 413
+
+        # MCP path — under limit passes
+        resp = client.post("/mcp", content=b"x" * 5)
+        assert resp.status_code == 200
+
+        # Other path — not enforced
+        resp = client.post("/other", content=b"x" * 50)
+        assert resp.status_code == 200

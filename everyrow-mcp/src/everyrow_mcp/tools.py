@@ -1,6 +1,5 @@
 """MCP tool functions for the everyrow MCP server."""
 
-import asyncio
 import json
 import logging
 from pathlib import Path
@@ -732,11 +731,11 @@ async def everyrow_progress(
     params: ProgressInput,
     ctx: EveryRowContext,
 ) -> list[TextContent]:
-    """Check progress of a running task. Blocks briefly to limit the polling rate.
+    """Check progress of a running task.
 
-    After receiving a status update, immediately call everyrow_progress again
-    unless the task is completed or failed. The tool handles pacing internally.
-    Do not add commentary between progress calls, just call again immediately.
+    After receiving a status update, wait at least ``retry_after_seconds``
+    before calling everyrow_progress again (unless the task is completed or
+    failed).  Do not add commentary between progress calls.
     """
     client = _get_client(ctx)
     task_id = params.task_id
@@ -753,9 +752,6 @@ async def everyrow_progress(
                 text="Unable to verify task ownership. Please try again.",
             )
         ]
-
-    # Block server-side before polling — controls the cadence
-    await asyncio.sleep(redis_store.PROGRESS_POLL_DELAY)
 
     try:
         status_response = handle_response(

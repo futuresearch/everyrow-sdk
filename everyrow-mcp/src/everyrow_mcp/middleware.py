@@ -98,7 +98,7 @@ class BodySizeLimitMiddleware:
     when the limit is exceeded — even for chunked transfer-encoding requests
     that lack a Content-Length header.
 
-    Only active on paths matching ``path_prefix``.
+    Active on paths matching any of the given ``path_prefixes``.
     """
 
     def __init__(
@@ -106,14 +106,16 @@ class BodySizeLimitMiddleware:
         app: ASGIApp,
         *,
         max_bytes: int,
-        path_prefix: str = "/api/uploads/",
+        path_prefixes: tuple[str, ...] = ("/api/uploads/",),
     ) -> None:
         self._app = app
         self._max_bytes = max_bytes
-        self._path_prefix = path_prefix
+        self._path_prefixes = path_prefixes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope["path"].startswith(self._path_prefix):
+        if scope["type"] != "http" or not any(
+            scope["path"].startswith(p) for p in self._path_prefixes
+        ):
             await self._app(scope, receive, send)
             return
 

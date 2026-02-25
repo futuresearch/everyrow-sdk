@@ -213,7 +213,9 @@ def _add_middleware(
         # Pure-ASGI middlewares — outermost wraps first.
         # SecurityHeaders → BodySizeLimit → Starlette app
         asgi_app = BodySizeLimitMiddleware(
-            app, max_bytes=settings.max_upload_size_bytes
+            app,
+            max_bytes=settings.max_upload_size_bytes,
+            path_prefixes=("/api/uploads/", "/mcp"),
         )
         asgi_app = SecurityHeadersMiddleware(asgi_app)
         return asgi_app

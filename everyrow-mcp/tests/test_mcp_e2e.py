@@ -260,7 +260,6 @@ class TestMcpProtocol:
                     new_callable=AsyncMock,
                     return_value=status_resp,
                 ),
-                patch("everyrow_mcp.redis_store.PROGRESS_POLL_DELAY", 0),
             ):
                 result = await session.call_tool(
                     "everyrow_progress",
@@ -358,7 +357,6 @@ class TestMcpProtocol:
                     new_callable=AsyncMock,
                     return_value=status_resp,
                 ),
-                patch("everyrow_mcp.redis_store.PROGRESS_POLL_DELAY", 0),
             ):
                 result = await session.call_tool(
                     "everyrow_progress",

@@ -59,7 +59,7 @@
     },
     {
       "name": "everyrow_progress",
-      "description": "Check progress of a running task. Blocks briefly to limit the polling rate."
+      "description": "Check progress of a running task."
     },
     {
       "name": "everyrow_results",

@@ -501,7 +501,6 @@ class TestProgress:
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("API error"),
             ),
-            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params, ctx)
@@ -532,7 +531,6 @@ class TestProgress:
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
@@ -567,7 +565,6 @@ class TestProgress:
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
@@ -1467,7 +1464,6 @@ class TestStdioVsHttpGating:
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
@@ -1492,7 +1488,6 @@ class TestStdioVsHttpGating:
                 new_callable=AsyncMock,
                 return_value=status_response,
             ),
-            patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools.write_initial_task_state"),
             patch(
                 "everyrow_mcp.tools._check_task_ownership",

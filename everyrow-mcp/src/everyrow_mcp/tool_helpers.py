@@ -280,15 +280,17 @@ class TaskState(BaseModel):
                 return f"{completed_msg}\n{next_call}"
             return f"Task {self.status.value}. Report the error to the user."
 
+        retry = redis_store.PROGRESS_POLL_DELAY
+
         if self.is_screen:
             return dedent(f"""\
-                Screen running ({self.elapsed_s}s elapsed).
-                Immediately call everyrow_progress(task_id='{task_id}').""")
+                Screen running ({self.elapsed_s}s elapsed). retry_after_seconds={retry}
+                Wait {retry} seconds, then call everyrow_progress(task_id='{task_id}').""")
 
         fail_part = f", {self.failed} failed" if self.failed else ""
         return dedent(f"""\
-            Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed)
-            Immediately call everyrow_progress(task_id='{task_id}').""")
+            Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed) retry_after_seconds={retry}
+            Wait {retry} seconds, then call everyrow_progress(task_id='{task_id}').""")
 
 
 def write_initial_task_state(
