@@ -123,6 +123,12 @@ class Settings(BaseSettings):
 
     everyrow_api_key: str | None = Field(default=None, repr=False)
 
+    require_auth: bool = Field(
+        default=True,
+        description="Require OAuth authentication in HTTP mode. "
+        "Set to False via --no-auth for local development.",
+    )
+
     @property
     def is_http(self) -> bool:
         return self.transport == "streamable-http"

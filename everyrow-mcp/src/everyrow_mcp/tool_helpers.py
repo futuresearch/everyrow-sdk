@@ -92,12 +92,13 @@ async def _submission_ui_json(
     poll_token = secrets.token_urlsafe(32)
     await redis_store.store_task_token(task_id, token)
 
-    # Record task owner for cross-user access checks (HTTP mode only).
+    # Record task owner for cross-user access checks (HTTP auth mode only).
     # This MUST succeed — downstream ownership checks deny access when no
     # owner is recorded, so a silent failure here would lock the user out
-    # of their own task.
+    # of their own task.  Skipped in no-auth mode where there is no
+    # authenticated user.
     user_id = ""
-    if settings.is_http:
+    if settings.is_http and settings.require_auth:
         access_token = get_access_token()
         if not access_token or not access_token.client_id:
             raise RuntimeError(

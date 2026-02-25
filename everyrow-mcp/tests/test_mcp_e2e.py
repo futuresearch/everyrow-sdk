@@ -86,6 +86,41 @@ def _http_state(fake_redis):
     )(everyrow_results_stdio)
 
 
+@pytest.fixture
+def _noauth_http_state(fake_redis):
+    """Configure settings for HTTP no-auth mode and patch Redis.
+
+    Like _http_state but with require_auth=False and no access-token patching,
+    matching the --no-auth server mode.
+    """
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_http)
+
+    with (
+        override_settings(
+            transport="streamable-http",
+            upload_secret="test-secret",
+            require_auth=False,
+        ),
+        patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+    ):
+        yield
+
+    # Restore stdio variant
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_stdio)
+
+
 @asynccontextmanager
 async def mcp_client():
     """MCP ClientSession connected to the server via in-memory transport.
@@ -369,6 +404,48 @@ class TestMcpProtocol:
             assert isinstance(result.content[-1], TextContent)
             human_text = result.content[-1].text
             assert "everyrow_results" in human_text
+
+    @pytest.mark.asyncio
+    async def test_submit_task_noauth_http(self, _noauth_http_state):
+        """Task submission works in no-auth HTTP mode (no access token)."""
+        task_id = str(uuid4())
+        mock_task = _mock_task(task_id)
+        _, fake_create_session = _mock_session()
+
+        async with mcp_client() as session:
+            with (
+                patch(
+                    "everyrow_mcp.tools._get_client",
+                    return_value=MagicMock(token="fake-token"),
+                ),
+                patch(
+                    "everyrow_mcp.tools.screen_async",
+                    new_callable=AsyncMock,
+                    return_value=mock_task,
+                ),
+                patch(
+                    "everyrow_mcp.tools.create_session",
+                    side_effect=fake_create_session,
+                ),
+            ):
+                result = await session.call_tool(
+                    "everyrow_screen",
+                    {
+                        "params": {
+                            "task": "Filter for engineering roles",
+                            "data": [
+                                {"company": "Acme", "role": "Engineer"},
+                            ],
+                        }
+                    },
+                )
+
+            assert not result.isError
+            # HTTP mode returns 2 content items: widget JSON + human text
+            assert len(result.content) == 2
+            widget = json.loads(result.content[0].text)
+            assert widget["task_id"] == task_id
+            assert widget["status"] == "submitted"
 
 
 # ── TestMcpE2ERealApi — real API tests ────────────────────────

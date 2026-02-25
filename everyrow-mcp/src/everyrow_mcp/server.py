@@ -78,6 +78,8 @@ def main():
     os.environ["EVERYROW_MCP_SERVER"] = "1"
     transport = Transport.HTTP if input_args.http else Transport.STDIO
     settings.transport = transport.value
+    if input_args.no_auth:
+        settings.require_auth = False
     mcp._mcp_server.instructions = get_instructions(is_http=input_args.http)
 
     # tools.py registers everyrow_results_stdio by default.
