@@ -37,7 +37,7 @@ _BLOCKED_HOSTNAMES = frozenset(
     }
 )
 
-# FINDING-02: restrict outbound fetches to standard HTTP(S) ports.
+# Restrict outbound fetches to standard HTTP(S) ports.
 _ALLOWED_PORTS: frozenset[int] = frozenset({80, 443, 8080, 8443})
 
 
@@ -76,7 +76,7 @@ def _resolve_and_validate(hostname: str) -> str:
 
     The returned IP is used by ``_SSRFSafeTransport`` to **pin** the TCP
     connection, eliminating the TOCTOU gap between DNS validation and the
-    actual ``connect()`` call (FINDING-01).
+    actual ``connect()`` call.
 
     Raises:
         ValueError: If the hostname is blocked, resolves to a blocked IP,
@@ -204,7 +204,7 @@ class _SSRFSafeTransport(httpx.AsyncBaseTransport):
     """Transport that resolves DNS, validates IPs, and pins connections to safe IPs.
 
     Eliminates the TOCTOU gap between DNS validation and TCP connection
-    (FINDING-01) by:
+    by:
 
     1. Resolving the hostname ourselves via ``getaddrinfo``
     2. Validating every resolved IP against the blocklist
@@ -212,7 +212,7 @@ class _SSRFSafeTransport(httpx.AsyncBaseTransport):
     4. Preserving the original hostname in the ``Host`` header and TLS SNI
        extension so the remote server sees the correct virtual host
 
-    Also enforces the port allowlist (FINDING-02) at transport time as a
+    Also enforces the port allowlist at transport time as a
     second check complementing the pre-flight validation.
     """
 
@@ -234,10 +234,11 @@ class _SSRFSafeTransport(httpx.AsyncBaseTransport):
         # directly without a second (unvalidated) DNS lookup.
         pinned_url = request.url.copy_with(host=resolved_ip)
 
-        # Preserve the original hostname in the Host header
-        host_header = hostname
+        # Preserve the original hostname in the Host header.
+        # IPv6 addresses must be wrapped in brackets per RFC 7230 §5.4.
+        host_header = f"[{hostname}]" if ":" in hostname else hostname
         if request.url.port and request.url.port not in (80, 443):
-            host_header = f"{hostname}:{request.url.port}"
+            host_header = f"{host_header}:{request.url.port}"
         headers = [
             (name, value)
             for name, value in request.headers.items()
@@ -246,7 +247,7 @@ class _SSRFSafeTransport(httpx.AsyncBaseTransport):
         headers.insert(0, ("host", host_header))
 
         # Preserve the original hostname for TLS SNI so the server
-        # presents the right certificate (reviewer feedback on FINDING-01).
+        # presents the right certificate.
         extensions = dict(request.extensions)
         if request.url.scheme == "https":
             extensions["sni_hostname"] = hostname.encode("ascii")

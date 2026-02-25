@@ -4,6 +4,7 @@ import socket
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 import pandas as pd
 import pytest
 
@@ -12,6 +13,7 @@ from everyrow_mcp.utils import (
     _is_blocked_ip,
     _normalise_google_sheets_url,
     _resolve_and_validate,
+    _SSRFSafeTransport,
     _validate_port,
     _validate_url_target,
     is_url,
@@ -298,7 +300,7 @@ class TestSsrfProtection:
                 _validate_url_target("http://nonexistent.invalid/data")
 
 
-# ── Port restriction tests (FINDING-02) ──────────────────────
+# ── Port restriction tests ────────────────────────────────────
 
 
 class TestPortRestriction:
@@ -351,7 +353,7 @@ class TestPortRestriction:
             _validate_url_target("http://example.com:8080/data.csv")
 
 
-# ── DNS-pinning tests (FINDING-01) ───────────────────────────
+# ── DNS-pinning tests ────────────────────────────────────────
 
 
 class TestResolveAndValidate:
@@ -396,3 +398,84 @@ class TestResolveAndValidate:
     def test_unwraps_ipv4_mapped_ipv6(self):
         with pytest.raises(ValueError, match="blocked IP"):
             _resolve_and_validate("::ffff:127.0.0.1")
+
+    def test_allows_public_ipv6_literal(self):
+        ip = _resolve_and_validate("2001:db8::1")
+        assert ip == "2001:db8::1"
+
+    def test_blocks_ipv6_ula(self):
+        with pytest.raises(ValueError, match="blocked IP"):
+            _resolve_and_validate("fd12:3456:789a::1")
+
+    def test_blocks_ipv6_link_local(self):
+        with pytest.raises(ValueError, match="blocked IP"):
+            _resolve_and_validate("fe80::1")
+
+
+# ── IPv6 Host header tests ───────────────────────────────────
+
+
+class TestSSRFSafeTransportIPv6Host:
+    """Tests for IPv6 Host header bracket wrapping in _SSRFSafeTransport."""
+
+    @pytest.mark.asyncio
+    async def test_ipv6_host_header_no_port(self):
+        """IPv6 hostname gets brackets in Host header even without explicit port."""
+        transport = _SSRFSafeTransport()
+        request = httpx.Request("GET", "http://[2001:db8::1]/data")
+
+        with patch.object(
+            transport._transport,
+            "handle_async_request",
+            return_value=httpx.Response(200),
+        ) as mock:
+            with patch(
+                "everyrow_mcp.utils._resolve_and_validate",
+                return_value="2001:db8::1",
+            ):
+                await transport.handle_async_request(request)
+
+        pinned = mock.call_args[0][0]
+        assert pinned.headers["host"] == "[2001:db8::1]"
+
+    @pytest.mark.asyncio
+    async def test_ipv6_host_header_with_non_standard_port(self):
+        """IPv6 hostname + non-standard port gets [addr]:port format."""
+        transport = _SSRFSafeTransport()
+        request = httpx.Request("GET", "http://[2001:db8::1]:8080/data")
+
+        with patch.object(
+            transport._transport,
+            "handle_async_request",
+            return_value=httpx.Response(200),
+        ) as mock:
+            with patch(
+                "everyrow_mcp.utils._resolve_and_validate",
+                return_value="2001:db8::1",
+            ):
+                with patch("everyrow_mcp.utils._validate_port"):
+                    await transport.handle_async_request(request)
+
+        pinned = mock.call_args[0][0]
+        assert pinned.headers["host"] == "[2001:db8::1]:8080"
+
+    @pytest.mark.asyncio
+    async def test_ipv4_host_header_no_brackets(self):
+        """IPv4 hostname does NOT get brackets."""
+        transport = _SSRFSafeTransport()
+        request = httpx.Request("GET", "http://example.com:8080/data")
+
+        with patch.object(
+            transport._transport,
+            "handle_async_request",
+            return_value=httpx.Response(200),
+        ) as mock:
+            with patch(
+                "everyrow_mcp.utils._resolve_and_validate",
+                return_value="93.184.216.34",
+            ):
+                with patch("everyrow_mcp.utils._validate_port"):
+                    await transport.handle_async_request(request)
+
+        pinned = mock.call_args[0][0]
+        assert pinned.headers["host"] == "example.com:8080"
