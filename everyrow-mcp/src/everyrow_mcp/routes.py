@@ -228,8 +228,7 @@ async def api_download_token(request: Request) -> Response:
         return err
 
     # No point minting a token if the CSV has already expired
-    csv_exists = await redis_store.get_result_csv(task_id)
-    if csv_exists is None:
+    if not await redis_store.result_csv_exists(task_id):
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=cors
         )
@@ -266,7 +265,9 @@ async def api_download(request: Request) -> Response:
     provided = request.query_params.get("token", "")
 
     # Atomically consume the download token (empty string yields None)
-    token_task_id = await redis_store.pop_download_token(provided) if provided else None
+    token_task_id, remaining_ttl = (
+        await redis_store.pop_download_token(provided) if provided else (None, 0)
+    )
     if token_task_id is None:
         logger.warning("Invalid or expired download token for task %s", task_id)
         return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
@@ -278,7 +279,9 @@ async def api_download(request: Request) -> Response:
             token_task_id,
             task_id,
         )
-        await redis_store.restore_download_token(provided, token_task_id)
+        await redis_store.restore_download_token(
+            provided, token_task_id, ttl=remaining_ttl
+        )
         return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
 
     csv_text = await redis_store.get_result_csv(task_id)

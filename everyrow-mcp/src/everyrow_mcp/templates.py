@@ -656,7 +656,8 @@ async function getFreshDownloadUrl(){
     try{
       const r=await fetch(downloadTokenUrl,{headers:{"Authorization":"Bearer "+pollToken}});
       if(r.ok){const d=await r.json();if(d.download_url){csvUrl=d.download_url;return d.download_url;}}
-    }catch{}
+      else{showToast("Download link expired — please re-run the query");}
+    }catch(e){showToast("Failed to refresh download link");}
   }
   return csvUrl;
 }
