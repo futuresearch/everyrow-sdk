@@ -384,7 +384,7 @@ class TestSheetsReadTool:
 
 class TestSheetsWriteTool:
     @pytest.mark.asyncio
-    async def test_write_overwrite(self, _mock_google_token):
+    async def test_write_overwrite_confirmed(self, _mock_google_token):
         mock_resp = _mock_response(
             {
                 "updatedRange": "Sheet1!A1:B3",
@@ -399,6 +399,51 @@ class TestSheetsWriteTool:
                 SheetsWriteInput(
                     spreadsheet_id="abc123def456ghi789jkl012mno345pqr678stu901v",
                     data=[{"name": "Alice"}, {"name": "Bob"}],
+                    confirm_overwrite=True,
+                )
+            )
+
+        assert "Wrote" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_write_overwrite_warns_if_existing_data(self, _mock_google_token):
+        """Writing without confirm_overwrite warns when range has data."""
+        read_resp = _mock_response({"values": [["name"], ["Alice"]]})
+
+        with patch.object(
+            httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=read_resp
+        ):
+            result = await sheets_write(
+                SheetsWriteInput(
+                    spreadsheet_id="abc123def456ghi789jkl012mno345pqr678stu901v",
+                    data=[{"name": "Bob"}],
+                )
+            )
+
+        assert "already contains" in result[0].text
+        assert "confirm_overwrite" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_write_overwrite_proceeds_on_empty_range(self, _mock_google_token):
+        """Writing without confirm_overwrite proceeds when range is empty."""
+        read_resp = _mock_response({})  # empty range
+        write_resp = _mock_response({"updatedRange": "Sheet1!A1:B2", "updatedRows": 2})
+
+        with (
+            patch.object(
+                httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=read_resp
+            ),
+            patch.object(
+                httpx.AsyncClient,
+                "put",
+                new_callable=AsyncMock,
+                return_value=write_resp,
+            ),
+        ):
+            result = await sheets_write(
+                SheetsWriteInput(
+                    spreadsheet_id="abc123def456ghi789jkl012mno345pqr678stu901v",
+                    data=[{"name": "Bob"}],
                 )
             )
 
@@ -432,15 +477,27 @@ class TestSheetsWriteTool:
 class TestSheetsCreateTool:
     @pytest.mark.asyncio
     async def test_create_empty(self, _mock_google_token):
-        mock_resp = _mock_response(
+        list_resp = _mock_response({"files": []})  # no duplicates
+        create_resp = _mock_response(
             {
                 "spreadsheetId": "new-id-123",
                 "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/new-id-123",
             }
         )
 
-        with patch.object(
-            httpx.AsyncClient, "post", new_callable=AsyncMock, return_value=mock_resp
+        with (
+            patch.object(
+                httpx.AsyncClient,
+                "get",
+                new_callable=AsyncMock,
+                return_value=list_resp,
+            ),
+            patch.object(
+                httpx.AsyncClient,
+                "post",
+                new_callable=AsyncMock,
+                return_value=create_resp,
+            ),
         ):
             result = await sheets_create(SheetsCreateInput(title="Test"))
 
@@ -451,6 +508,7 @@ class TestSheetsCreateTool:
 
     @pytest.mark.asyncio
     async def test_create_with_data(self, _mock_google_token):
+        list_resp = _mock_response({"files": []})  # no duplicates
         create_resp = _mock_response(
             {
                 "spreadsheetId": "new-id-456",
@@ -460,6 +518,12 @@ class TestSheetsCreateTool:
         write_resp = _mock_response({"updatedRows": 2})
 
         with (
+            patch.object(
+                httpx.AsyncClient,
+                "get",
+                new_callable=AsyncMock,
+                return_value=list_resp,
+            ),
             patch.object(
                 httpx.AsyncClient,
                 "post",
@@ -479,6 +543,19 @@ class TestSheetsCreateTool:
 
         data = json.loads(result[0].text)
         assert data["rows_written"] == 1
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_duplicate_title(self, _mock_google_token):
+        """sheets_create warns when a spreadsheet with the same title exists."""
+        list_resp = _mock_response({"files": [{"id": "existing-id", "name": "Budget"}]})
+
+        with patch.object(
+            httpx.AsyncClient, "get", new_callable=AsyncMock, return_value=list_resp
+        ):
+            result = await sheets_create(SheetsCreateInput(title="Budget"))
+
+        assert "already exists" in result[0].text
+        assert "existing-id" in result[0].text
 
 
 class TestSheetsInfoTool:

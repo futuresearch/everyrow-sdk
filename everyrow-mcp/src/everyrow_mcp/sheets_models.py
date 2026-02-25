@@ -99,6 +99,11 @@ class SheetsWriteInput(BaseModel):
         default=False,
         description="If True, append after existing data instead of overwriting.",
     )
+    confirm_overwrite: bool = Field(
+        default=False,
+        description="Must be set to True to overwrite existing data when append=False. "
+        "The tool will check if the range has data and warn you first.",
+    )
 
     @field_validator("spreadsheet_id")
     @classmethod

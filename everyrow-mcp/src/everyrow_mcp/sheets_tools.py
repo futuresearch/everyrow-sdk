@@ -227,6 +227,23 @@ async def sheets_write(params: SheetsWriteInput) -> list[TextContent]:
                     )
                 ]
             else:
+                # Pre-check: warn if the target range already has data
+                if not params.confirm_overwrite:
+                    existing = await client.read_range(
+                        params.spreadsheet_id, cell_range=params.range
+                    )
+                    if existing:
+                        existing_rows = len(existing)
+                        return [
+                            TextContent(
+                                type="text",
+                                text=f"The range '{params.range}' already contains {existing_rows} rows "
+                                f"(including headers). Writing will overwrite this data. "
+                                f"To proceed, call again with confirm_overwrite=True, "
+                                f"or use append=True to add rows after existing data.",
+                            )
+                        ]
+
                 result = await client.write_range(
                     params.spreadsheet_id, cell_range=params.range, values=values
                 )
@@ -269,6 +286,21 @@ async def sheets_create(params: SheetsCreateInput) -> list[TextContent]:
         token = await get_google_token()
 
         async with GoogleSheetsClient(token) as client:
+            # Duplicate title guard
+            existing = await client.list_spreadsheets(
+                query=params.title, max_results=50
+            )
+            for f in existing:
+                if f.get("name") == params.title:
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"A spreadsheet named '{params.title}' already exists "
+                            f"(id: {f['id']}). Pick a different title to avoid "
+                            f"creating a duplicate.",
+                        )
+                    ]
+
             metadata = await client.create_spreadsheet(params.title)
             spreadsheet_id = metadata["spreadsheetId"]
             url = metadata.get(
