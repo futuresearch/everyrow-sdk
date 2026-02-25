@@ -287,8 +287,9 @@ class TaskState(BaseModel):
                     completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
                 if settings.is_http:
                     next_call = dedent(f"""\
-                        Call everyrow_results(task_id='{task_id}', page_size={settings.preview_size}) to view the output. \
-                        The server auto-adjusts page_size to fit a {settings.token_budget:,}-token budget.""")
+                        Before fetching results, ask the user how many rows they'd like to review. \
+                        Then call everyrow_results(task_id='{task_id}', page_size=N). \
+                        If the dataset is small ({self.total} rows), just use the default.""")
                 else:
                     next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
                 return f"{completed_msg}\n{next_call}"
