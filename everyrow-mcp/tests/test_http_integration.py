@@ -145,10 +145,25 @@ class TestProgressEndpoint:
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_unknown_task_returns_404(self, client: httpx.AsyncClient):
+    async def test_denied_without_owner(self, client: httpx.AsyncClient):
+        """Poll token is valid but no task owner recorded → fail-closed 403."""
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
         await redis_store.store_poll_token(task_id, poll_token)
+        # No task owner stored — ownership check should reject
+
+        resp = await client.get(
+            f"/api/progress/{task_id}", params={"token": poll_token}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["error"] == "Task ownership could not be verified"
+
+    @pytest.mark.asyncio
+    async def test_unknown_task_returns_404(self, client: httpx.AsyncClient):
+        task_id = str(uuid4())
+        poll_token = secrets.token_urlsafe(16)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
         # No task_token stored
 
         resp = await client.get(
@@ -161,8 +176,9 @@ class TestProgressEndpoint:
     async def test_running_task_returns_progress(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
         await redis_store.store_task_token(task_id, "api-key-123")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         status_resp = _make_status_response(
             status="running", completed=7, total=20, failed=1, running=4
@@ -193,8 +209,9 @@ class TestProgressEndpoint:
     async def test_completed_task_cleans_up_tokens(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
         await redis_store.store_task_token(task_id, "api-key")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         status_resp = _make_status_response(
             status="completed", completed=10, total=10, failed=0, running=0
@@ -220,8 +237,9 @@ class TestProgressEndpoint:
     async def test_api_error_returns_500(self, client: httpx.AsyncClient):
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
         await redis_store.store_task_token(task_id, "api-key")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         with patch(
             "everyrow_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio",
@@ -250,8 +268,9 @@ class TestProgressLifecycle:
         poll_token = secrets.token_urlsafe(16)
 
         # 1. Store tokens (simulating what everyrow_agent does)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
         await redis_store.store_task_token(task_id, "api-key-for-polling")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         # 2. Poll progress — task is running
         running_resp = _make_status_response(status="running", completed=1, total=3)
@@ -307,7 +326,8 @@ class TestDownloadTokenEndpoint:
         """Authorization: Bearer header is parsed correctly by Starlette."""
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
         await redis_store.store_result_csv(task_id, "a,b\n1,2\n")
 
         resp = await client.get(
@@ -339,7 +359,8 @@ class TestDownloadTokenEndpoint:
         """Poll token via ?token= query param in a real URL is rejected."""
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
         await redis_store.store_result_csv(task_id, "a\n1\n")
 
         resp = await client.get(
@@ -355,7 +376,8 @@ class TestDownloadTokenEndpoint:
         """Two sequential mints for the same task produce different download tokens."""
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
         await redis_store.store_result_csv(task_id, "col\nval\n")
 
         headers = {"Authorization": f"Bearer {poll_token}"}
@@ -378,7 +400,8 @@ class TestDownloadTokenEndpoint:
         task_id = str(uuid4())
         poll_token = secrets.token_urlsafe(16)
         csv_text = "x,y\n1,2\n"
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
         await redis_store.store_result_csv(task_id, csv_text)
 
         # Mint
@@ -410,7 +433,8 @@ class TestDownloadTokenEndpoint:
         poll_token = secrets.token_urlsafe(16)
         csv_text = "v\n1\n"
 
-        await redis_store.store_poll_token(task_a, poll_token)
+        await redis_store.store_poll_token(task_a, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_a, "test-user")
         await redis_store.store_result_csv(task_a, csv_text)
         await redis_store.store_result_csv(task_b, csv_text)
 
@@ -456,7 +480,8 @@ class TestDownloadTokenLifecycle:
         csv_data = {"name": ["Alice", "Bob"], "score": [95, 87]}
         df = pd.DataFrame(csv_data)
 
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         # 1. Store results (simulates what everyrow_results tool does)
         result = await try_store_result(
@@ -504,7 +529,8 @@ class TestDownloadTokenLifecycle:
         poll_token = secrets.token_urlsafe(16)
         df = pd.DataFrame({"col": [1, 2, 3]})
 
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         result = await try_store_result(
             task_id, df, 0, 10, mcp_server_url="http://testserver"
@@ -549,7 +575,8 @@ class TestDownloadTokenLifecycle:
         poll_token = secrets.token_urlsafe(16)
         df = pd.DataFrame({"a": [1, 2]})
 
-        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
 
         # Store once to populate Redis cache
         await try_store_result(task_id, df, 0, 10, mcp_server_url="http://testserver")

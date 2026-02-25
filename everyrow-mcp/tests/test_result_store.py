@@ -503,7 +503,8 @@ class TestApiDownload:
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_missing_csv_returns_404(self, client: httpx.AsyncClient):
+    async def test_denied_without_owner(self, client: httpx.AsyncClient):
+        """Valid poll token but no task owner → fail-closed 403."""
         task_id = str(uuid4())
         download_token = secrets.token_urlsafe(32)
 
