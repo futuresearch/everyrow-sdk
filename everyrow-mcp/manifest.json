@@ -3,8 +3,8 @@
   "name": "everyrow-mcp",
   "display_name": "Everyrow MCP Server",
   "version": "0.4.0",
-  "description": "AI-powered dataframe ops: transform, dedupe, merge, rank, and screen with natural language",
-  "long_description": "MCP server for everyrow: agent ops at spreadsheet scale. This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files. All tools operate on local CSV files.",
+  "description": "Give your AI a research team. Forecast, score, classify, or research every row of a dataset.",
+  "long_description": "MCP server for everyrow: give your AI a research team. Each operation dispatches web research agents across a dataset to forecast, score, classify, deduplicate, merge, or research at scale.",
   "author": {
     "name": "FutureSearch",
     "url": "https://everyrow.io"
@@ -31,39 +31,39 @@
   "tools": [
     {
       "name": "everyrow_screen",
-      "description": "Filter rows in a CSV file based on any criteria."
+      "description": "Filter rows — researches each row to evaluate pass/fail."
     },
     {
       "name": "everyrow_rank",
-      "description": "Score and sort rows in a CSV file based on any criteria."
+      "description": "Score and rank rows — researches each row to compute the score."
     },
     {
       "name": "everyrow_dedupe",
-      "description": "Remove duplicate rows from a CSV file using semantic equivalence."
+      "description": "Deduplicate — researches rows to resolve entity matches."
     },
     {
       "name": "everyrow_merge",
-      "description": "Join two CSV files using intelligent entity matching."
+      "description": "Join two CSVs — researches to match rows across tables."
     },
     {
       "name": "everyrow_agent",
-      "description": "Run web research agents on each row of a CSV file."
+      "description": "Research every row and add new columns."
     },
     {
       "name": "everyrow_forecast",
-      "description": "Forecast the probability of binary questions from a CSV file."
+      "description": "Forecast — researches each question to predict outcomes."
     },
     {
       "name": "everyrow_single_agent",
-      "description": "Run a single web research agent on a task, optionally with context data."
+      "description": "Research a single question."
     },
     {
       "name": "everyrow_progress",
-      "description": "Check progress of a running task. Blocks briefly to limit the polling rate."
+      "description": "Check progress of a running task."
     },
     {
       "name": "everyrow_results",
-      "description": "Retrieve results from a completed everyrow task and save them to a CSV."
+      "description": "Retrieve results from a completed task."
     },
     {
       "name": "everyrow_list_sessions",

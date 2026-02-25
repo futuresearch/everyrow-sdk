@@ -90,6 +90,15 @@ class Detailed(BaseModel):
 
 Compare: regex on "remote-friendly" job postings gets 68% precision.
 
+## Via MCP
+
+MCP tool: `everyrow_screen`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `csv_path` | string | Path to input CSV file |
+| `task` | string | What should pass |
+
 ## Related docs
 
 ### Guides

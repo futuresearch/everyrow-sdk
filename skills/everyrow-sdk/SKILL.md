@@ -1,11 +1,11 @@
 ---
 name: everyrow-sdk
-description: Helps write Python code using the everyrow SDK for AI-powered data processing - transforming, deduping, merging, ranking, and screening dataframes with natural language instructions
+description: Use when the user wants Claude to dispatch researchers to forecast, score, classify, or add to a dataset at scale.
 ---
 
 # everyrow SDK
 
-The everyrow SDK provides intelligent data processing utilities powered by AI agents. Use this skill when writing Python code that needs to:
+everyrow gives Claude a research team for your data. Use this skill when writing Python code that needs to:
 
 > **Documentation**: For detailed guides, case studies, and API reference, see:
 > - Docs site: [everyrow.io/docs](https://everyrow.io/docs)
