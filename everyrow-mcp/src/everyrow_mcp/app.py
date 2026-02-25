@@ -131,7 +131,9 @@ then execute the returned curl command, then use the artifact_id from the respon
 - Do NOT pass local file paths to `everyrow_upload_data` — it will fail in remote mode.
 
 ## Results
-- `everyrow_results(task_id)` returns a paginated preview with a download link.
+- `everyrow_results(task_id)` returns a schema preview and a curl command.
+- Execute the curl command to download the full CSV to your sandbox filesystem.
+- Then load with `pd.read_csv('results.csv')` and analyse using code execution.
 """
 )
 

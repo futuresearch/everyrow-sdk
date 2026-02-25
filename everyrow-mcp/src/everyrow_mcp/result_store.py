@@ -17,6 +17,7 @@ import json
 import logging
 import math
 import secrets
+import shlex
 from typing import Any
 
 import pandas as pd
@@ -159,6 +160,52 @@ def _build_result_response(
     ]
 
 
+def _build_curl_result_response(
+    task_id: str,
+    csv_url: str,
+    preview_records: list[dict[str, Any]],
+    total: int,
+    columns: list[str],
+    session_url: str = "",
+    poll_token: str = "",
+    mcp_server_url: str = "",
+) -> list[TextContent]:
+    """Build MCP TextContent response with a curl download command.
+
+    Instead of returning full paginated data, returns a small preview
+    (for schema understanding) plus a curl command to download the full CSV.
+    """
+    col_names = _format_columns(columns)
+
+    widget_data: dict[str, Any] = {
+        "csv_url": csv_url,
+        "preview": preview_records,
+        "total": total,
+    }
+    if session_url:
+        widget_data["session_url"] = session_url
+    if poll_token:
+        widget_data["poll_token"] = poll_token
+        widget_data["download_token_url"] = (
+            f"{mcp_server_url}/api/results/{task_id}/download-token"
+        )
+    widget_json = json.dumps(widget_data)
+
+    curl_cmd = f"curl -sS -o results.csv {shlex.quote(csv_url)}"
+    summary = (
+        f"Results: {total} rows, {len(columns)} columns ({col_names}).\n"
+        f"Schema preview ({len(preview_records)} rows) is attached above.\n\n"
+        f"Download the full CSV to analyse it:\n"
+        f"```\n{curl_cmd}\n```\n"
+        f"Then load with: `df = pd.read_csv('results.csv')`"
+    )
+
+    return [
+        TextContent(type="text", text=widget_json),
+        TextContent(type="text", text=summary),
+    ]
+
+
 async def _get_csv_url(
     task_id: str, mcp_server_url: str
 ) -> tuple[str, str] | tuple[None, None]:
@@ -183,6 +230,8 @@ async def try_cached_result(
     offset: int,
     page_size: int,
     mcp_server_url: str = "",
+    *,
+    curl_mode: bool = False,
 ) -> list[TextContent] | None:
     cached_meta_raw = await redis_store.get_result_meta(task_id)
     if not cached_meta_raw:
@@ -220,6 +269,19 @@ async def try_cached_result(
         logger.warning("Poll token expired for task %s, falling back to API", task_id)
         return None
 
+    if curl_mode:
+        curl_preview = preview_records[: settings.curl_preview_rows]
+        return _build_curl_result_response(
+            task_id=task_id,
+            csv_url=csv_url,
+            preview_records=curl_preview,
+            total=meta["total"],
+            columns=meta["columns"],
+            session_url=meta.get("session_url", ""),
+            poll_token=poll_token or "",
+            mcp_server_url=mcp_server_url,
+        )
+
     preview_records, effective_page_size = clamp_page_to_budget(
         preview_records=preview_records,
         page_size=page_size,
@@ -247,6 +309,8 @@ async def try_store_result(
     page_size: int,
     session_url: str = "",
     mcp_server_url: str = "",
+    *,
+    curl_mode: bool = False,
 ) -> list[TextContent] | None:
     """Store a DataFrame in Redis and return a response.
 
@@ -283,6 +347,19 @@ async def try_store_result(
                 "Poll token expired for task %s, cannot build download URL", task_id
             )
             return None
+
+        if curl_mode:
+            curl_preview = preview_records[: settings.curl_preview_rows]
+            return _build_curl_result_response(
+                task_id=task_id,
+                csv_url=csv_url,
+                preview_records=curl_preview,
+                total=total,
+                columns=columns,
+                session_url=session_url,
+                poll_token=poll_token or "",
+                mcp_server_url=mcp_server_url,
+            )
 
         preview_records, effective_page_size = clamp_page_to_budget(
             preview_records=preview_records,

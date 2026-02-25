@@ -865,7 +865,9 @@ async def everyrow_results_http(  # noqa: PLR0911
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    Results are returned as a paginated preview with a download link.
+    Returns a schema preview and a curl command to download the full CSV.
+    Execute the curl command to download the full CSV, then use
+    pd.read_csv('results.csv') to analyse the data.
     """
     client = _get_client(ctx)
     task_id = params.task_id
@@ -886,7 +888,11 @@ async def everyrow_results_http(  # noqa: PLR0911
 
     # ── Return from cache if available ───────────────────────────
     cached = await try_cached_result(
-        task_id, params.offset, params.page_size, mcp_server_url=mcp_server_url
+        task_id,
+        params.offset,
+        params.page_size,
+        mcp_server_url=mcp_server_url,
+        curl_mode=True,
     )
     if cached is not None:
         return cached
@@ -916,7 +922,7 @@ async def everyrow_results_http(  # noqa: PLR0911
     # output_path is accepted by the schema but ignored in HTTP mode —
     # the server must not write to its own filesystem on remote request.
 
-    # ── Store in Redis and return paginated response ──────────────
+    # ── Store in Redis and return curl download response ──────────
     store_response = await try_store_result(
         task_id,
         df,
@@ -924,13 +930,14 @@ async def everyrow_results_http(  # noqa: PLR0911
         params.page_size,
         session_url,
         mcp_server_url=mcp_server_url,
+        curl_mode=True,
     )
     if store_response is not None:
         return store_response
 
-    # ── Fallback: return inline preview when Redis is unavailable ──
-    page_df = df.iloc[params.offset : params.offset + params.page_size]
-    preview = _sanitize_records(page_df.to_dict(orient="records"))
+    # ── Fallback: return small inline preview when Redis is unavailable ──
+    preview_df = df.iloc[: settings.curl_preview_rows]
+    preview = _sanitize_records(preview_df.to_dict(orient="records"))
     cols = ", ".join(df.columns)
     return [
         TextContent(
@@ -940,7 +947,7 @@ async def everyrow_results_http(  # noqa: PLR0911
         TextContent(
             type="text",
             text=f"Results: {len(df)} rows, {len(df.columns)} columns ({cols}). "
-            f"Showing {len(page_df)} rows inline (Redis unavailable, no download link).",
+            f"Showing {len(preview_df)} row schema preview (Redis unavailable, no download link).",
         ),
     ]
 
