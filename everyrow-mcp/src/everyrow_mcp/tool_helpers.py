@@ -92,13 +92,12 @@ async def _submission_ui_json(
     poll_token = secrets.token_urlsafe(32)
     await redis_store.store_task_token(task_id, token)
 
-    # Record task owner for cross-user access checks (HTTP auth mode only).
+    # Record task owner for cross-user access checks (HTTP mode only).
     # This MUST succeed — downstream ownership checks deny access when no
     # owner is recorded, so a silent failure here would lock the user out
-    # of their own task.  Skipped in no-auth mode where there is no
-    # authenticated user.
+    # of their own task.
     user_id = ""
-    if settings.is_http and settings.require_auth:
+    if settings.is_http:
         access_token = get_access_token()
         if not access_token or not access_token.client_id:
             raise RuntimeError(
@@ -134,11 +133,13 @@ async def create_tool_response(
     """Build the standard submission response for a tool.
 
     Returns human-readable text in all modes, plus a widget JSON
-    prepended in HTTP mode.
+    prepended in authenticated HTTP mode.  In no-auth HTTP mode the
+    widget is skipped (no Claude Desktop to render it) but the task
+    token is still stored so the progress tool can poll the API.
     """
     text = _submission_text(label, session_url, task_id)
     main_content = TextContent(type="text", text=text)
-    if settings.is_http:
+    if settings.is_http and settings.require_auth:
         ui_json = await _submission_ui_json(
             session_url=session_url,
             task_id=task_id,
@@ -147,6 +148,9 @@ async def create_tool_response(
             mcp_server_url=mcp_server_url,
         )
         return [TextContent(type="text", text=ui_json), main_content]
+    if settings.is_http:
+        # No-auth HTTP: store the API token for progress polling, skip widget.
+        await redis_store.store_task_token(task_id, token)
     return [main_content]
 
 

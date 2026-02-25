@@ -407,7 +407,11 @@ class TestMcpProtocol:
 
     @pytest.mark.asyncio
     async def test_submit_task_noauth_http(self, _noauth_http_state):
-        """Task submission works in no-auth HTTP mode (no access token)."""
+        """Task submission works in no-auth HTTP mode (no access token).
+
+        No widget JSON is returned (no Claude Desktop to render it),
+        only the human-readable text.
+        """
         task_id = str(uuid4())
         mock_task = _mock_task(task_id)
         _, fake_create_session = _mock_session()
@@ -441,11 +445,10 @@ class TestMcpProtocol:
                 )
 
             assert not result.isError
-            # HTTP mode returns 2 content items: widget JSON + human text
-            assert len(result.content) == 2
-            widget = json.loads(result.content[0].text)
-            assert widget["task_id"] == task_id
-            assert widget["status"] == "submitted"
+            # No-auth mode: text only, no widget JSON
+            assert len(result.content) == 1
+            assert isinstance(result.content[0], TextContent)
+            assert task_id in result.content[0].text
 
 
 # ── TestMcpE2ERealApi — real API tests ────────────────────────
