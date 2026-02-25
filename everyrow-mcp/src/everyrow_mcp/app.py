@@ -1,85 +1,148 @@
-"""FastMCP application instance, lifespan, and task state management."""
+"""FastMCP application instance, lifespans, and resource handlers."""
 
-import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
 
-from everyrow.api_utils import create_client
+from everyrow.api_utils import create_client as _create_sdk_client
 from everyrow.generated.api.billing.get_billing_balance_billing_get import (
     asyncio as get_billing,
 )
 from everyrow.generated.client import AuthenticatedClient
-from everyrow.generated.models.public_task_type import PublicTaskType
-from everyrow.generated.models.task_status import TaskStatus
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 
-PROGRESS_POLL_DELAY = 12  # seconds to block in everyrow_progress before returning
-TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
-# Singleton client, initialized in lifespan
-_client: AuthenticatedClient | None = None
-
-
-@asynccontextmanager
-async def lifespan(_server: FastMCP):
-    """Initialize singleton client and validate credentials on startup."""
-    global _client  # noqa: PLW0603
-
-    _clear_task_state()
-
-    try:
-        with create_client() as _client:
-            response = await get_billing(client=_client)
-            if response is None:
-                raise RuntimeError("Failed to authenticate with everyrow API")
-            yield
-    except Exception as e:
-        logging.getLogger(__name__).error(f"everyrow-mcp startup failed: {e!r}")
-        raise
-    finally:
-        _client = None
-        _clear_task_state()
-
-
-mcp = FastMCP("everyrow_mcp", lifespan=lifespan)
+from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import TASK_STATE_FILE, get_redis_client
+from everyrow_mcp.tool_helpers import SessionContext
 
 
 def _clear_task_state() -> None:
+    if settings.is_http:
+        return
     if TASK_STATE_FILE.exists():
         TASK_STATE_FILE.unlink()
 
 
-def _write_task_state(
-    task_id: str,
-    task_type: PublicTaskType,
-    session_url: str,
-    total: int,
-    completed: int,
-    failed: int,
-    running: int,
-    status: TaskStatus,
-    started_at: datetime,
-) -> None:
-    """Write task tracking state for hooks/status line to read.
+@asynccontextmanager
+async def stdio_lifespan(_server: FastMCP):
+    """Initialize singleton client and validate credentials on startup (stdio mode)."""
+    _clear_task_state()
 
-    Note: Only one task is tracked at a time. If multiple tasks run concurrently,
-    only the most recent one's progress is shown.
-    """
     try:
-        TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        state = {
-            "task_id": task_id,
-            "task_type": task_type.value,
-            "session_url": session_url,
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "running": running,
-            "status": status.value,
-            "started_at": started_at.timestamp(),
-        }
-        with open(TASK_STATE_FILE, "w") as f:
-            json.dump(state, f)
+        with _create_sdk_client() as client:
+            response = await get_billing(client=client)
+            if response is None:
+                raise RuntimeError("Failed to authenticate with everyrow API")
+            yield SessionContext(client_factory=lambda: client)
     except Exception as e:
-        logging.getLogger(__name__).debug(f"Failed to write task state: {e!r}")
+        logging.getLogger(__name__).error("everyrow-mcp startup failed: %r", e)
+        raise
+    finally:
+        _clear_task_state()
+
+
+@asynccontextmanager
+async def http_lifespan(_server: FastMCP):
+    """HTTP mode lifespan — verify Redis on startup.
+
+    NOTE: This runs per MCP *session*, not per server. Do NOT close
+    shared resources (auth_provider, Redis) here — they must survive
+    across sessions. Process exit handles cleanup.
+    """
+    redis_client = get_redis_client()
+    await redis_client.ping()  # pyright: ignore[reportGeneralTypeIssues]
+
+    def _http_client_factory() -> AuthenticatedClient:
+        access_token = get_access_token()
+        if access_token is None:
+            raise RuntimeError("Not authenticated")
+        return AuthenticatedClient(
+            base_url=settings.everyrow_api_url,
+            token=access_token.token,
+            raise_on_unexpected_status=True,
+            follow_redirects=True,
+        )
+
+    yield SessionContext(
+        client_factory=_http_client_factory,
+        mcp_server_url=settings.mcp_server_url,
+    )
+
+
+@asynccontextmanager
+async def no_auth_http_lifespan(_server: FastMCP):
+    """HTTP no-auth mode: singleton client from API key, verify Redis."""
+    redis_client = get_redis_client()
+    await redis_client.ping()  # pyright: ignore[reportGeneralTypeIssues]
+
+    with _create_sdk_client() as client:
+        response = await get_billing(client=client)
+        if response is None:
+            raise RuntimeError("Failed to authenticate with everyrow API")
+        yield SessionContext(
+            client_factory=lambda: client,
+            mcp_server_url=settings.mcp_server_url,
+        )
+
+
+_INSTRUCTIONS_COMMON = """\
+You are connected to the everyrow MCP server. everyrow dispatches web research \
+agents that search the internet, read pages, and return structured results for \
+every row in a dataset.
+
+## Workflow
+1. **Ingest data** — pass `data` (inline list of dicts) or an `artifact_id` \
+(from `everyrow_upload_data` or `everyrow_request_upload_url`) to any processing tool.
+2. **Submit** — call a processing tool (everyrow_agent, everyrow_screen, \
+everyrow_rank, everyrow_dedupe, everyrow_merge, everyrow_forecast). \
+It returns a task_id immediately.
+3. **Poll** — call `everyrow_progress(task_id)` repeatedly until the task completes. \
+Do NOT add commentary between progress calls — just call again immediately.
+4. **Results** — call `everyrow_results(task_id)` to retrieve the output.
+
+## Key rules
+- Always share the session_url with the user after submitting a task.
+- Never guess or fabricate results — always wait for the task to complete.
+- For small datasets (< 50 rows), prefer passing `data` directly.
+- For larger datasets, use `everyrow_upload_data` to get an artifact_id first.
+"""
+
+_INSTRUCTIONS_STDIO = (
+    _INSTRUCTIONS_COMMON
+    + """\
+## Data ingestion (local mode)
+- `everyrow_upload_data(source="/path/to/file.csv")` — upload a local CSV file.
+- `everyrow_upload_data(source="https://...")` — upload from a URL (Google Sheets supported).
+- Or pass `data=[{"col": "val"}, ...]` directly to any processing tool.
+
+## Results
+- `everyrow_results(task_id, output_path="/path/to/output.csv")` saves results as CSV.
+"""
+)
+
+_INSTRUCTIONS_HTTP = (
+    _INSTRUCTIONS_COMMON
+    + """\
+## Data ingestion (remote mode)
+- `everyrow_upload_data(source="https://...")` — upload from a URL (Google Sheets supported).
+- For local/sandbox files, use `everyrow_request_upload_url(filename="data.csv")`, \
+then execute the returned curl command, then use the artifact_id from the response.
+- Or pass `data=[{"col": "val"}, ...]` directly to any processing tool.
+- Do NOT pass local file paths to `everyrow_upload_data` — it will fail in remote mode.
+
+## Results
+- `everyrow_results(task_id)` returns a paginated preview with a download link.
+"""
+)
+
+
+def get_instructions(is_http: bool) -> str:
+    """Return server instructions appropriate for the transport mode."""
+    return _INSTRUCTIONS_HTTP if is_http else _INSTRUCTIONS_STDIO
+
+
+mcp = FastMCP(
+    "everyrow_mcp",
+    instructions=_INSTRUCTIONS_STDIO,
+    lifespan=stdio_lifespan,
+)

@@ -2,7 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from everyrow_mcp.redis_utils import REDIS_DB, build_key, create_redis_client
+from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import build_key, create_redis_client
 
 
 class TestBuildKey:
@@ -29,7 +30,7 @@ class TestBuildKey:
 class TestCreateRedisClient:
     """Tests for create_redis_client factory."""
 
-    @patch("everyrow_mcp.redis_utils.Redis")
+    @patch("everyrow_mcp.redis_store.Redis")
     def test_direct_mode(self, mock_redis_cls):
         """Test direct Redis connection (no Sentinel)."""
         mock_client = MagicMock()
@@ -46,7 +47,7 @@ class TestCreateRedisClient:
         assert call_kwargs["password"] == "secret"
         assert call_kwargs["decode_responses"] is True
 
-    @patch("everyrow_mcp.redis_utils.Sentinel")
+    @patch("everyrow_mcp.redis_store.Sentinel")
     def test_sentinel_mode(self, mock_sentinel_cls):
         """Test Sentinel-based Redis connection."""
         mock_sentinel = MagicMock()
@@ -57,7 +58,7 @@ class TestCreateRedisClient:
         result = create_redis_client(
             sentinel_endpoints="host1:26379,host2:26379",
             sentinel_master_name="mymaster",
-            db=REDIS_DB,
+            db=settings.redis_db,
         )
 
         assert result is mock_master
@@ -67,8 +68,9 @@ class TestCreateRedisClient:
         assert ("host2", 26379) in sentinels
         mock_sentinel.master_for.assert_called_once_with(
             "mymaster",
-            db=REDIS_DB,
+            db=settings.redis_db,
             password=None,
+            ssl=False,
             decode_responses=True,
             health_check_interval=30,
             retry=mock_sentinel.master_for.call_args[1]["retry"],

@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "everyrow-mcp",
   "display_name": "Everyrow MCP Server",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "AI-powered dataframe ops: transform, dedupe, merge, rank, and screen with natural language",
   "long_description": "MCP server for everyrow: agent ops at spreadsheet scale. This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files. All tools operate on local CSV files.",
   "author": {
@@ -50,16 +50,32 @@
       "description": "Run web research agents on each row of a CSV file."
     },
     {
+      "name": "everyrow_forecast",
+      "description": "Forecast the probability of binary questions from a CSV file."
+    },
+    {
       "name": "everyrow_single_agent",
       "description": "Run a single web research agent on a task, optionally with context data."
     },
     {
       "name": "everyrow_progress",
-      "description": "Check progress of a running task. Blocks for a time to limit the polling rate."
+      "description": "Check progress of a running task. Blocks briefly to limit the polling rate."
     },
     {
       "name": "everyrow_results",
       "description": "Retrieve results from a completed everyrow task and save them to a CSV."
+    },
+    {
+      "name": "everyrow_list_sessions",
+      "description": "List everyrow sessions owned by the authenticated user (paginated)."
+    },
+    {
+      "name": "everyrow_cancel",
+      "description": "Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."
+    },
+    {
+      "name": "everyrow_upload_data",
+      "description": "Upload data from a URL or local file. Returns an artifact_id for use in processing tools."
     }
   ],
   "user_config": {
