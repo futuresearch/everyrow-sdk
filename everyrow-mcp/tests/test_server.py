@@ -1217,7 +1217,9 @@ class TestUploadData:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x,y\n1,2\n")
 
-        with override_settings(transport="streamable-http"):
+        with override_settings(
+            transport="streamable-http", upload_secret="test-secret"
+        ):
             with pytest.raises(
                 ValidationError, match="Local file paths are not supported"
             ):
@@ -1225,7 +1227,9 @@ class TestUploadData:
 
     def test_upload_accepts_url_in_http_mode(self):
         """Test that URLs are accepted in HTTP mode."""
-        with override_settings(transport="streamable-http"):
+        with override_settings(
+            transport="streamable-http", upload_secret="test-secret"
+        ):
             params = UploadDataInput(source="https://example.com/data.csv")
             assert params.source == "https://example.com/data.csv"
 
@@ -1420,7 +1424,7 @@ class TestStdioVsHttpGating:
         fake_token.client_id = "test-user-123"
 
         with (
-            override_settings(transport="streamable-http"),
+            override_settings(transport="streamable-http", upload_secret="test-secret"),
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
@@ -1482,7 +1486,7 @@ class TestStdioVsHttpGating:
         )
 
         with (
-            override_settings(transport="streamable-http"),
+            override_settings(transport="streamable-http", upload_secret="test-secret"),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,

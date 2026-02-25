@@ -55,7 +55,7 @@ pytestmark = pytest.mark.skipif(
 def _http_mode(fake_redis):
     """Configure settings for HTTP mode with the shared test Redis."""
     with (
-        override_settings(transport="streamable-http"),
+        override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
     ):
         yield

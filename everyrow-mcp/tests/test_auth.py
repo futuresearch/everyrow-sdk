@@ -64,7 +64,14 @@ def mock_redis():
     async def _delete(key):
         store.pop(key, None)
 
+    async def _set(key, value, *, ex=None, nx=False):  # noqa: ARG001
+        if nx and key in store:
+            return None  # NX: skip if key exists
+        store[key] = value
+        return True
+
     redis.setex = AsyncMock(side_effect=_setex)
+    redis.set = AsyncMock(side_effect=_set)
     redis.exists = AsyncMock(side_effect=_exists)
     redis.delete = AsyncMock(side_effect=_delete)
     redis._store = store  # exposed for assertions
@@ -359,8 +366,11 @@ def provider_redis():
 
     redis = AsyncMock()
 
-    async def _set(key, value):
+    async def _set(key, value, *, ex=None, nx=False):  # noqa: ARG001
+        if nx and key in store:
+            return None  # NX: skip if key exists
         store[key] = value
+        return True
 
     async def _setex(*args, name=None, time=None, value=None):  # noqa: ARG001
         key = name if name is not None else args[0]

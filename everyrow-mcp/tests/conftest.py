@@ -25,6 +25,7 @@ import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
 from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import _get_fernet
 from everyrow_mcp.tool_helpers import SessionContext
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
@@ -95,11 +96,13 @@ def override_settings(**overrides):
     orig = {k: getattr(settings, k) for k in overrides}
     for k, v in overrides.items():
         setattr(settings, k, v)
+    _get_fernet.cache_clear()
     try:
         yield
     finally:
         for k, v in orig.items():
             setattr(settings, k, v)
+        _get_fernet.cache_clear()
 
 
 @pytest.fixture

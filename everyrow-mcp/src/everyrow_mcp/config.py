@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
+from urllib.parse import urlparse
 
-from pydantic import Field, PositiveInt, field_validator
+from pydantic import Field, PositiveInt, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -108,6 +112,15 @@ class Settings(BaseSettings):
         description="Maximum response size when fetching CSV from a URL (50 MB).",
     )
 
+    upload_rate_limit: PositiveInt = Field(
+        default=20,
+        description="Max uploads per user per rate window",
+    )
+    upload_rate_window: PositiveInt = Field(
+        default=3600,
+        description="Upload rate limit sliding window in seconds (1 hour)",
+    )
+
     everyrow_api_key: str | None = Field(default=None, repr=False)
 
     @property
@@ -120,8 +133,34 @@ class Settings(BaseSettings):
 
     @field_validator("mcp_server_url", "supabase_url")
     @classmethod
-    def _strip_url_slashes(cls, v: str) -> str:
-        return v.rstrip("/")
+    def _validate_url(cls, v: str) -> str:
+        v = v.rstrip("/")
+        if not v:
+            return v
+        parsed = urlparse(v)
+        host = (parsed.hostname or "").lower()
+        is_local = host in ("localhost", "127.0.0.1", "::1")
+        if not is_local and parsed.scheme != "https":
+            raise ValueError(
+                f"Non-localhost URLs must use https:// (got {parsed.scheme}://)"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _require_redis_ssl_for_remote(self) -> Settings:
+        host = (self.redis_host or "").lower()
+        is_local = host in ("localhost", "127.0.0.1", "::1", "")
+        if not is_local and not self.redis_ssl:
+            if self.is_http:
+                raise ValueError(
+                    f"Redis host {self.redis_host} is remote but redis_ssl=False. "
+                    "Enable redis_ssl for non-localhost Redis in HTTP mode."
+                )
+            logger.warning(
+                "Redis host %s is remote but redis_ssl=False — traffic is unencrypted.",
+                self.redis_host,
+            )
+        return self
 
 
 @lru_cache

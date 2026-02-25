@@ -3,7 +3,7 @@
 _APP_SCRIPT_SRC = "https://unpkg.com/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
 
 RESULTS_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
+<html><head><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light dark">
 <style>
 :root{
   --bg:#fff;--bg-alt:#f8f9fa;--bg-hover:rgba(25,118,210,0.06);
@@ -166,7 +166,7 @@ app.onhostcontextchanged=(ctx)=>{
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 function escAttr(s){return esc(s).replace(/"/g,"&quot;");}
 function truncSafe(s,len){if(s.length<=len)return s;let t=s.slice(0,len);const urlRe=/(https?:\\/\\/[^\\s<>"'\\]]+)$/;const m=t.match(urlRe);if(m){const full=s.slice(m.index).match(/^https?:\\/\\/[^\\s<>"'\\]]+/);if(full&&full[0].length>m[1].length)t=s.slice(0,m.index+full[0].length);}return t;}
-function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
+function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
 
 /* --- data processing --- */
 function flat(obj,pre){
@@ -702,11 +702,11 @@ function updateSessionLink(){
   sessionLinkEl.innerHTML=h;
   document.getElementById("sessionOpenLink")?.addEventListener("click",e=>{
     e.preventDefault();
-    app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
+    if(!/^https?:\\/\\//i.test(sessionUrl))return;app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
   });
   document.getElementById("csvOpenLink")?.addEventListener("click",e=>{
     e.preventDefault();
-    app.openLink({url:csvUrl}).catch(()=>window.open(csvUrl,"_blank"));
+    if(!/^https?:\\/\\//i.test(csvUrl))return;app.openLink({url:csvUrl}).catch(()=>window.open(csvUrl,"_blank"));
   });
 }
 
@@ -743,7 +743,7 @@ applyTheme();
 </script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
 
 SESSION_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
+<html><head><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light dark">
 <style>
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:12px;color:#333;font-size:13px}
@@ -834,7 +834,7 @@ function render(d){
   const link=el.querySelector(".session-open");
   if(link){link.addEventListener("click",e=>{
     e.preventDefault();
-    app.openLink({url:url}).catch(()=>window.open(url,"_blank"));
+    if(!/^https?:\\/\\//i.test(url))return;app.openLink({url:url}).catch(()=>window.open(url,"_blank"));
   });}
 
   if(done&&!wasDone){wasDone=true;el.classList.add("flash")}

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import time as _time
 from urllib.parse import urlparse
 
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import lifespan_wrapper
@@ -70,15 +72,19 @@ def configure_http_mode(
     mcp.settings.host = host
     mcp.settings.port = port
 
-    if not no_auth and not settings.upload_secret:
+    if not settings.upload_secret:
         raise RuntimeError(
             "UPLOAD_SECRET must be set in HTTP mode for HMAC signing. "
             'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
         )
-    if settings.is_http and not no_auth and not settings.redis_password:
-        logger.warning(
+    if not no_auth and not settings.redis_password:
+        raise RuntimeError(
             "REDIS_PASSWORD is not set — Redis is unauthenticated. "
             "Set REDIS_PASSWORD for production deployments."
+        )
+    if no_auth and not settings.redis_password:
+        logger.warning(
+            "REDIS_PASSWORD is not set — acceptable for local development only."
         )
 
     _register_widgets(mcp, mcp_server_url)
@@ -164,23 +170,31 @@ def _ui_csp(connect_domains: list[str]) -> dict[str, str | list[str]]:
 
 
 class _RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log every inbound request and its response status at DEBUG level."""
+    """Log inbound requests at INFO level with method, path, status, and timing."""
 
     async def dispatch(self, request, call_next):
-        has_auth = "authorization" in request.headers
-        logger.debug(
-            "INCOMING %s %s | Host: %s | Auth: %s",
-            request.method,
-            request.url.path,
-            request.headers.get("host", "?"),
-            "present" if has_auth else "none",
-        )
+        # Skip health check requests — k8s probes hit these every ~10s.
+        if request.url.path == "/health":
+            return await call_next(request)
+
+        start = _time.monotonic()
         response = await call_next(request)
-        logger.debug(
-            "RESPONSE %s %s -> %s",
+        elapsed_ms = (_time.monotonic() - start) * 1000
+
+        # Extract user_id from the access token if available.
+        try:
+            access_token = get_access_token()
+            user_id = access_token.client_id if access_token else None
+        except Exception:
+            user_id = None
+
+        logger.info(
+            "HTTP %s %s -> %d (%.0fms) user=%s",
             request.method,
             request.url.path,
             response.status_code,
+            elapsed_ms,
+            user_id or "anon",
         )
         return response
 
