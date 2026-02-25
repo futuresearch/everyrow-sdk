@@ -130,8 +130,32 @@ async def api_progress(request: Request) -> Response:
         )
 
 
-async def api_download(request: Request) -> Response:
-    """REST endpoint to download task results as CSV."""
+async def _validate_poll_token_bearer_only(
+    task_id: str, request: Request
+) -> JSONResponse | None:
+    """Validate poll token from Authorization header only (no query params).
+
+    Used for API endpoints where query-param auth is inappropriate
+    (e.g. token minting — the poll token must not leak into URLs).
+    """
+    expected = await redis_store.get_poll_token(task_id)
+    auth_header = request.headers.get("authorization", "")
+    provided = auth_header[7:] if auth_header.lower().startswith("bearer ") else ""
+    if not expected or not provided or not secrets.compare_digest(provided, expected):
+        logger.warning("Invalid poll token (bearer-only) for task %s", task_id)
+        return JSONResponse(
+            {"error": "Unauthorized"}, status_code=403, headers=_cors_headers()
+        )
+    return None
+
+
+async def api_download_token(request: Request) -> Response:
+    """Mint a fresh short-lived download token, authenticated via poll token.
+
+    The widget calls this on click so the user always gets a valid
+    download URL, even if the original one baked into the tool result
+    has expired (5-min TTL) or was already consumed (single-use).
+    """
     cors = _cors_headers()
     if request.method == "OPTIONS":
         return Response(
@@ -144,8 +168,62 @@ async def api_download(request: Request) -> Response:
     if err := _validate_uuid(task_id):
         return err
 
-    if err := await _validate_poll_token(task_id, request):
+    if err := await _validate_poll_token_bearer_only(task_id, request):
         return err
+
+    # No point minting a token if the CSV has already expired
+    csv_exists = await redis_store.get_result_csv(task_id)
+    if csv_exists is None:
+        return JSONResponse(
+            {"error": "Results not found or expired"}, status_code=404, headers=cors
+        )
+
+    download_token = secrets.token_urlsafe(32)
+    await redis_store.store_download_token(download_token, task_id)
+
+    download_url = (
+        f"{settings.mcp_server_url}/api/results/{task_id}/download"
+        f"?token={download_token}"
+    )
+    return JSONResponse({"download_url": download_url}, headers=cors)
+
+
+async def api_download(request: Request) -> Response:
+    """REST endpoint to download task results as CSV.
+
+    Authenticates via a short-lived, single-use download token (not the
+    long-lived poll token).  The token is consumed atomically on use so
+    a leaked download URL cannot be replayed.
+    """
+    cors = _cors_headers()
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=204,
+            headers={**cors, "Access-Control-Max-Age": "3600"},
+        )
+
+    task_id = request.path_params["task_id"]
+
+    if err := _validate_uuid(task_id):
+        return err
+
+    provided = request.query_params.get("token", "")
+
+    # Atomically consume the download token (empty string yields None)
+    token_task_id = await redis_store.pop_download_token(provided) if provided else None
+    if token_task_id is None:
+        logger.warning("Invalid or expired download token for task %s", task_id)
+        return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
+
+    # Verify the token was issued for this task
+    if not secrets.compare_digest(token_task_id, task_id):
+        logger.warning(
+            "Download token task_id mismatch: token for %s used on %s",
+            token_task_id,
+            task_id,
+        )
+        await redis_store.restore_download_token(provided, token_task_id)
+        return JSONResponse({"error": "Unauthorized"}, status_code=403, headers=cors)
 
     csv_text = await redis_store.get_result_csv(task_id)
     if csv_text is None:

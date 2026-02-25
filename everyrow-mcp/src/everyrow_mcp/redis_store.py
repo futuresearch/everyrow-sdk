@@ -27,6 +27,7 @@ TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 RESULT_CACHE_TTL = 600
 CSV_CACHE_TTL = 3600  # 1 hour — full CSV stored in Redis for download
 TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task
+DOWNLOAD_TOKEN_TTL = 300  # 5 minutes — short-lived, single-use download tokens
 
 
 class Transport(StrEnum):
@@ -295,3 +296,38 @@ async def pop_upload_meta(upload_id: str) -> str | None:
     """Atomically get and delete upload metadata (prevents replay)."""
     key = build_key("upload", upload_id)
     return await get_redis_client().getdel(key)
+
+
+# ── Download tokens (short-lived, single-use) ────────────────
+
+
+async def store_download_token(download_token: str, task_id: str) -> None:
+    """Store a single-use download token that maps back to a task_id.
+
+    Keyed by token (reverse-lookup) so multiple concurrent download tokens
+    can exist for the same task, and GETDEL provides natural consume semantics.
+    """
+    await get_redis_client().setex(
+        name=build_key("dl_token", download_token),
+        time=DOWNLOAD_TOKEN_TTL,
+        value=encrypt_value(task_id),
+    )
+
+
+async def pop_download_token(download_token: str) -> str | None:
+    """Atomically consume a download token, returning the task_id or None."""
+    encrypted = await get_redis_client().getdel(build_key("dl_token", download_token))
+    if encrypted is None:
+        return None
+    return decrypt_value(encrypted)
+
+
+async def restore_download_token(
+    download_token: str, task_id: str, ttl: int = DOWNLOAD_TOKEN_TTL
+) -> None:
+    """Re-store a download token (e.g. after a task_id mismatch)."""
+    await get_redis_client().setex(
+        name=build_key("dl_token", download_token),
+        time=ttl,
+        value=encrypt_value(task_id),
+    )
