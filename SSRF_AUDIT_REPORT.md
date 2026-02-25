@@ -9,15 +9,27 @@
 
 ## Executive Summary
 
-The MCP server implements a **three-layer SSRF protection** around its sole user-controlled URL-fetching path (`fetch_csv_from_url`), introduced in commit `4000b88`. The protections are well-designed and cover the major attack vectors. No **Critical** vulnerabilities were found. The remaining risks are a narrow DNS-rebinding TOCTOU window that existing mitigations reduce but cannot fully close, missing port restrictions, and an incomplete IP blocklist. The auth subsystem and Redis infrastructure are not directly exploitable for SSRF.
+The MCP server implements a **three-layer SSRF protection** around its sole user-controlled URL-fetching path (`fetch_csv_from_url`), introduced in commit `4000b88`. The protections are well-designed and cover the major attack vectors. No **Critical** vulnerabilities were found. The two highest-priority findings — DNS-rebinding TOCTOU (FINDING-01) and missing port restrictions (FINDING-02) — have been **fixed** in this PR.
 
 | Severity | Count | Status |
 |----------|-------|--------|
 | Critical | 0 | — |
-| High | 1 | Residual risk (mitigated) |
-| Medium | 3 | Actionable |
-| Low | 5 | Hardening opportunities |
-| Info | 3 | Defence-in-depth notes |
+| High | 1 | **Fixed** (FINDING-01) |
+| Medium | 3 | 1 **fixed** (FINDING-02), 2 open |
+| Low | 4 | Hardening opportunities |
+| Info | 4 | Defence-in-depth notes |
+
+---
+
+## Scope Limitations
+
+This audit is based on **static analysis** of the source code. The following were not tested:
+
+- No runtime DNS rebinding was attempted against a live instance
+- No live container escape testing
+- No fuzzing of URL parser edge cases
+- No review of the EveryRow SDK client code (only the MCP server)
+- No penetration testing of the deployed Kubernetes infrastructure
 
 ---
 
@@ -58,7 +70,7 @@ everyrow_upload_data(source=<user_url>)
 
 ### Layer 1: Pre-flight DNS Validation
 
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:53-100`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:53-100`
 
 Before any HTTP request, `_validate_url_target(url)` extracts the hostname via `urlparse` and calls `_validate_hostname()`, which:
 
@@ -80,15 +92,15 @@ Before any HTTP request, `_validate_url_target(url)` extracts the hostname via `
 | `fc00::/7` | IPv6 ULA |
 | `fe80::/10` | IPv6 link-local |
 
-### Layer 2: Transport-Level Re-validation
+### Layer 2: Transport-Level IP Pinning
 
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:168-185`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:168-185`
 
-Custom `_SSRFSafeTransport(httpx.AsyncBaseTransport)` wraps every outgoing request and calls `_validate_hostname(request.url.host)` immediately before the inner transport connects. This re-check narrows the DNS-rebinding TOCTOU window.
+Custom `_SSRFSafeTransport(httpx.AsyncBaseTransport)` resolves DNS, validates the resolved IPs, and **pins the connection** to the validated IP. The original hostname is preserved in the `Host` header and TLS SNI extension.
 
 ### Layer 3: Redirect Chain Validation
 
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:152-165`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:152-165`
 
 An httpx `event_hooks["response"]` hook validates every redirect `Location` header against `_validate_url_target()` before following. Redirects are capped at `max_redirects=5`.
 
@@ -97,6 +109,7 @@ An httpx `event_hooks["response"]` hook validates every redirect `Location` head
 | Control | File:Line | Details |
 |---------|-----------|---------|
 | Scheme restriction | `utils.py:117` | Only `http://` and `https://` |
+| Port allowlist | `utils.py:40-55` | Only 80, 443, 8080, 8443 |
 | Streaming size limit | `utils.py:219-224` | 50 MB default, aborts mid-stream |
 | Content-Length pre-check | `utils.py:212` | Rejects before streaming if header present |
 | IPv4-mapped IPv6 unwrap | `utils.py:48-49, 68-70` | `::ffff:127.0.0.1` → `127.0.0.1` |
@@ -107,148 +120,94 @@ An httpx `event_hooks["response"]` hook validates every redirect `Location` head
 
 ## Findings
 
-### FINDING-01: DNS Rebinding TOCTOU Window (Residual)
+### FINDING-01: DNS Rebinding TOCTOU Window — FIXED
 
 **Severity:** High (residual risk after mitigation)
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:179-182`
-**Status:** Partially mitigated by `_SSRFSafeTransport`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:179-182`
+**Status:** **Fixed** — transport now pins resolved IP
 
 **Description:**
 
-The `_SSRFSafeTransport` re-validates hostnames at request time, but its `_validate_hostname()` call performs its own `socket.getaddrinfo()` lookup, which is a **separate DNS resolution** from what httpx's inner `AsyncHTTPTransport` (via `httpcore`) performs when opening the TCP connection. If DNS rebinds between the transport-level check (line 181) and the actual `connect()` inside `httpcore`, a fast-rebinding DNS server could succeed.
+The original `_SSRFSafeTransport` re-validated hostnames at request time, but its `_validate_hostname()` call performed its own `socket.getaddrinfo()` lookup, which was a **separate DNS resolution** from what httpx's inner `AsyncHTTPTransport` (via `httpcore`) performed when opening the TCP connection. If DNS rebinds between the transport-level check and the actual `connect()` inside `httpcore`, a fast-rebinding DNS server could succeed.
 
 ```
-Timeline:
+Original timeline (vulnerable):
   T0: _validate_hostname() → getaddrinfo() → returns 93.184.216.34 (public) ✓
   T1: DNS rebinds hostname → 169.254.169.254 (metadata)
   T2: AsyncHTTPTransport → httpcore.connect() → getaddrinfo() → 169.254.169.254
   T3: Connection established to cloud metadata service
 ```
 
-The window between T0 and T2 is extremely narrow (microseconds within the same async coroutine), making this attack probabilistic and unreliable, but **not zero**.
+The window between T0 and T2 was extremely narrow (microseconds within the same async coroutine). Successful exploitation would require an attacker-controlled DNS server with very fast rebinding and is probabilistic — the actual success rate depends heavily on OS resolver caching behaviour and configured TTLs.
 
-**Proof of Concept:**
+**Fix Applied:**
 
-```python
-# Attacker-controlled DNS server with fast rebinding
-# First query returns 93.184.216.34 (passes validation)
-# Immediate second query returns 169.254.169.254 (metadata)
-
-# Attacker sends to MCP tool:
-source = "http://rebind.attacker.com/csv"
-
-# Race condition: ~1-5% success rate on fast networks
-# If DNS rebinds between _SSRFSafeTransport check and httpcore connect,
-# the request reaches the cloud metadata service.
-```
-
-**Recommended Fix:**
-
-Pin the resolved IP at validation time and connect directly to it, passing the original hostname as the `Host` header. This eliminates the TOCTOU entirely:
+The transport now uses `_resolve_and_validate()` to resolve DNS once, validate all IPs, then pins the connection to the validated IP by rewriting the request URL. The original hostname is preserved in the `Host` header and TLS SNI extension (addressing the TLS/SNI regression risk noted in code review):
 
 ```python
-class _SSRFSafeTransport(httpx.AsyncBaseTransport):
-    def __init__(self) -> None:
-        self._transport = httpx.AsyncHTTPTransport(retries=0)
+# Resolve DNS and validate — returns the first safe IP
+resolved_ip = _resolve_and_validate(hostname)
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        hostname = request.url.host
-        if not hostname:
-            return await self._transport.handle_async_request(request)
+# Pin the URL to the validated IP
+pinned_url = request.url.copy_with(host=resolved_ip)
 
-        # Resolve and validate once
-        resolved_ip = _resolve_and_validate(hostname)  # new helper
+# Preserve original hostname in Host header
+headers = [...("host", hostname)...]
 
-        # Rewrite the request URL to use the pinned IP
-        pinned_url = request.url.copy_with(host=resolved_ip)
-        pinned_request = httpx.Request(
-            method=request.method,
-            url=pinned_url,
-            headers={**request.headers, "Host": hostname},
-            content=request.content,
-        )
-        return await self._transport.handle_async_request(pinned_request)
+# Preserve original hostname for TLS SNI
+extensions["sni_hostname"] = hostname.encode("ascii")
 ```
+
+This eliminates the TOCTOU entirely — `httpcore` connects directly to the validated IP without performing a second DNS lookup.
 
 ---
 
-### FINDING-02: No Port Restriction on Fetched URLs
+### FINDING-02: No Port Restriction on Fetched URLs — FIXED
 
 **Severity:** Medium
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:53-100`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:53-100`
+**Status:** **Fixed** — port allowlist added
 
 **Description:**
 
-The SSRF blocklist validates IP addresses but does not restrict ports. An attacker can probe internal services on non-standard ports even when the IP is public or allowed. This is particularly dangerous in containerized deployments where services bind to non-standard ports.
+The SSRF blocklist validated IP addresses but did not restrict ports. An attacker could probe internal services on non-standard ports even when the IP is public or allowed. This is particularly dangerous in containerized deployments where services bind to non-standard ports.
 
 **Proof of Concept:**
 
 ```python
 # Probe Redis on its default port (if exposed on a public IP or shared network)
 source = "http://redis.internal:6379/"
-# Redis responds with -ERR, but the connection is established
-# and the response reveals service information
-
-# Probe internal HTTP services on non-standard ports
-source = "http://monitoring.internal:9090/api/v1/targets"
-# If monitoring.internal resolves to a non-blocked IP
 
 # SMTP banner grabbing
 source = "http://mail.company.com:25/"
 ```
 
-**Recommended Fix:**
+**Fix Applied:**
 
-Add a port allowlist (default: 80, 443) or blocklist (common internal service ports):
-
-```python
-_BLOCKED_PORTS = {
-    25, 465, 587,         # SMTP
-    6379, 6380,           # Redis
-    5432,                 # PostgreSQL
-    3306,                 # MySQL
-    27017,                # MongoDB
-    2379, 2380,           # etcd
-    9200, 9300,           # Elasticsearch
-    11211,                # Memcached
-}
-
-_ALLOWED_PORTS = {80, 443, 8080, 8443}  # Alternative: allowlist approach
-
-def _validate_url_target(url: str) -> None:
-    parsed = urlparse(url)
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    if port not in _ALLOWED_PORTS:
-        raise ValueError(f"Port {port} is not permitted for URL fetching")
-    # ... existing hostname validation
-```
+Added `_ALLOWED_PORTS = {80, 443, 8080, 8443}` and `_validate_port()`, enforced both in the pre-flight `_validate_url_target()` and at transport time in `_SSRFSafeTransport`. Non-allowed ports raise `ValueError`.
 
 ---
 
-### FINDING-03: Incomplete IP Blocklist — Missing Cloud/RFC Ranges
+### FINDING-03: Incomplete IP Blocklist — Missing CGNAT Range
 
 **Severity:** Medium
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:21-31`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:21-31`
 
 **Description:**
 
-The blocklist covers the major RFC 1918 ranges and cloud metadata endpoints but is missing several ranges that are reachable in cloud/container environments:
+The blocklist covers the major RFC 1918 ranges and cloud metadata endpoints but is missing `100.64.0.0/10` (RFC 6598 CGNAT), which is used by AWS for VPC endpoints and by Tailscale for mesh networking. An attacker could reach internal VPC services via this range.
 
-| Missing Network | RFC | Risk |
-|----------------|-----|------|
-| `100.64.0.0/10` | RFC 6598 (CGNAT) | Used in AWS VPCs, GKE node pools, Tailscale |
-| `198.18.0.0/15` | RFC 2544 | Network testing; sometimes used internally |
-| `192.0.0.0/24` | RFC 6890 | IANA special-purpose |
-| `192.0.2.0/24` | RFC 5737 | TEST-NET-1 (documentation) |
-| `198.51.100.0/24` | RFC 5737 | TEST-NET-2 (documentation) |
-| `203.0.113.0/24` | RFC 5737 | TEST-NET-3 (documentation) |
-
-The most critical omission is `100.64.0.0/10` — this CGNAT range is used by AWS for VPC endpoints and by Tailscale for mesh networking. An attacker could reach internal VPC services via this range.
+| Missing Network | RFC | Severity |
+|----------------|-----|----------|
+| `100.64.0.0/10` | RFC 6598 (CGNAT) | **Medium** — reachable in AWS VPCs, GKE, Tailscale |
+| `198.18.0.0/15` | RFC 2544 | Low — benchmark testing, sometimes used internally |
+| `192.0.0.0/24` | RFC 6890 | Info — IANA special-purpose |
+| `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` | RFC 5737 | Info — TEST-NET (documentation only, non-routable) |
 
 **Proof of Concept:**
 
 ```python
-# AWS VPC endpoint (CGNAT range, used by some services)
+# AWS VPC endpoint (CGNAT range)
 source = "http://100.64.0.1/latest/meta-data/"
 
 # Tailscale node in mesh network
@@ -271,7 +230,7 @@ _BLOCKED_NETWORKS = [
 ### FINDING-04: Rate Limit Bypass via IP Header Spoofing
 
 **Severity:** Medium
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/middleware.py:28-40`
+**File:** `everyrow-mcp/src/everyrow_mcp/middleware.py:28-40`
 
 **Description:**
 
@@ -285,346 +244,150 @@ if settings.trust_proxy_headers:
         return value.split(",")[0].strip()  # Trusts first value
 ```
 
-This affects:
-- Registration rate limiting (`middleware.py:43-91`)
-- OAuth rate limiting (`auth.py:211-218`)
-- All IP-based access controls
-
-**Proof of Concept:**
-
-```bash
-# Bypass rate limit by rotating spoofed IPs
-for i in $(seq 1 1000); do
-  curl -H "X-Forwarded-For: 1.2.3.$((i % 256))" \
-    https://mcp.example.com/register
-done
-```
-
 **Current Mitigation:** `docker-compose.yaml:42` defaults `TRUST_PROXY_HEADERS=false`. But Kubernetes/GKE deployments typically set this to `true`.
 
 **Recommended Fix:**
 
 1. Document that the reverse proxy MUST overwrite (not append to) the trusted IP header
-2. Consider validating that the first IP in `X-Forwarded-For` is not from a private range
-3. Add the proxy's own IP to a `TRUSTED_PROXIES` allowlist and only read the header when the direct connection comes from a trusted proxy:
-
-```python
-def get_client_ip(request: Request) -> str | None:
-    if settings.trust_proxy_headers:
-        direct_ip = request.client.host if request.client else None
-        if direct_ip and direct_ip in settings.trusted_proxy_ips:
-            value = request.headers.get(settings.trusted_ip_header.lower())
-            if value:
-                return value.split(",")[0].strip()
-    return request.client.host if request.client else None
-```
+2. Add the proxy's own IP to a `TRUSTED_PROXIES` allowlist and only read the header when the direct connection comes from a trusted proxy
 
 ---
 
 ### FINDING-05: Relative Redirect Blocking (False Positive / Fail-Safe)
 
 **Severity:** Low
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:152-165`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:152-165`
 
 **Description:**
 
 The `_check_redirect` event hook validates the raw `Location` header from redirect responses. For relative redirects (e.g., `Location: /path`), `urlparse` returns `hostname=None`, causing `_validate_url_target` to raise `"URL has no hostname"`. This blocks the redirect chain.
 
-From a security perspective, this is **fail-safe** — relative redirects stay on the same (already validated) host. However, it may cause false positives if a legitimate public server (e.g., Google Sheets) returns a relative redirect.
-
-```python
-# utils.py:155-158
-location = response.headers.get("location", "")
-if location:
-    try:
-        _validate_url_target(location)  # Fails for relative URLs
-```
+From a security perspective, this is **fail-safe** — relative redirects stay on the same (already validated) host. However, it may cause false positives if a legitimate public server returns a relative redirect.
 
 **Recommended Fix:**
 
-Resolve relative redirects against the request URL before validating:
-
-```python
-async def _check_redirect(response: httpx.Response) -> None:
-    if response.is_redirect:
-        location = response.headers.get("location", "")
-        if location:
-            # Resolve relative redirects against the request URL
-            from urllib.parse import urljoin
-            resolved = urljoin(str(response.request.url), location)
-            try:
-                _validate_url_target(resolved)
-            except ValueError:
-                raise httpx.TooManyRedirects(
-                    f"Redirect to blocked address: {resolved}",
-                    request=response.request,
-                )
-```
+Resolve relative redirects against the request URL before validating using `urljoin()`.
 
 ---
 
 ### FINDING-06: URL Parser Discrepancy (urlparse vs httpx)
 
-**Severity:** Low
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:90-100`
+**Severity:** Info
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:90-100`
 
 **Description:**
 
-The pre-flight validation uses Python's `urlparse` to extract the hostname, while httpx uses its own URL parser (via `httpcore`). Parser discrepancies could theoretically allow an attacker to craft a URL where `urlparse` extracts a public hostname (passes validation) while httpx connects to a different (internal) host.
+The pre-flight validation uses Python's `urlparse` to extract the hostname, while httpx uses its own URL parser (via `httpcore`). Parser discrepancies could theoretically allow an attacker to craft a URL where `urlparse` extracts a different hostname than httpx.
 
-Known divergence vectors:
-- **Backslash normalization:** `http://public.com\@127.0.0.1/` — `urlparse` may treat the path differently than httpx
-- **Unicode hostnames:** `http://ⓔⓧⓐⓜⓟⓛⓔ.com/` — IDNA encoding differences
-- **Percent-encoded authority:** `http://%31%32%37.%30.%30.%31/` — may decode to `127.0.0.1` differently
-
-**Mitigating Factor:** The `_SSRFSafeTransport` (Layer 2) re-validates using `request.url.host`, which is httpx's own parsed view. This provides defense-in-depth against parser discrepancies — even if the pre-flight check is fooled, the transport-level check uses the same parser that will make the connection.
-
-**Proof of Concept:**
-
-```python
-# Theoretical — most of these are blocked by one layer or another
-
-# Backslash confusion (depends on Python/httpx version)
-source = "http://public.com\\@127.0.0.1/"
-
-# Percent-encoded IP (urlparse decodes differently than httpx)
-source = "http://%31%32%37%2e%30%2e%30%2e%31/"
-```
-
-**Recommended Fix:**
-
-Add explicit normalization before validation to match httpx's behavior:
-
-```python
-def _validate_url_target(url: str) -> None:
-    # Normalize to match httpx's parser
-    try:
-        httpx_url = httpx.URL(url)
-        hostname = httpx_url.host
-    except httpx.InvalidURL:
-        raise ValueError(f"Invalid URL: {url}")
-    if not hostname:
-        raise ValueError(f"URL has no hostname: {url}")
-    _validate_hostname(hostname)
-```
+**Mitigating Factor:** The `_SSRFSafeTransport` (Layer 2) re-validates using `request.url.host`, which is httpx's own parsed view, and then pins the connection to the resolved IP. This means the defence-in-depth is already working as designed — even if the pre-flight check (Layer 1) is fooled by a parser discrepancy, the transport-level check (Layer 2) uses the same parser that determines where the connection actually goes. The pre-flight check is purely an early-rejection optimisation.
 
 ---
 
 ### FINDING-07: Auth httpx Client Without SSRF Transport
 
 **Severity:** Low
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/auth.py:199-202`
+**File:** `everyrow-mcp/src/everyrow_mcp/auth.py:199-202`
 
 **Description:**
 
-The `EveryRowAuthProvider.__init__` creates an `httpx.AsyncClient()` without `_SSRFSafeTransport`. This client is used for:
-- Supabase token exchange (`_supabase_token_request`, line 560)
-- JWKS fetching (via `PyJWKClient`, line 53)
+The `EveryRowAuthProvider.__init__` creates an `httpx.AsyncClient()` without `_SSRFSafeTransport`. The target URL is derived from `settings.supabase_url`, which is a config value validated at startup to require HTTPS for non-localhost (`config.py:134-147`).
 
-The target URL is derived from `settings.supabase_url`, which is:
-- A config value (environment variable), not user-controlled
-- Validated at startup to require HTTPS for non-localhost (`config.py:134-147`)
+**Not exploitable** unless the attacker controls the server's environment variables.
 
-**Not exploitable** unless the attacker controls the server's environment variables, which would give them full compromise regardless.
-
-```python
-# auth.py:199-202
-self._http_client = httpx.AsyncClient(
-    timeout=httpx.Timeout(10.0),
-    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-)
-```
-
-**Recommended Fix (defence-in-depth):**
-
-Add the SSRF transport as a precaution:
-
-```python
-from everyrow_mcp.utils import _SSRFSafeTransport
-
-self._http_client = httpx.AsyncClient(
-    transport=_SSRFSafeTransport(),
-    timeout=httpx.Timeout(10.0),
-    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-)
-```
+**Recommended Fix (defence-in-depth):** Add the SSRF transport as a precaution.
 
 ---
 
 ### FINDING-08: Missing IPv6 Addresses in Blocklist
 
 **Severity:** Low
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/utils.py:21-31`
+**File:** `everyrow-mcp/src/everyrow_mcp/utils.py:21-31`
 
 **Description:**
 
-The blocklist does not include:
-- `::` (IPv6 unspecified address) — this is NOT the same as `::1` (loopback) and is NOT an IPv4-mapped address, so `ipv4_mapped` unwrapping does not cover it
-- `::ffff:0:0/96` (IPv4-mapped prefix explicitly) — individual addresses are unwrapped, but the prefix itself is not blocked
+The blocklist does not include `::` (IPv6 unspecified address) or `::ffff:0:0/96` (IPv4-mapped prefix). The practical risk is minimal since `::` does not route to any reachable host in most environments.
 
-The practical risk is minimal since `::` does not route to any reachable host in most environments.
-
-**Recommended Fix:**
-
-```python
-_BLOCKED_NETWORKS = [
-    # ... existing entries ...
-    ipaddress.ip_network("::/128"),            # IPv6 unspecified
-    ipaddress.ip_network("::ffff:0:0/96"),     # IPv4-mapped prefix (belt-and-suspenders)
-]
-```
+**Recommended Fix:** Add `::/128` and `::ffff:0:0/96` to the blocklist.
 
 ---
 
 ### FINDING-09: `_decode_trusted_server_jwt` Skips Signature Verification
 
 **Severity:** Info (by design)
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/auth.py:152-161`
+**File:** `everyrow-mcp/src/everyrow_mcp/auth.py:152-161`
 
 **Description:**
 
-This function decodes JWTs with `verify_signature=False`. It is documented as for server-to-server tokens received from Supabase over HTTPS, and the docstring warns:
+This function decodes JWTs with `verify_signature=False`. It is only called from `_issue_token_response` (line 456) with tokens obtained directly from Supabase's token endpoint over HTTPS. The critical guarantee that makes this safe is the HTTPS enforcement on `supabase_url` via the `_validate_url` validator in `config.py:134-147` — the token is received over a TLS-authenticated channel, making it trustworthy without a separate signature check.
 
-> "NEVER use this for tokens received from end users."
-
-It is only called from `_issue_token_response` (line 456) with tokens obtained directly from Supabase's token endpoint over HTTPS. The caller chain is:
-
-```
-handle_callback → _validate_callback_request → _validate_supabase_code
-  → _exchange_supabase_code → _supabase_token_request
-  → POST {supabase_url}/auth/v1/token (HTTPS, server-to-server)
-  → response.access_token → _decode_trusted_server_jwt()
-```
-
-**Assessment:** Safe by current usage. The risk would arise if this function were called with user-supplied tokens in the future. The docstring warning is appropriate.
-
-**Recommended Fix:** Add a comment at the call site (line 456) reinforcing that the token source must remain trusted.
+**Assessment:** Safe by current usage. The docstring warning ("NEVER use this for tokens received from end users") is appropriate.
 
 ---
 
 ### FINDING-10: Wildcard CORS on Widget Endpoints
 
 **Severity:** Info (safe by design)
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/src/everyrow_mcp/routes.py:22-33`
+**File:** `everyrow-mcp/src/everyrow_mcp/routes.py:22-33`
 
 **Description:**
 
-Widget endpoints use `Access-Control-Allow-Origin: *`. Per the CORS specification, browsers do not send credentials (cookies) with wildcard-origin requests. Since auth is via Bearer tokens (not cookies), this is safe — no ambient credentials are leaked.
-
-The code includes a clear documentation comment explaining this design decision.
-
-**Assessment:** Correct. No action needed.
+Widget endpoints use `Access-Control-Allow-Origin: *`. Since auth is via Bearer tokens (not cookies), this is safe per the CORS specification — no ambient credentials are leaked.
 
 ---
 
 ### FINDING-11: Container Hardening Review
 
 **Severity:** Info
-**File:** `/Users/rafaelpoyiadzi/Documents/git/everyrow-sdk/worktrees/audit-ssrf/everyrow-mcp/deploy/docker-compose.yaml`
+**File:** `everyrow-mcp/deploy/docker-compose.yaml`
 
 **Description:**
 
-The container configuration follows security best practices:
+The container configuration follows security best practices (non-root user, `no-new-privileges`, `cap_drop: ALL`, read-only rootfs, memory/CPU limits, network isolation, Redis password required, Redis not exposed to host, MCP bound to localhost).
 
-| Control | Status | Location |
-|---------|--------|----------|
-| Non-root user | Present | `Dockerfile:19` (`mcp` user) |
-| `no-new-privileges` | Present | `docker-compose.yaml:50` |
-| `cap_drop: ALL` | Present | `docker-compose.yaml:51-52` |
-| Read-only rootfs | Present | `docker-compose.yaml:53` |
-| Memory limits | Present | `docker-compose.yaml:46-47` (512M) |
-| CPU limits | Present | `docker-compose.yaml:48` (1 CPU) |
-| Network isolation | Present | `docker-compose.yaml:60-62` (bridge) |
-| Redis password required | Present | `docker-compose.yaml:4` |
-| Redis not exposed to host | Present | No `ports:` on Redis service |
-| MCP bound to localhost | Present | `docker-compose.yaml:29` (`127.0.0.1:8000`) |
-
-**Missing (minor):**
-- No `pids_limit` set (prevents fork bomb DoS)
-- No `tmpfs` size limit (line 55: `tmpfs: - /tmp` has no size cap)
-- Consider `PYTHONHASHSEED=random` for hash collision DoS resistance
-
-**Recommended Fix:**
-
-```yaml
-mcp-server:
-  # ... existing config ...
-  pids_limit: 100
-  tmpfs:
-    - /tmp:size=50M
-  environment:
-    PYTHONHASHSEED: "random"
-```
+**Missing (minor):** No `pids_limit` (fork bomb DoS), no `tmpfs` size limit.
 
 ---
 
 ## Attack Surface Matrix
 
-| Attack Vector | Entry Point | Protection | Bypass Possible? |
-|---------------|-------------|------------|-----------------|
-| Direct SSRF via URL | `everyrow_upload_data(source=url)` | 3-layer validation | Only via DNS rebinding TOCTOU (FINDING-01) |
-| SSRF via redirect | HTTP 3xx from attacker server | Event hook + transport re-check | Relative redirects blocked (fail-safe, FINDING-05) |
-| Cloud metadata (169.254.169.254) | URL or DNS rebind | IP blocklist + hostname block | No (blocked in all 3 layers) |
-| GKE metadata hostname | `metadata.google.internal` | Hostname blocklist | No |
-| IPv4-mapped IPv6 bypass | `::ffff:127.0.0.1` | Unwrap + re-check | No |
-| Localhost via DNS | `attacker.com → 127.0.0.1` | DNS resolution + IP check | Only via TOCTOU (narrow window) |
-| Internal ports (Redis, etc.) | URL with non-standard port | **Not protected** (FINDING-02) | **Yes** |
-| CGNAT range (100.64.x.x) | URL or DNS | **Not in blocklist** (FINDING-03) | **Yes** |
-| OAuth callback redirect | `/auth/callback` | Whitelist against registered URIs | No |
-| File read via path | Local CSV path (stdio only) | Path validation + symlink resolve | No (HTTP mode rejects paths) |
-| Redis key injection | Task IDs, user IDs | `build_key()` sanitization | No |
-| Upload URL forgery | HMAC-SHA256 signature | `verify_upload_signature()` + expiry | No |
+| Attack Vector | Entry Point | Protection | Bypass? | Remediation |
+|---------------|-------------|------------|---------|-------------|
+| Direct SSRF via URL | `everyrow_upload_data(source=url)` | 3-layer validation + IP pinning | No (FINDING-01 fixed) | **Done** |
+| Internal port probing | URL with non-standard port | Port allowlist (80, 443, 8080, 8443) | No (FINDING-02 fixed) | **Done** |
+| SSRF via redirect | HTTP 3xx from attacker server | Event hook + transport re-check | Relative redirects blocked (fail-safe) | Open (Low) |
+| Cloud metadata (169.254.169.254) | URL or DNS rebind | IP blocklist + hostname block | No | N/A |
+| GKE metadata hostname | `metadata.google.internal` | Hostname blocklist | No | N/A |
+| IPv4-mapped IPv6 bypass | `::ffff:127.0.0.1` | Unwrap + re-check | No | N/A |
+| CGNAT range (100.64.x.x) | URL or DNS | **Not in blocklist** (FINDING-03) | **Yes** | Open (Medium) |
+| Rate limit bypass | Spoofed X-Forwarded-For | Proxy trust config | Conditional (FINDING-04) | Open (Medium) |
+| OAuth callback redirect | `/auth/callback` | Whitelist against registered URIs | No | N/A |
+| File read via path | Local CSV path (stdio only) | Path validation + symlink resolve | No (HTTP mode rejects) | N/A |
+| Redis key injection | Task IDs, user IDs | `build_key()` sanitization | No | N/A |
+| Upload URL forgery | HMAC-SHA256 signature | `verify_upload_signature()` + expiry | No | N/A |
 
 ---
 
 ## Recommendations Summary
 
-### Priority 1 (High Impact)
+### Done (This PR)
 
-1. **Fix DNS rebinding TOCTOU** (FINDING-01): Pin resolved IPs at validation time and connect directly to them, eliminating the window between validation and connection.
+1. **~~Fix DNS rebinding TOCTOU~~** (FINDING-01): Transport now pins resolved IPs — TOCTOU eliminated.
+2. **~~Add port restrictions~~** (FINDING-02): Port allowlist `{80, 443, 8080, 8443}` enforced pre-flight and at transport time.
 
-### Priority 2 (Medium Impact)
+### Priority 2 (Medium Impact — Open)
 
-2. **Add port restrictions** (FINDING-02): Restrict outbound URL fetching to ports 80/443 (or a configurable allowlist).
 3. **Expand IP blocklist** (FINDING-03): Add `100.64.0.0/10` (CGNAT), `198.18.0.0/15`, and `192.0.0.0/24`.
 4. **Harden proxy IP trust** (FINDING-04): Validate the direct connection IP against a trusted proxy allowlist before reading forwarded headers.
 
-### Priority 3 (Low Impact / Defence-in-Depth)
+### Priority 3 (Low Impact / Defence-in-Depth — Open)
 
 5. **Resolve relative redirects** (FINDING-05): Use `urljoin()` to resolve relative Location headers before validating.
-6. **Normalize URLs with httpx** (FINDING-06): Use `httpx.URL()` for hostname extraction to match the HTTP client's parser.
-7. **Add SSRF transport to auth client** (FINDING-07): Defence-in-depth for `EveryRowAuthProvider._http_client`.
-8. **Add IPv6 unspecified address** (FINDING-08): Block `::` and `::ffff:0:0/96`.
-9. **Container hardening** (FINDING-11): Add `pids_limit`, `tmpfs` size limit.
-
----
-
-## Testing Gaps
-
-The existing test suite (`tests/test_utils.py:221-295`) covers:
-- Blocked IPs: localhost, 10.x, 172.16.x, 192.168.x, link-local, IPv6 loopback
-- IPv4-mapped IPv6: loopback, private, metadata
-- Public IP allowlisting
-- DNS resolution failure (unresolvable hostname)
-- URL target validation with mocked DNS
-
-**Missing test coverage:**
-
-| Test Case | Status |
-|-----------|--------|
-| DNS rebinding simulation (dual-answer DNS) | Missing |
-| Non-standard port blocking | Missing (no protection exists) |
-| CGNAT range (100.64.0.0/10) blocking | Missing (not in blocklist) |
-| Relative redirect handling | Missing |
-| URL parser discrepancy vectors | Missing |
-| `_check_redirect` with absolute blocked redirect | Missing |
-| `_SSRFSafeTransport` with blocked IP | Missing |
-| Google Sheets URL normalization + SSRF | Missing |
-| IPv6 unspecified address `::` | Missing |
-| `file://`, `gopher://` scheme rejection | Missing |
+6. **Add SSRF transport to auth client** (FINDING-07): Defence-in-depth for `EveryRowAuthProvider._http_client`.
+7. **Add IPv6 unspecified address** (FINDING-08): Block `::` and `::ffff:0:0/96`.
+8. **Container hardening** (FINDING-11): Add `pids_limit`, `tmpfs` size limit.
 
 ---
 
 ## Conclusion
 
-The SSRF protections introduced in commit `4000b88` represent a **well-engineered, defense-in-depth approach** that covers the major attack vectors. The three-layer architecture (pre-flight, transport, redirect) provides meaningful redundancy. The most significant residual risk is the DNS-rebinding TOCTOU window, which is narrow but theoretically exploitable. The missing port restrictions and incomplete IP blocklist are practical concerns for cloud deployments that should be addressed. No critical vulnerabilities that would allow reliable SSRF exploitation were found.
+The SSRF protections introduced in commit `4000b88` represent a **well-engineered, defense-in-depth approach** that covers the major attack vectors. The three-layer architecture (pre-flight, transport, redirect) provides meaningful redundancy. The two highest-priority findings have been fixed in this PR: the DNS-rebinding TOCTOU is eliminated via IP pinning, and non-standard ports are now blocked via an allowlist. The remaining open items (CGNAT blocklist, proxy IP trust) are medium-priority hardening improvements. No critical vulnerabilities that would allow reliable SSRF exploitation were found.
