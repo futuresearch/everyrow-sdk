@@ -22,7 +22,8 @@ import io
 import json
 import os
 import re
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pandas as pd
@@ -51,12 +52,21 @@ pytestmark = pytest.mark.skipif(
 # ── Fixtures ───────────────────────────────────────────────────
 
 
+def _fake_access_token():
+    """Return a mock access token for ownership checks."""
+    tok = MagicMock()
+    tok.client_id = "integration-test-user"
+    return tok
+
+
 @pytest.fixture
 def _http_mode(fake_redis):
     """Configure settings for HTTP mode with the shared test Redis."""
     with (
         override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+        patch("everyrow_mcp.tools.get_access_token", _fake_access_token),
+        patch("everyrow_mcp.tool_helpers.get_access_token", _fake_access_token),
     ):
         yield
 
@@ -109,16 +119,15 @@ def extract_task_id(submit_text: str) -> str:
 
 
 def extract_poll_token(widget_json: str) -> str:
-    """Extract poll token from the progress_url in widget JSON."""
+    """Extract poll token from widget JSON."""
     data = json.loads(widget_json)
-    progress_url = data.get("progress_url", "")
-    match = re.search(r"token=([A-Za-z0-9_-]+)", progress_url)
-    if not match:
-        raise ValueError(f"No poll token in widget JSON: {widget_json}")
-    return match.group(1)
+    token = data.get("poll_token", "")
+    if not token:
+        raise ValueError(f"No poll_token in widget JSON: {widget_json}")
+    return token
 
 
-async def poll_via_tool(task_id: str, ctx, max_polls: int = 30) -> str:
+async def poll_via_tool(task_id: str, ctx, max_polls: int = 60) -> str:
     """Poll everyrow_progress via MCP tool until complete."""
     for _ in range(max_polls):
         result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
@@ -130,6 +139,8 @@ async def poll_via_tool(task_id: str, ctx, max_polls: int = 30) -> str:
         if "failed" in text.lower() or "revoked" in text.lower():
             raise RuntimeError(f"Task failed: {text}")
 
+        await asyncio.sleep(2)
+
     raise TimeoutError(f"Task {task_id} did not complete within {max_polls} polls")
 
 
@@ -137,8 +148,8 @@ async def poll_via_rest(
     client: httpx.AsyncClient,
     task_id: str,
     poll_token: str,
-    max_polls: int = 30,
-) -> dict:
+    max_polls: int = 60,
+) -> dict[str, Any]:
     """Poll /api/progress via REST endpoint until complete."""
     for _ in range(max_polls):
         resp = await client.get(
@@ -172,7 +183,7 @@ class TestHttpScreenPipeline:
         self,
         client: httpx.AsyncClient,
         everyrow_client,
-        jobs_csv: str,
+        jobs_data: list[dict[str, Any]],
     ):
         """Submit a screen task, poll via REST, fetch results via MCP tool."""
         # 1. Submit via MCP tool (in HTTP mode)
@@ -180,7 +191,7 @@ class TestHttpScreenPipeline:
         result = await everyrow_screen(
             ScreenInput(
                 task="Filter for remote positions with salary > $100k",
-                input_csv=jobs_csv,
+                data=jobs_data,
             ),
             ctx,
         )
@@ -241,20 +252,14 @@ class TestHttpAgentPipeline:
         self,
         client: httpx.AsyncClient,
         everyrow_client,
-        tmp_path,
     ):
         """Submit an agent task, poll via REST, verify results via MCP tool."""
-        # Create small input (2 rows to minimize cost)
-        df = pd.DataFrame([{"name": "Anthropic"}, {"name": "OpenAI"}])
-        input_csv = tmp_path / "companies.csv"
-        df.to_csv(input_csv, index=False)
-
         # 1. Submit via MCP tool
         ctx = make_test_context(everyrow_client, mcp_server_url="http://testserver")
         result = await everyrow_agent(
             AgentInput(
                 task="Find the company's headquarters city.",
-                input_csv=str(input_csv),
+                data=[{"name": "Anthropic"}, {"name": "OpenAI"}],
                 response_schema={
                     "properties": {
                         "headquarters": {
@@ -323,14 +328,14 @@ class TestProgressPollingModes:
         self,
         client: httpx.AsyncClient,
         everyrow_client,
-        jobs_csv: str,
+        jobs_data: list[dict[str, Any]],
     ):
         """Submit a task and poll using both REST endpoint and MCP tool."""
         ctx = make_test_context(everyrow_client, mcp_server_url="http://testserver")
         result = await everyrow_screen(
             ScreenInput(
                 task="Filter for engineering roles",
-                input_csv=jobs_csv,
+                data=jobs_data,
             ),
             ctx,
         )
