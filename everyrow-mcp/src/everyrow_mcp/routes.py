@@ -176,6 +176,11 @@ async def api_download(request: Request) -> Response:
             {"error": "Results not found or expired"}, status_code=404, headers=cors
         )
 
+    # Regenerate a fresh poll token so subsequent everyrow_results() calls
+    # can still build download URLs from the cached CSV in Redis.
+    new_token = secrets.token_urlsafe(32)
+    await redis_store.store_poll_token(task_id, new_token)
+
     safe_prefix = "".join(c for c in task_id[:8] if c.isalnum() or c == "-")
     return Response(
         content=csv_text,
