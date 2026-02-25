@@ -176,6 +176,11 @@ async def api_download(request: Request) -> Response:
 
     csv_text = await redis_store.get_result_csv(task_id)
     if csv_text is None:
+        # Re-store the consumed token so progress polling and future
+        # downloads aren't permanently broken when CSV expires before token.
+        provided = _extract_bearer_or_query_token(request, task_id)
+        if provided:
+            await redis_store.store_poll_token(task_id, provided)
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=cors
         )
