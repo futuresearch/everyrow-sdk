@@ -204,7 +204,9 @@ class _RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             elapsed_ms = (_time.monotonic() - start) * 1000
 
-            # Extract user_id from the access token if available.
+            # Best-effort user_id for logging only (not a security boundary).
+            # None in --no-auth mode, on non-MCP routes (/health, /download),
+            # or when auth context isn't populated yet.  Logs "anon" when None.
             try:
                 access_token = get_access_token()
                 user_id = access_token.client_id if access_token else None
