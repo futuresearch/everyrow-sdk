@@ -131,11 +131,11 @@ then execute the returned curl command, then use the artifact_id from the respon
 - Do NOT pass local file paths to `everyrow_upload_data` — it will fail in remote mode.
 
 ## Results
-- When a task completes, ask the user how many rows they'd like you to review before calling \
-everyrow_results. If the dataset is small, just use the default (50).
+- IMPORTANT: When a task completes, you MUST ask the user how many rows they want loaded into \
+the conversation BEFORE calling everyrow_results. Do NOT call everyrow_results without asking first.
 - `everyrow_results(task_id, page_size=N)` returns N rows in context plus a download link for the full CSV.
-- Always tell the user how many rows you are showing vs the total, and that the full dataset \
-is available via the download link.
+- After retrieving results, tell the user how many rows you can see vs the total, and that the \
+full dataset is visible to them in the widget and via the download link.
 - Use offset to paginate through larger datasets.
 """
 )

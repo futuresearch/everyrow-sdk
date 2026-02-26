@@ -656,10 +656,10 @@ class HttpResultsInput(BaseModel):
     page_size: int = Field(
         default=50,
         description=(
-            "Number of result rows to load into the conversation (default 50). "
-            "Ask the user how many rows they'd like to review before calling this tool. "
-            "Use offset to paginate through larger datasets. "
-            "The full dataset is always available to the user via the download link."
+            "Number of result rows to load into the conversation. "
+            "REQUIRED: You must ask the user how many rows they want before calling this tool. "
+            "Do not use the default without asking. "
+            "Use offset to paginate through larger datasets."
         ),
         ge=1,
         le=10000,

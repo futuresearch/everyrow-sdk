@@ -864,10 +864,10 @@ async def everyrow_results_http(
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    Before calling this tool, ask the user how many rows they want you to
-    ingest in your context. If the dataset is small, don't bother asking.
-    Returns up to page_size rows (default 50) with a download link for
-    the full CSV. Tell the user how many rows you are showing vs the total.
+    IMPORTANT: You MUST ask the user how many rows they want loaded into the
+    conversation BEFORE calling this tool. Do NOT call with the default — always
+    ask first and use their answer as page_size.
+    After results load, tell the user how many rows you can see vs the total.
     """
     client = _get_client(ctx)
     task_id = params.task_id
