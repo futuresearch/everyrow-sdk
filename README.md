@@ -30,6 +30,7 @@ Enable Claude to perform tens of thousands of LLM calls, or thousands of LLM web
 | [**Dedupe**](https://everyrow.io/docs/reference/DEDUPE) | Deduplicate when fuzzy matching fails | 20k rows |
 | [**Merge**](https://everyrow.io/docs/reference/MERGE) | Join tables when keys don't match | 5k rows |
 | [**Research**](https://everyrow.io/docs/reference/RESEARCH) | Web research on every row | 10k rows |
+| [**Forecast**](https://everyrow.io/docs/reference/FORECAST) | Probability forecasts from research | 1k rows |
 
 See the full [API reference](https://everyrow.io/docs/api), [guides](https://everyrow.io/docs/guides), and [case studies](https://everyrow.io/docs/case-studies), (for example, see our [case study](https://everyrow.io/docs/case-studies/llm-web-research-agents-at-scale) running a `Research` task on 10k rows, running agents that used 120k LLM calls.)
 
