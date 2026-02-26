@@ -133,6 +133,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -209,6 +210,7 @@ async def everyrow_single_agent(
     Once the task is completed, call everyrow_results to save the output.
     """
     logger.info("everyrow_single_agent: task=%.80s", params.task)
+    log_client_info(ctx, "everyrow_single_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -295,6 +297,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_rank")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -388,6 +391,7 @@ async def everyrow_screen(
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_screen")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -474,6 +478,7 @@ async def everyrow_dedupe(
         params.equivalence_relation,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_dedupe")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -565,6 +570,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         len(params.left_data) if params.left_data else "artifact",
         len(params.right_data) if params.right_data else "artifact",
     )
+    log_client_info(ctx, "everyrow_merge")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -650,6 +656,7 @@ async def everyrow_forecast(
         params.context or "",
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_forecast")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -961,6 +968,7 @@ async def everyrow_list_sessions(
     Use this to find past sessions or check what's been run.
     Results are paginated — 25 sessions per page by default.
     """
+    log_client_info(ctx, "everyrow_list_sessions")
     client = _get_client(ctx)
 
     try:
@@ -1023,6 +1031,7 @@ async def everyrow_cancel(
     params: CancelInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    log_client_info(ctx, "everyrow_cancel")
     client = _get_client(ctx)
     task_id = params.task_id
 

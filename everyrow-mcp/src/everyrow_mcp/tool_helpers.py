@@ -93,28 +93,50 @@ def log_client_info(ctx: EveryRowContext, tool_name: str) -> None:
 def client_supports_widgets(ctx: EveryRowContext) -> bool:
     """Return True if the connected MCP client can render widgets.
 
-    Checks for the MCP Apps UI capability in experimental extensions.
-    Falls back to a name-based allowlist for clients that don't advertise
-    the capability yet (Claude.ai, Claude Desktop).
+    Uses a two-tier whitelist approach:
+
+    1. **MCP Apps UI capability** (spec-recommended, future-proof):
+       Clients that advertise ``experimental["io.modelcontextprotocol/ui"]``
+       explicitly support widget rendering.  This is the long-term signal.
+
+    2. **Name-based whitelist** (pragmatic fallback):
+       Claude.ai and Claude Desktop can render widgets but don't yet
+       advertise the UI capability.  We maintain a whitelist of known
+       widget-capable client names so they get widgets today.
+       This fallback should be removed once clients adopt the capability.
+
+    Unknown clients default to **no widget** — this is intentional.
+    Widget JSON is ~500-2000 tokens; sending it to a client that can't
+    render it (e.g. Claude Code, third-party MCP clients) wastes context
+    for no benefit.
     """
     try:
         cp = ctx.session.client_params
         if not cp:
             return False
 
-        # Check explicit UI capability first (spec-recommended)
+        # Tier 1: explicit UI capability (preferred, spec-recommended)
         caps = cp.capabilities
         if caps:
             experimental = caps.experimental or {}
             if experimental.get("io.modelcontextprotocol/ui") is not None:
                 return True
 
-        # Fall back to name-based detection for known widget-capable clients
+        # Tier 2: name-based whitelist for known widget-capable clients
+        # that don't yet advertise the UI capability.
+        # Update this set as new clients are verified via log_client_info().
+        # Known values (from log_client_info, Feb 2026):
+        #   Claude.ai:    "Anthropic/ClaudeAI"  (version "1.0.0")
+        #   Claude Desktop: "Anthropic/ClaudeAI"  (version "1.0.0") — same as Claude.ai
+        #   Claude Code:  "claude-code"
+        # Note: Claude.ai and Claude Desktop report the same clientInfo.name,
+        # so a single whitelist entry covers both.
+        _WIDGET_CAPABLE_CLIENTS = {"anthropic/claudeai"}
         name = (cp.clientInfo.name or "").lower() if cp.clientInfo else ""
-        return name not in ("claude-code",)
+        return name in _WIDGET_CAPABLE_CLIENTS
     except Exception:
         logger.debug("Could not determine widget support", exc_info=True)
-        return True  # default to including widgets
+        return False  # unknown client — skip widget to save context tokens
 
 
 def _submission_text(

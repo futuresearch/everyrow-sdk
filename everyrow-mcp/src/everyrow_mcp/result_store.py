@@ -129,11 +129,12 @@ def _build_result_response(
     # (Claude.ai, Claude Desktop). Clients like Claude Code don't render
     # widgets, so the JSON just wastes context tokens.
     #
-    # Detection uses two approaches (see tool_helpers.client_supports_widgets):
+    # Detection uses a two-tier whitelist (see tool_helpers.client_supports_widgets):
     #  1. MCP Apps UI capability — clients that advertise
     #     experimental["io.modelcontextprotocol/ui"] explicitly support widgets.
-    #  2. Name-based fallback — Claude.ai/Desktop don't advertise the
-    #     capability yet, so we use a denylist (currently just "claude-code").
+    #  2. Name-based whitelist — Claude.ai/Desktop don't advertise the
+    #     capability yet, so we whitelist known widget-capable client names.
+    #     Unknown clients default to NO widget (saves context tokens).
     #     This fallback should be removed once clients adopt the capability.
     contents: list[TextContent] = []
     if offset == 0 and not skip_widget:
