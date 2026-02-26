@@ -121,6 +121,9 @@ def _build_result_response(
     # Only emit widget JSON on the first page — the widget already fetches
     # the full dataset independently, so subsequent pages only need the
     # text summary for the LLM.
+    # Alternative: track a per-task call counter in Redis and only emit on
+    # the first call. Rejected because it adds state, and re-fetching
+    # offset=0 (e.g. "show me the results again") should show the widget.
     contents: list[TextContent] = []
     if offset == 0:
         widget_data: dict[str, Any] = {
