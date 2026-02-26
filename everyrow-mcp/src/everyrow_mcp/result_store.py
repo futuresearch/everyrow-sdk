@@ -105,40 +105,55 @@ def _build_result_response(
     *requested_page_size*, when provided, is the user's original page_size
     and is used in the "next page" hint so the server can re-clamp
     independently on each call.
+
+    The widget fetches full results on demand by minting a fresh download
+    token via the ``download-token`` endpoint — no pre-minted URL is baked
+    into the response, avoiding stale-token issues on re-render.
     """
     col_names = _format_columns(columns)
     hint_page_size = (
         requested_page_size if requested_page_size is not None else page_size
     )
 
-    widget_data: dict[str, Any] = {
-        "csv_url": csv_url,
-        "preview": preview_records,
-        "total": total,
-    }
-    if session_url:
-        widget_data["session_url"] = session_url
-    if poll_token:
-        widget_data["poll_token"] = poll_token
-        widget_data["download_token_url"] = (
-            f"{mcp_server_url}/api/results/{task_id}/download-token"
-        )
-    widget_json = json.dumps(widget_data)
-
     has_more = offset + page_size < total
     next_offset = offset + page_size if has_more else None
+
+    # Only emit widget JSON on the first page — the widget already fetches
+    # the full dataset independently, so subsequent pages only need the
+    # text summary for the LLM.
+    # Alternative: track a per-task call counter in Redis and only emit on
+    # the first call. Rejected because it adds state, and re-fetching
+    # offset=0 (e.g. "show me the results again") should show the widget.
+    contents: list[TextContent] = []
+    if offset == 0:
+        widget_data: dict[str, Any] = {
+            "csv_url": csv_url,
+            "preview": preview_records,
+            "total": total,
+            "fetch_full_results": True,
+        }
+        if session_url:
+            widget_data["session_url"] = session_url
+        if poll_token:
+            widget_data["poll_token"] = poll_token
+            widget_data["download_token_url"] = (
+                f"{mcp_server_url}/api/results/{task_id}/download-token"
+            )
+        contents.append(TextContent(type="text", text=json.dumps(widget_data)))
 
     if has_more:
         page_size_arg = f", page_size={hint_page_size}"
         summary = (
             f"Results: {total} rows, {len(columns)} columns ({col_names}). "
             f"Showing rows {offset + 1}-{min(offset + page_size, total)} of {total}.\n"
+            f"IMPORTANT: Tell the user that you can only see {min(page_size, total)} of the {total} rows in your context, "
+            f"but they have access to all {total} rows via the widget above.\n"
             f"Call everyrow_results(task_id='{task_id}', offset={next_offset}{page_size_arg}) for the next page."
         )
         if offset == 0:
             summary += (
                 f"\nFull CSV download: {csv_url}\n"
-                "IMPORTANT: Display this download link to the user as a clickable URL in your response."
+                "Display this download link to the user as a clickable URL in your response."
             )
     elif offset == 0:
         summary = (
@@ -153,10 +168,8 @@ def _build_result_response(
             f"of {total} (final page)."
         )
 
-    return [
-        TextContent(type="text", text=widget_json),
-        TextContent(type="text", text=summary),
-    ]
+    contents.append(TextContent(type="text", text=summary))
+    return contents
 
 
 async def _get_csv_url(
@@ -247,12 +260,8 @@ async def try_store_result(
     page_size: int,
     session_url: str = "",
     mcp_server_url: str = "",
-) -> list[TextContent] | None:
-    """Store a DataFrame in Redis and return a response.
-
-    Returns None if Redis is not available (caller should fall back to
-    inline results).
-    """
+) -> list[TextContent]:
+    """Store a DataFrame in Redis and return a paginated response."""
     try:
         # Store full CSV in Redis
         await redis_store.store_result_csv(task_id, df.to_csv(index=False))
@@ -279,10 +288,9 @@ async def try_store_result(
 
         csv_url, poll_token = await _get_csv_url(task_id, mcp_server_url)
         if csv_url is None:
-            logger.warning(
-                "Poll token expired for task %s, cannot build download URL", task_id
+            raise RuntimeError(
+                f"Poll token expired for task {task_id}, cannot build download URL"
             )
-            return None
 
         preview_records, effective_page_size = clamp_page_to_budget(
             preview_records=preview_records,
@@ -302,10 +310,6 @@ async def try_store_result(
             mcp_server_url=mcp_server_url,
             requested_page_size=page_size,
         )
-    except Exception as exc:
-        logger.error(
-            "Failed to store results in Redis for task %s, falling back to inline: %s",
-            task_id,
-            type(exc).__name__,
-        )
-        return None
+    except Exception:
+        logger.exception("Failed to store results in Redis for task %s", task_id)
+        raise

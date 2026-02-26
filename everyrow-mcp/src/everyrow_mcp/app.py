@@ -131,7 +131,13 @@ then execute the returned curl command, then use the artifact_id from the respon
 - Do NOT pass local file paths to `everyrow_upload_data` — it will fail in remote mode.
 
 ## Results
-- `everyrow_results(task_id)` returns a paginated preview with a download link.
+- IMPORTANT: When a task completes, you MUST ask the user how many rows they want loaded into \
+your context BEFORE calling everyrow_results. Do NOT call everyrow_results without asking first.
+- `everyrow_results(task_id, page_size=N)` loads N rows into your context so you can read them. \
+The user always has access to all rows via the widget and download link.
+- After retrieving results, tell the user how many rows you can see vs the total, and that \
+they have access to the full dataset via the widget above and the download link.
+- Use offset to paginate through larger datasets.
 """
 )
 

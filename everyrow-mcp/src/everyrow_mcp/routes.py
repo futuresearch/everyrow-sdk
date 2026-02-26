@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import secrets
 from uuid import UUID
 
+import pandas as pd
 from everyrow.api_utils import handle_response
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.client import AuthenticatedClient
@@ -14,6 +16,7 @@ from starlette.responses import JSONResponse, Response
 
 from everyrow_mcp import redis_store
 from everyrow_mcp.config import settings
+from everyrow_mcp.result_store import _sanitize_records
 from everyrow_mcp.tool_helpers import _UI_EXCLUDE, TaskState
 
 logger = logging.getLogger(__name__)
@@ -243,7 +246,7 @@ async def api_download_token(request: Request) -> Response:
     return JSONResponse({"download_url": download_url}, headers=cors)
 
 
-async def api_download(request: Request) -> Response:
+async def api_download(request: Request) -> Response:  # noqa: PLR0911
     """REST endpoint to download task results as CSV.
 
     Authenticates via a short-lived, single-use download token (not the
@@ -288,6 +291,38 @@ async def api_download(request: Request) -> Response:
     if csv_text is None:
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=cors
+        )
+
+    # Validate format parameter
+    fmt = request.query_params.get("format", "csv")
+    if fmt not in ("csv", "json"):
+        return JSONResponse(
+            {"error": "Unsupported format"}, status_code=400, headers=cors
+        )
+
+    # Return JSON array if requested (used by the widget for full data fetch).
+    if fmt == "json":
+        # Guard against memory exhaustion — JSON conversion holds ~4x the data
+        # in memory (csv string, DataFrame, records list, JSON response body).
+        # Use a conservative 10 MB threshold to keep peak memory manageable.
+        max_json_size = settings.max_upload_size_bytes // 5
+        if len(csv_text) > max_json_size:
+            logger.warning(
+                "CSV too large for JSON conversion (%d chars, limit %d) for task %s",
+                len(csv_text),
+                max_json_size,
+                task_id,
+            )
+            return JSONResponse(
+                {"error": "Result too large for JSON format"},
+                status_code=413,
+                headers=cors,
+            )
+        df = pd.read_csv(io.StringIO(csv_text))
+        records = _sanitize_records(df.to_dict(orient="records"))
+        return JSONResponse(
+            records,
+            headers={**cors, "X-Content-Type-Options": "nosniff"},
         )
 
     safe_prefix = "".join(c for c in task_id[:8] if c.isalnum() or c == "-")

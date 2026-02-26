@@ -654,8 +654,14 @@ class HttpResultsInput(BaseModel):
         ge=0,
     )
     page_size: int = Field(
-        default=1000,
-        description="Number of rows per page. Default 1000. Max 10000.",
+        default=50,
+        description=(
+            "Number of result rows to load into your context so you can read them. "
+            "The user has access to all rows via the widget regardless of this value. "
+            "REQUIRED: You must ask the user how many rows they want before calling this tool. "
+            "Do not use the default without asking. "
+            "Use offset to paginate through larger datasets."
+        ),
         ge=1,
         le=10000,
     )

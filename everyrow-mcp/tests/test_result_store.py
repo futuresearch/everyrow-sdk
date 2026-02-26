@@ -124,8 +124,26 @@ class TestBuildResultResponse:
             offset=18,
             page_size=5,
         )
-        summary = result[1].text
-        assert "final page" in summary
+        # No widget JSON for non-first pages
+        assert len(result) == 1
+        assert "final page" in result[0].text
+
+    def test_no_widget_json_on_subsequent_pages(self):
+        """Widget JSON is only emitted on the first page (offset=0)."""
+        preview = [{"id": i} for i in range(5)]
+        csv_url = f"{FAKE_SERVER_URL}/api/results/task-pg2/download?token=abc"
+        result = _build_result_response(
+            task_id="task-pg2",
+            csv_url=csv_url,
+            preview_records=preview,
+            total=20,
+            columns=["id"],
+            offset=5,
+            page_size=5,
+        )
+        assert len(result) == 1
+        # Should be the text summary, not JSON
+        assert "Showing rows" in result[0].text
 
     def test_session_url_included_in_widget(self):
         preview = [{"a": 1}]
@@ -379,16 +397,18 @@ class TestTryStoreResult:
         assert meta["session_url"] == "https://everyrow.io/sessions/abc"
 
     @pytest.mark.asyncio
-    async def test_returns_none_on_failure(self, sample_df, _http_state):
-        with patch(
-            "everyrow_mcp.result_store.redis_store.store_result_csv",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("Redis down"),
+    async def test_raises_on_redis_failure(self, sample_df, _http_state):
+        with (
+            patch(
+                "everyrow_mcp.result_store.redis_store.store_result_csv",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Redis down"),
+            ),
+            pytest.raises(RuntimeError, match="Redis down"),
         ):
-            result = await try_store_result(
+            await try_store_result(
                 "task-fail", sample_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
             )
-        assert result is None
 
     @pytest.mark.asyncio
     async def test_widget_includes_poll_token_and_download_url(
@@ -574,6 +594,43 @@ class TestApiDownload:
         )
         assert resp.status_code == 403
 
+    @pytest.mark.asyncio
+    async def test_json_format_returns_json(self, client: httpx.AsyncClient):
+        """?format=json returns a JSON array with correct types."""
+        task_id = str(uuid4())
+        download_token = secrets.token_urlsafe(32)
+        csv_text = "name,score\nAlice,95\nBob,87\n"
+
+        await redis_store.store_download_token(download_token, task_id)
+        await redis_store.store_result_csv(task_id, csv_text)
+
+        resp = await client.get(
+            f"/api/results/{task_id}/download",
+            params={"token": download_token, "format": "json"},
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/json"
+        assert resp.headers.get("x-content-type-options") == "nosniff"
+        data = resp.json()
+        assert len(data) == 2
+        assert data[0]["name"] == "Alice"
+
+    @pytest.mark.asyncio
+    async def test_unsupported_format_returns_400(self, client: httpx.AsyncClient):
+        """?format=xml or any unknown value returns 400."""
+        task_id = str(uuid4())
+        download_token = secrets.token_urlsafe(32)
+
+        await redis_store.store_download_token(download_token, task_id)
+        await redis_store.store_result_csv(task_id, "a\n1\n")
+
+        resp = await client.get(
+            f"/api/results/{task_id}/download",
+            params={"token": download_token, "format": "xml"},
+        )
+        assert resp.status_code == 400
+        assert "Unsupported format" in resp.json()["error"]
+
 
 # ── Token budget clamping ─────────────────────────────────────
 
@@ -740,3 +797,42 @@ class TestTokenBudgetIntegration:
         summary = result[1].text
         # The hint should suggest the user's original page_size=10
         assert "page_size=10" in summary
+
+
+# ── Widget fetch_full_results flag ─────────────────────────
+
+
+class TestWidgetFetchFullResults:
+    @pytest.mark.asyncio
+    async def test_store_result_includes_fetch_flag(self, sample_df, _http_state):
+        task_id = "task-widget-fetch"
+        await redis_store.store_poll_token(task_id, "test-token")
+
+        result = await try_store_result(
+            task_id,
+            sample_df,
+            0,
+            50,
+            mcp_server_url=FAKE_SERVER_URL,
+        )
+
+        widget = json.loads(result[0].text)
+        assert widget["fetch_full_results"] is True
+        # No pre-minted results_url — widget mints its own token on demand
+        assert "results_url" not in widget
+
+    @pytest.mark.asyncio
+    async def test_cached_result_includes_fetch_flag(self, sample_df, _http_state):
+        task_id = "task-widget-cached-fetch"
+        await redis_store.store_poll_token(task_id, "test-token")
+
+        await try_store_result(
+            task_id, sample_df, 0, 50, mcp_server_url=FAKE_SERVER_URL
+        )
+
+        cached = await try_cached_result(task_id, 0, 50, mcp_server_url=FAKE_SERVER_URL)
+
+        assert cached is not None
+        widget = json.loads(cached[0].text)
+        assert widget["fetch_full_results"] is True
+        assert "results_url" not in widget

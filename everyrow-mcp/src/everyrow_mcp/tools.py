@@ -49,7 +49,6 @@ from everyrow_mcp.models import (
     _schema_to_model,
 )
 from everyrow_mcp.result_store import (
-    _sanitize_records,
     try_cached_result,
     try_store_result,
 )
@@ -859,13 +858,18 @@ async def everyrow_results_stdio(
     ]
 
 
-async def everyrow_results_http(  # noqa: PLR0911
+async def everyrow_results_http(
     params: HttpResultsInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    Results are returned as a paginated preview with a download link.
+    IMPORTANT: You MUST ask the user how many rows they want loaded into your
+    context BEFORE calling this tool. Do NOT call with the default — always
+    ask first and use their answer as page_size.
+    The user always has access to all rows via the widget — page_size only
+    controls how many rows you can read.
+    After results load, tell the user how many rows you can see vs the total.
     """
     client = _get_client(ctx)
     task_id = params.task_id
@@ -886,7 +890,10 @@ async def everyrow_results_http(  # noqa: PLR0911
 
     # ── Return from cache if available ───────────────────────────
     cached = await try_cached_result(
-        task_id, params.offset, params.page_size, mcp_server_url=mcp_server_url
+        task_id,
+        params.offset,
+        params.page_size,
+        mcp_server_url=mcp_server_url,
     )
     if cached is not None:
         return cached
@@ -916,8 +923,8 @@ async def everyrow_results_http(  # noqa: PLR0911
     # output_path is accepted by the schema but ignored in HTTP mode —
     # the server must not write to its own filesystem on remote request.
 
-    # ── Store in Redis and return paginated response ──────────────
-    store_response = await try_store_result(
+    # ── Store in Redis and return response ──────────────────────
+    return await try_store_result(
         task_id,
         df,
         params.offset,
@@ -925,24 +932,6 @@ async def everyrow_results_http(  # noqa: PLR0911
         session_url,
         mcp_server_url=mcp_server_url,
     )
-    if store_response is not None:
-        return store_response
-
-    # ── Fallback: return inline preview when Redis is unavailable ──
-    page_df = df.iloc[params.offset : params.offset + params.page_size]
-    preview = _sanitize_records(page_df.to_dict(orient="records"))
-    cols = ", ".join(df.columns)
-    return [
-        TextContent(
-            type="text",
-            text=json.dumps({"preview": preview, "total": len(df)}),
-        ),
-        TextContent(
-            type="text",
-            text=f"Results: {len(df)} rows, {len(df.columns)} columns ({cols}). "
-            f"Showing {len(page_df)} rows inline (Redis unavailable, no download link).",
-        ),
-    ]
 
 
 @mcp.tool(
