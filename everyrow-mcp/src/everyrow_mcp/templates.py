@@ -82,8 +82,9 @@ body.fullscreen .resize-handle{display:none}
 .copy-modal-box textarea{width:100%;height:300px;font-family:monospace;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:8px;background:var(--input-bg);color:var(--text);resize:vertical}
 .copy-modal-box .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 .copy-modal-box button{padding:6px 16px;border:1px solid var(--border);border-radius:5px;background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px}
-.session-link{margin-bottom:6px;font-size:12px}
+.session-link{margin-bottom:6px;font-size:12px;display:flex;align-items:center;gap:8px}
 .session-link a{font-weight:500}
+.session-link .spacer{flex:1}
 .col-resize-handle{position:absolute;top:0;right:-2px;width:4px;height:100%;cursor:col-resize;z-index:5;user-select:none}
 .col-resize-handle:hover{background:var(--accent);opacity:.3}
 body.col-resizing,body.col-resizing *{cursor:col-resize!important;user-select:none!important}
@@ -110,10 +111,9 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 .settings-drop input[type="radio"]{margin:0}
 .settings-drop .drop-sep{border-top:1px solid var(--border-light);margin:4px 0}
 </style></head><body>
-<div id="sessionLink" class="session-link"></div>
+<div id="sessionLink" class="session-link"><span class="spacer"></span><input id="globalSearch" type="text" placeholder="Search all columns..."></div>
 <div id="toolbar">
   <span id="sum">Loading...</span>
-  <input id="globalSearch" type="text" placeholder="Search all columns...">
   <button id="selAllBtn">Select all</button>
   <button id="copyBtn" disabled>Copy CSV (0)</button>
   <span class="export-btns"><button id="exportLink" title="Copy CSV download link to clipboard">Copy link</button></span>
@@ -717,11 +717,13 @@ function onRowResizeUp(){
 }
 
 /* --- session URL display --- */
+const linksEl=document.createElement("span");linksEl.id="sessionLinks";
+sessionLinkEl.insertBefore(linksEl,sessionLinkEl.querySelector(".spacer"));
 function updateSessionLink(){
   let h="";
   if(sessionUrl)h+='<a href="#" id="sessionOpenLink">Open everyrow session &#x2197;</a>';
   if(csvUrl){if(h)h+=" &nbsp;|&nbsp; ";h+='<a href="#" id="csvOpenLink">Download CSV &#x2913;</a>';}
-  sessionLinkEl.innerHTML=h;
+  linksEl.innerHTML=h;
   document.getElementById("sessionOpenLink")?.addEventListener("click",e=>{
     e.preventDefault();
     if(!/^https?:\\/\\//i.test(sessionUrl))return;app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
@@ -756,7 +758,10 @@ function fetchFullResults(url,opts,hasPreview,total){
 }
 app.ontoolresult=({content})=>{
   const t=content?.find(c=>c.type==="text");if(!t)return;
-  let meta;try{meta=JSON.parse(t.text);}catch{sum.textContent=t.text;return;}
+  let meta;try{meta=JSON.parse(t.text);}catch{
+    /* Non-JSON response (e.g. subsequent page text summary) — hide the widget. */
+    document.body.style.display="none";return;
+  }
   if(meta.session_url&&!sessionUrl){sessionUrl=meta.session_url;updateSessionLink();}
   if(meta.poll_token){pollToken=meta.poll_token;}
   if(meta.download_token_url){downloadTokenUrl=meta.download_token_url;}
@@ -766,7 +771,7 @@ app.ontoolresult=({content})=>{
     fetchFullResultsWithFreshToken(!!meta.preview,meta.total);
   }else if(meta.preview){processData(meta.preview);}
   else if(Array.isArray(meta)){processData(meta);}
-  else{sum.textContent=JSON.stringify(meta);}
+  else{document.body.style.display="none";}
 };
 
 await app.connect();
