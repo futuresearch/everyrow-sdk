@@ -65,6 +65,80 @@ def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
     return ctx.request_context.lifespan_context.client_factory()
 
 
+def log_client_info(ctx: EveryRowContext, tool_name: str) -> None:
+    """Log MCP client identity and capabilities for the current request."""
+    try:
+        cp = ctx.session.client_params
+        if not cp:
+            logger.info("[%s] client_params=None", tool_name)
+            return
+        name = cp.clientInfo.name if cp.clientInfo else "unknown"
+        version = cp.clientInfo.version if cp.clientInfo else "unknown"
+        caps = cp.capabilities
+        experimental = (caps.experimental or {}) if caps else {}
+        logger.info(
+            "[%s] client=%s/%s sampling=%s elicitation=%s roots=%s ui=%s",
+            tool_name,
+            name,
+            version,
+            caps.sampling is not None if caps else False,
+            caps.elicitation is not None if caps else False,
+            caps.roots is not None if caps else False,
+            experimental.get("io.modelcontextprotocol/ui") is not None,
+        )
+    except Exception:
+        logger.debug("Could not log client info for %s", tool_name, exc_info=True)
+
+
+def client_supports_widgets(ctx: EveryRowContext) -> bool:
+    """Return True if the connected MCP client can render widgets.
+
+    Uses a two-tier whitelist approach:
+
+    1. **MCP Apps UI capability** (spec-recommended, future-proof):
+       Clients that advertise ``experimental["io.modelcontextprotocol/ui"]``
+       explicitly support widget rendering.  This is the long-term signal.
+
+    2. **Name-based whitelist** (pragmatic fallback):
+       Claude.ai and Claude Desktop can render widgets but don't yet
+       advertise the UI capability.  We maintain a whitelist of known
+       widget-capable client names so they get widgets today.
+       This fallback should be removed once clients adopt the capability.
+
+    Unknown clients default to **no widget** — this is intentional.
+    Widget JSON is ~500-2000 tokens; sending it to a client that can't
+    render it (e.g. Claude Code, third-party MCP clients) wastes context
+    for no benefit.
+    """
+    try:
+        cp = ctx.session.client_params
+        if not cp:
+            return False
+
+        # Tier 1: explicit UI capability (preferred, spec-recommended)
+        caps = cp.capabilities
+        if caps:
+            experimental = caps.experimental or {}
+            if experimental.get("io.modelcontextprotocol/ui") is not None:
+                return True
+
+        # Tier 2: name-based whitelist for known widget-capable clients
+        # that don't yet advertise the UI capability.
+        # Update this set as new clients are verified via log_client_info().
+        # Known values (from log_client_info, Feb 2026):
+        #   Claude.ai:    "Anthropic/ClaudeAI"  (version "1.0.0")
+        #   Claude Desktop: "Anthropic/ClaudeAI"  (version "1.0.0") — same as Claude.ai
+        #   Claude Code:  "claude-code"
+        # Note: Claude.ai and Claude Desktop report the same clientInfo.name,
+        # so a single whitelist entry covers both.
+        _WIDGET_CAPABLE_CLIENTS = {"anthropic/claudeai"}
+        name = (cp.clientInfo.name or "").lower() if cp.clientInfo else ""
+        return name in _WIDGET_CAPABLE_CLIENTS
+    except Exception:
+        logger.debug("Could not determine widget support", exc_info=True)
+        return False  # unknown client — skip widget to save context tokens
+
+
 def _submission_text(
     label: str, session_url: str, task_id: str, session_id: str = ""
 ) -> str:

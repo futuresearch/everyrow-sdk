@@ -59,7 +59,9 @@ from everyrow_mcp.tool_helpers import (
     TaskState,
     _fetch_task_result,
     _get_client,
+    client_supports_widgets,
     create_tool_response,
+    log_client_info,
     write_initial_task_state,
 )
 from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
@@ -132,6 +134,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -208,6 +211,7 @@ async def everyrow_single_agent(
     Once the task is completed, call everyrow_results to save the output.
     """
     logger.info("everyrow_single_agent: task=%.80s", params.task)
+    log_client_info(ctx, "everyrow_single_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -294,6 +298,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_rank")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -387,6 +392,7 @@ async def everyrow_screen(
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_screen")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -473,6 +479,7 @@ async def everyrow_dedupe(
         params.equivalence_relation,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_dedupe")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -564,6 +571,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         len(params.left_data) if params.left_data else "artifact",
         len(params.right_data) if params.right_data else "artifact",
     )
+    log_client_info(ctx, "everyrow_merge")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -649,6 +657,7 @@ async def everyrow_forecast(
         params.context or "",
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_forecast")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -720,6 +729,7 @@ async def everyrow_upload_data(
     across multiple tool calls.
     """
     logger.info("everyrow_upload_data: source=%.80s", params.source)
+    log_client_info(ctx, "everyrow_upload_data")
     client = _get_client(ctx)
 
     if is_url(params.source):
@@ -875,6 +885,8 @@ async def everyrow_results_http(
     client = _get_client(ctx)
     task_id = params.task_id
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
+    log_client_info(ctx, "everyrow_results")
+    skip_widget = not client_supports_widgets(ctx)
 
     # ── Cross-user access check ──────────────────────────────────
     try:
@@ -895,6 +907,7 @@ async def everyrow_results_http(
         params.offset,
         params.page_size,
         mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
     )
     if cached is not None:
         return cached
@@ -932,6 +945,7 @@ async def everyrow_results_http(
         params.page_size,
         session_url,
         mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
     )
 
 
@@ -955,6 +969,7 @@ async def everyrow_list_sessions(
     Use this to find past sessions or check what's been run.
     Results are paginated — 25 sessions per page by default.
     """
+    log_client_info(ctx, "everyrow_list_sessions")
     client = _get_client(ctx)
 
     try:
@@ -1057,6 +1072,7 @@ async def everyrow_cancel(
     params: CancelInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    log_client_info(ctx, "everyrow_cancel")
     client = _get_client(ctx)
     task_id = params.task_id
 
