@@ -151,6 +151,7 @@ let sessionUrl="",csvUrl="",pollToken="",downloadTokenUrl="";
 const TRUNC=200;
 let didDrag=false;
 let copyFmt="csv";
+let widgetActive=false;
 const settingsBtn=document.getElementById("settingsBtn");
 const settingsDrop=document.getElementById("settingsDrop");
 const S={rows:[],allCols:[],filteredIdx:[],sortCol:null,sortDir:0,filters:{},globalQuery:"",selected:new Set(),lastClick:null,isFullscreen:false,focusedCell:null};
@@ -759,12 +760,13 @@ function fetchFullResults(url,opts,hasPreview,total){
 app.ontoolresult=({content})=>{
   const t=content?.find(c=>c.type==="text");if(!t)return;
   let meta;try{meta=JSON.parse(t.text);}catch{
-    /* Non-JSON response (e.g. subsequent page text summary) — hide the widget. */
-    document.body.style.display="none";return;
+    /* Non-JSON (e.g. summary text) — ignore if widget already active */
+    return;
   }
   /* Only show the widget for recognized data shapes */
   const isWidget=meta.fetch_full_results||meta.preview||Array.isArray(meta);
   if(!isWidget){return;}
+  widgetActive=true;
   document.body.style.display="";
   if(meta.session_url&&!sessionUrl){sessionUrl=meta.session_url;updateSessionLink();}
   if(meta.poll_token){pollToken=meta.poll_token;}
