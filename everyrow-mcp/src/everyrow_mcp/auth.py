@@ -496,8 +496,21 @@ class EveryRowAuthProvider(
             supabase_refresh_token=authorization_code.supabase_refresh_token,
         )
 
-    async def load_access_token(self, token: str) -> AccessToken | None:  # noqa: ARG002
-        return None
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        # Accept raw Supabase JWTs directly (JWT passthrough path).
+        # This allows the CC app to forward the user's session JWT without an
+        # OAuth dance.  Backward-compatible: clients using the existing OAuth
+        # flow continue to receive MCP-issued tokens, which are Supabase JWTs
+        # under the hood, so they are also accepted here.
+        result = await self._token_verifier.verify_token(token)
+        if result is None:
+            return None
+        return AccessToken(
+            token=result.token,
+            client_id=result.client_id,
+            scopes=["everyrow"],
+            expires_at=result.expires_at,
+        )
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
