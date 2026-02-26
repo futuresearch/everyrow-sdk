@@ -93,6 +93,9 @@ body.row-resizing,body.row-resizing *{cursor:row-resize!important;user-select:no
 .cell-more:hover,.cell-less:hover{text-decoration:underline}
 .export-btns{display:inline-flex;gap:2px}
 .export-btns button{padding:3px 8px;font-size:11px}
+#globalSearch{padding:4px 8px;border:1px solid var(--input-border);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text);outline:none;width:160px;transition:border-color .15s,width .2s}
+#globalSearch:focus{border-color:var(--input-focus);width:220px}
+#globalSearch::placeholder{color:var(--text-dim)}
 .col-ghost{position:fixed;background:var(--bg-toolbar);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:12px;font-weight:600;opacity:.85;pointer-events:none;z-index:200;white-space:nowrap}
 body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none!important}
 .hdr-row th.drag-over-left{box-shadow:inset 3px 0 0 var(--accent)}
@@ -110,6 +113,7 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 <div id="sessionLink" class="session-link"></div>
 <div id="toolbar">
   <span id="sum">Loading...</span>
+  <input id="globalSearch" type="text" placeholder="Search all columns...">
   <button id="selAllBtn">Select all</button>
   <button id="copyBtn" disabled>Copy CSV (0)</button>
   <span class="export-btns"><button id="exportLink" title="Copy CSV download link to clipboard">Copy link</button></span>
@@ -149,7 +153,7 @@ let didDrag=false;
 let copyFmt="csv";
 const settingsBtn=document.getElementById("settingsBtn");
 const settingsDrop=document.getElementById("settingsDrop");
-const S={rows:[],allCols:[],filteredIdx:[],sortCol:null,sortDir:0,filters:{},selected:new Set(),lastClick:null,isFullscreen:false,focusedCell:null};
+const S={rows:[],allCols:[],filteredIdx:[],sortCol:null,sortDir:0,filters:{},globalQuery:"",selected:new Set(),lastClick:null,isFullscreen:false,focusedCell:null};
 
 /* --- theming & display mode --- */
 app.onhostcontextchanged=(ctx)=>{
@@ -198,7 +202,7 @@ function processData(data){
   const all=[...colSet];
   const visible=all.filter(k=>!k.startsWith("research."));
   S.allCols=[...visible.filter(k=>!k.includes(".")),...visible.filter(k=>k.includes("."))];
-  S.sortCol=null;S.sortDir=0;S.filters={};S.selected.clear();S.lastClick=null;
+  S.sortCol=null;S.sortDir=0;S.filters={};S.globalQuery="";globalSearchEl.value="";S.selected.clear();S.lastClick=null;
   S.filteredIdx=S.rows.map((_,i)=>i);
   renderTable();
 }
@@ -206,6 +210,10 @@ function processData(data){
 /* --- filter & sort --- */
 function applyFilterAndSort(){
   let idx=S.rows.map((_,i)=>i);
+  if(S.globalQuery){
+    const gq=S.globalQuery.toLowerCase();
+    idx=idx.filter(i=>{const row=S.rows[i].display;return Object.values(row).some(v=>v!=null&&String(v).toLowerCase().includes(gq));});
+  }
   for(const[col,q]of Object.entries(S.filters)){
     if(!q)continue;
     const lq=q.toLowerCase();
@@ -227,6 +235,8 @@ function applyFilterAndSort(){
 
 let filterTimer=null;
 function onFilterInput(col,val){S.filters[col]=val;clearTimeout(filterTimer);filterTimer=setTimeout(()=>applyFilterAndSort(),150);}
+const globalSearchEl=document.getElementById("globalSearch");
+globalSearchEl.addEventListener("input",()=>{S.globalQuery=globalSearchEl.value;clearTimeout(filterTimer);filterTimer=setTimeout(()=>applyFilterAndSort(),150);});
 
 /* --- research lookup --- */
 function getResearch(row,col){
