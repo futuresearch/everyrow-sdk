@@ -177,7 +177,7 @@ def _widgets_from_user_agent() -> bool:
     #   Claude Code: "claude-code/2.1.59 (cli)"
     #   MCP SDK:     "python-httpx/0.28.1"  (test client)
     #   OAuth flow:  "Bun/1.3.10"  (Claude Code's OAuth helper)
-    _NO_WIDGET_UA_SUBSTRINGS = {"claude-code"}
+    _NO_WIDGET_UA_SUBSTRINGS = {"claude-code", "everyrow-cc"}
 
     if any(pattern in ua for pattern in _NO_WIDGET_UA_SUBSTRINGS):
         return False
@@ -435,7 +435,7 @@ class TaskState(BaseModel):
                 if settings.is_http:
                     if self.total <= settings.auto_page_size_threshold:
                         next_call = dedent(f"""\
-                            Call everyrow_results(task_id='{task_id}', page_size={self.total}) to load all rows.""")
+                            Call everyrow_results(task_id='{task_id}', page_size={max(self.total, 1)}) to load all rows.""")
                     else:
                         next_call = dedent(f"""\
                             IMPORTANT: Do NOT call everyrow_results yet.\
