@@ -5,6 +5,9 @@
 services:
   mcp-server:
     ports: !override []
+    command: ["everyrow-mcp", "--http", "--no-auth", "--port", "8000", "--host", "0.0.0.0"]
+    environment:
+      ALLOW_NO_AUTH: "1"
 
   nginx:
     image: nginx:alpine
