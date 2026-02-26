@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import os
 import time as _time
 from urllib.parse import urlparse
 
@@ -174,9 +175,13 @@ def _configure_mcp_auth(
         client_registration_options=ClientRegistrationOptions(enabled=True),
     )
     hostname = urlparse(settings.mcp_server_url).hostname or "localhost"
+    allowed_hosts = [hostname]
+    extra = os.environ.get("EXTRA_ALLOWED_HOSTS", "")
+    if extra:
+        allowed_hosts.extend(h.strip() for h in extra.split(",") if h.strip())
     mcp.settings.transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[hostname],
+        allowed_hosts=allowed_hosts,
     )
 
 
