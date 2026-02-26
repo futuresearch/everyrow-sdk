@@ -246,7 +246,7 @@ async def api_download_token(request: Request) -> Response:
 
 
 async def api_download(request: Request) -> Response:  # noqa: PLR0911
-    """REST endpoint to download task results as CSV.
+    """REST endpoint to download task results as CSV or JSON.
 
     Authenticates via a short-lived, single-use download token (not the
     long-lived poll token).  The token is consumed atomically on use so
@@ -301,10 +301,15 @@ async def api_download(request: Request) -> Response:  # noqa: PLR0911
 
     # Return JSON array directly — no parsing needed since Redis stores JSON natively.
     if fmt == "json":
+        safe_prefix = "".join(c for c in task_id[:8] if c.isalnum() or c == "-")
         return Response(
             content=json_text,
             media_type="application/json",
-            headers={**cors, "X-Content-Type-Options": "nosniff"},
+            headers={
+                **cors,
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": f'attachment; filename="results_{safe_prefix}.json"',
+            },
         )
 
     # CSV generated on-the-fly from the stored JSON.
