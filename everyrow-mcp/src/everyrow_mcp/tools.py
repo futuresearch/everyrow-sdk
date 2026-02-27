@@ -1346,12 +1346,24 @@ async def everyrow_list_session_tasks(
 
     lines = [f"Found {len(tasks)} task(s) in session {params.session_id}:\n"]
     for t in tasks:
-        artifact = (
-            f" | output_artifact: {t['artifact_id']}" if t.get("artifact_id") else ""
+        output = (
+            f" | output_artifact_id: {t['output_artifact_id']}"
+            if t.get("output_artifact_id")
+            else ""
+        )
+        inputs = (
+            f" | input_artifact_ids: {t['input_artifact_ids']}"
+            if t.get("input_artifact_ids")
+            else ""
+        )
+        context = (
+            f" | context_artifact_ids: {t['context_artifact_ids']}"
+            if t.get("context_artifact_ids")
+            else ""
         )
         lines.append(
             f"- **{t['task_type']}** (task_id: {t['task_id']})\n"
-            f"  Status: {t['status']} | Created: {t['created_at']}{artifact}"
+            f"  Status: {t['status']} | Created: {t['created_at']}{output}{inputs}{context}"
         )
 
     return [TextContent(type="text", text="\n".join(lines))]
