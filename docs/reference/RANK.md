@@ -81,6 +81,16 @@ When specifying a response model, make sure that it contains `field_name`. Other
 | `ascending_order` | bool | True = lowest first (default) |
 | `preview` | bool | True = process only a few rows |
 
+## Via MCP
+
+MCP tool: `everyrow_rank`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `csv_path` | string | Path to input CSV file |
+| `task` | string | How to score each row |
+| `field_name` | string | Column name for the score |
+
 ## Related docs
 
 ### Guides

@@ -79,6 +79,15 @@ Probabilities are clamped to [3, 97]—even near-certain outcomes retain residua
 | 5 | ~6 min | ~$3 |
 | 20 | ~10 min | ~$12 |
 
+## Via MCP
+
+MCP tool: `everyrow_forecast`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `csv_path` | string | Path to CSV with questions (one per row) |
+| `context` | string | Optional batch-level context for all questions |
+
 ## Related docs
 
 ### Blog posts

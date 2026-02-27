@@ -34,6 +34,8 @@ Set your API key before launching Claude Code:
 export EVERYROW_API_KEY=your_key_here  # Get one at everyrow.io/api-key
 ```
 
+Download [fda_products.csv](https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/fda_products.csv) (20,000 rows from the FDA Drugs@FDA database with ingredient, strength, applicant, and dosage form columns). Tell Claude:
+
 ```
 Deduplicate fda_products.csv. Two rows are duplicates if they have the same
 ingredient + same strength + same applicant + same dosage form.
@@ -144,4 +146,4 @@ equivalence_relation="Same drug"
 
 ---
 
-Built with [everyrow](https://github.com/futuresearch/everyrow-sdk). See the [dedupe documentation](/docs/reference/DEDUPE) for more options. Related guides: [Resolve Duplicate Entities](/resolve-entities-python) (500-row CRM walkthrough), [Deduplicate Training Data](/deduplicate-training-data-ml) (semantic dedup for ML datasets).
+Built with [everyrow](https://github.com/futuresearch/everyrow-sdk). See the [dedupe documentation](reference/DEDUPE) for more options. Related guides: [Resolve Duplicate Entities](/resolve-entities-python) (500-row CRM walkthrough), [Deduplicate Training Data](/deduplicate-training-data-ml) (semantic dedup for ML datasets).

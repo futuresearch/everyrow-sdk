@@ -3,8 +3,8 @@
   "name": "everyrow-mcp",
   "display_name": "Everyrow MCP Server",
   "version": "0.4.0",
-  "description": "AI-powered dataframe ops: transform, dedupe, merge, rank, and screen with natural language",
-  "long_description": "MCP server for everyrow: agent ops at spreadsheet scale. This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files. All tools operate on local CSV files.",
+  "description": "Give your AI a research team. Forecast, score, classify, or research every row of a dataset.",
+  "long_description": "MCP server for everyrow: give your AI a research team. Each operation dispatches web research agents across a dataset to forecast, score, classify, deduplicate, merge, or research at scale.",
   "author": {
     "name": "FutureSearch",
     "url": "https://everyrow.io"
@@ -76,6 +76,10 @@
     {
       "name": "everyrow_upload_data",
       "description": "Upload data from a URL or local file. Returns an artifact_id for use in processing tools."
+    },
+    {
+      "name": "everyrow_balance",
+      "description": "Check the current billing balance for the authenticated user."
     }
   ],
   "user_config": {

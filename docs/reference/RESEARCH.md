@@ -131,6 +131,23 @@ companies = await single_agent(
 )
 ```
 
+## Via MCP
+
+MCP tools: `everyrow_agent` (DataFrame), `everyrow_single_agent` (single question)
+
+**everyrow_agent:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `csv_path` | string | Path to input CSV file |
+| `task` | string | What to research for each row |
+
+**everyrow_single_agent:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `task` | string | The question to research |
+
 ## Related docs
 
 ### Guides

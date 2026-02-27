@@ -7,6 +7,13 @@ description: Install everyrow and run your first operation.
 
 Everyrow lets you perform qualitative data transformations on noisy real-world data, at quantitative scale. Define your fuzzy logic concisely in natural language, and everyrow handles the complexity of orchestrating the execution.
 
+**Using Claude Code?** Install the plugin and ask Claude in natural language:
+
+```bash
+claude plugin marketplace add futuresearch/everyrow-sdk
+claude plugin install everyrow@futuresearch
+```
+
 ## Prerequisites
 
 - Python 3.12+

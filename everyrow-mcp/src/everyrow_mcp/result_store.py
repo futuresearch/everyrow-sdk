@@ -1,18 +1,17 @@
 """Redis-backed result retrieval for the everyrow MCP server.
 
-Handles checking Redis for cached metadata, storing CSV results,
+Handles checking Redis for cached metadata, storing JSON results,
 and building the MCP TextContent responses.
 
 Caching strategy:
   - Base metadata (total, columns) cached at  result:{task_id}
   - Per-page previews cached at               result:{task_id}:page:{offset}:{page_size}
-  - Full CSV stored at                        result:{task_id}:csv  (1h TTL)
-  - On a page cache miss, the CSV is read from Redis and the page is sliced.
+  - Full JSON stored at                       result:{task_id}:json  (1h TTL)
+  - On a page cache miss, the JSON is read from Redis and the page is sliced.
 """
 
 from __future__ import annotations
 
-import io
 import json
 import logging
 import math
@@ -98,6 +97,8 @@ def _build_result_response(
     mcp_server_url: str = "",
     *,
     requested_page_size: int | None = None,
+    skip_widget: bool = False,
+    skip_session: bool = False,
 ) -> list[TextContent]:
     """Build MCP TextContent response for Redis-backed results.
 
@@ -110,6 +111,8 @@ def _build_result_response(
     token via the ``download-token`` endpoint — no pre-minted URL is baked
     into the response, avoiding stale-token issues on re-render.
     """
+    if skip_session:
+        session_url = ""
     col_names = _format_columns(columns)
     hint_page_size = (
         requested_page_size if requested_page_size is not None else page_size
@@ -124,8 +127,19 @@ def _build_result_response(
     # Alternative: track a per-task call counter in Redis and only emit on
     # the first call. Rejected because it adds state, and re-fetching
     # offset=0 (e.g. "show me the results again") should show the widget.
+    # Widget JSON is only useful for clients that can render iframes
+    # (Claude.ai, Claude Desktop). Clients like Claude Code don't render
+    # widgets, so the JSON just wastes context tokens.
+    #
+    # Detection uses a two-tier whitelist (see tool_helpers.client_supports_widgets):
+    #  1. MCP Apps UI capability — clients that advertise
+    #     experimental["io.modelcontextprotocol/ui"] explicitly support widgets.
+    #  2. Name-based whitelist — Claude.ai/Desktop don't advertise the
+    #     capability yet, so we whitelist known widget-capable client names.
+    #     Unknown clients default to NO widget (saves context tokens).
+    #     This fallback should be removed once clients adopt the capability.
     contents: list[TextContent] = []
-    if offset == 0:
+    if offset == 0 and not skip_widget:
         widget_data: dict[str, Any] = {
             "csv_url": csv_url,
             "preview": preview_records,
@@ -196,6 +210,9 @@ async def try_cached_result(
     offset: int,
     page_size: int,
     mcp_server_url: str = "",
+    *,
+    skip_widget: bool = False,
+    skip_session: bool = False,
 ) -> list[TextContent] | None:
     cached_meta_raw = await redis_store.get_result_meta(task_id)
     if not cached_meta_raw:
@@ -206,16 +223,15 @@ async def try_cached_result(
     if cached_page is not None:
         preview_records = json.loads(cached_page)
     else:
-        # Page cache miss — read full CSV from Redis and slice
+        # Page cache miss — read full JSON from Redis and slice
         try:
-            csv_text = await redis_store.get_result_csv(task_id)
-            if csv_text is None:
+            json_text = await redis_store.get_result_json(task_id)
+            if json_text is None:
                 logger.warning(
-                    "CSV expired in Redis for task %s, falling back to API", task_id
+                    "JSON expired in Redis for task %s, falling back to API", task_id
                 )
                 return None
-            df = pd.read_csv(io.StringIO(csv_text))
-            all_records = _sanitize_records(df.to_dict(orient="records"))
+            all_records: list[dict[str, Any]] = json.loads(json_text)
             clamped = min(offset, len(all_records))
             preview_records = all_records[clamped : clamped + page_size]
             await redis_store.store_result_page(
@@ -223,7 +239,7 @@ async def try_cached_result(
             )
         except Exception:
             logger.warning(
-                "Failed to read CSV from Redis for task %s, falling back to API",
+                "Failed to read JSON from Redis for task %s, falling back to API",
                 task_id,
             )
             return None
@@ -250,6 +266,8 @@ async def try_cached_result(
         poll_token=poll_token or "",
         mcp_server_url=mcp_server_url,
         requested_page_size=page_size,
+        skip_widget=skip_widget,
+        skip_session=skip_session,
     )
 
 
@@ -260,11 +278,14 @@ async def try_store_result(
     page_size: int,
     session_url: str = "",
     mcp_server_url: str = "",
+    *,
+    skip_widget: bool = False,
+    skip_session: bool = False,
 ) -> list[TextContent]:
     """Store a DataFrame in Redis and return a paginated response."""
     try:
-        # Store full CSV in Redis
-        await redis_store.store_result_csv(task_id, df.to_csv(index=False))
+        all_records = _sanitize_records(df.to_dict(orient="records"))
+        await redis_store.store_result_json(task_id, json.dumps(all_records))
 
         total = len(df)
         columns = list(df.columns)
@@ -277,8 +298,7 @@ async def try_store_result(
 
         # Build and cache page preview
         clamped_offset = min(offset, total)
-        page_df = df.iloc[clamped_offset : clamped_offset + page_size]
-        preview_records = _sanitize_records(page_df.to_dict(orient="records"))
+        preview_records = all_records[clamped_offset : clamped_offset + page_size]
         await redis_store.store_result_page(
             task_id=task_id,
             offset=offset,
@@ -309,6 +329,8 @@ async def try_store_result(
             poll_token=poll_token or "",
             mcp_server_url=mcp_server_url,
             requested_page_size=page_size,
+            skip_widget=skip_widget,
+            skip_session=skip_session,
         )
     except Exception:
         logger.exception("Failed to store results in Redis for task %s", task_id)

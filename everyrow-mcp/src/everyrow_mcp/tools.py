@@ -11,6 +11,7 @@ from uuid import UUID
 import pandas as pd
 from everyrow.api_utils import handle_response
 from everyrow.constants import EveryrowError
+from everyrow.generated.api.billing import get_billing_balance_billing_get
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.ops import (
@@ -58,7 +59,10 @@ from everyrow_mcp.tool_helpers import (
     TaskState,
     _fetch_task_result,
     _get_client,
+    client_supports_widgets,
     create_tool_response,
+    is_internal_client,
+    log_client_info,
     write_initial_task_state,
 )
 from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
@@ -131,6 +135,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -207,6 +212,7 @@ async def everyrow_single_agent(
     Once the task is completed, call everyrow_results to save the output.
     """
     logger.info("everyrow_single_agent: task=%.80s", params.task)
+    log_client_info(ctx, "everyrow_single_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -293,6 +299,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_rank")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -386,6 +393,7 @@ async def everyrow_screen(
         params.task,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_screen")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -472,6 +480,7 @@ async def everyrow_dedupe(
         params.equivalence_relation,
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_dedupe")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -563,6 +572,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         len(params.left_data) if params.left_data else "artifact",
         len(params.right_data) if params.right_data else "artifact",
     )
+    log_client_info(ctx, "everyrow_merge")
     client = _get_client(ctx)
     _clear_task_state()
 
@@ -648,6 +658,7 @@ async def everyrow_forecast(
         params.context or "",
         len(params.data) if params.data else "artifact",
     )
+    log_client_info(ctx, "everyrow_forecast")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -719,6 +730,7 @@ async def everyrow_upload_data(
     across multiple tool calls.
     """
     logger.info("everyrow_upload_data: source=%.80s", params.source)
+    log_client_info(ctx, "everyrow_upload_data")
     client = _get_client(ctx)
 
     if is_url(params.source):
@@ -864,16 +876,19 @@ async def everyrow_results_http(
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    IMPORTANT: You MUST ask the user how many rows they want loaded into your
-    context BEFORE calling this tool. Do NOT call with the default — always
-    ask first and use their answer as page_size.
     The user always has access to all rows via the widget — page_size only
-    controls how many rows you can read.
+    controls how many rows _you_ can read.
     After results load, tell the user how many rows you can see vs the total.
     """
     client = _get_client(ctx)
     task_id = params.task_id
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
+    log_client_info(ctx, "everyrow_results")
+    skip_widget = not client_supports_widgets(ctx)
+    skip_session = False
+    if is_internal_client():
+        skip_widget = True
+        skip_session = True
 
     # ── Cross-user access check ──────────────────────────────────
     try:
@@ -894,6 +909,8 @@ async def everyrow_results_http(
         params.offset,
         params.page_size,
         mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
+        skip_session=skip_session,
     )
     if cached is not None:
         return cached
@@ -931,6 +948,8 @@ async def everyrow_results_http(
         params.page_size,
         session_url,
         mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
+        skip_session=skip_session,
     )
 
 
@@ -954,6 +973,7 @@ async def everyrow_list_sessions(
     Use this to find past sessions or check what's been run.
     Results are paginated — 25 sessions per page by default.
     """
+    log_client_info(ctx, "everyrow_list_sessions")
     client = _get_client(ctx)
 
     try:
@@ -1002,6 +1022,46 @@ async def everyrow_list_sessions(
 
 
 @mcp.tool(
+    name="everyrow_balance",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Check Account Balance",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_balance(ctx: EveryRowContext) -> list[TextContent]:
+    """Check the current billing balance for the authenticated user.
+
+    Returns the account balance in dollars. Use this to verify available
+    credits before submitting tasks.
+    """
+    client = _get_client(ctx)
+
+    try:
+        response = await get_billing_balance_billing_get.asyncio(client=client)
+        if response is None:
+            raise RuntimeError("Failed to get billing balance")
+    except Exception:
+        logger.exception("Failed to get billing balance")
+        return [
+            TextContent(
+                type="text",
+                text="Error retrieving billing balance. Please try again.",
+            )
+        ]
+
+    return [
+        TextContent(
+            type="text",
+            text=f"Current balance: ${response.current_balance_dollars:.2f}",
+        )
+    ]
+
+
+@mcp.tool(
     name="everyrow_cancel",
     structured_output=False,
     annotations=ToolAnnotations(
@@ -1016,6 +1076,7 @@ async def everyrow_cancel(
     params: CancelInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    log_client_info(ctx, "everyrow_cancel")
     client = _get_client(ctx)
     task_id = params.task_id
 

@@ -65,6 +65,134 @@ def _get_client(ctx: EveryRowContext) -> AuthenticatedClient:
     return ctx.request_context.lifespan_context.client_factory()
 
 
+def log_client_info(ctx: EveryRowContext, tool_name: str) -> None:
+    """Log MCP client identity and capabilities for the current request."""
+    try:
+        cp = ctx.session.client_params
+        if not cp:
+            # Stateless HTTP mode — no MCP initialize handshake.
+            # Fall back to User-Agent from the HTTP request.
+            from everyrow_mcp.http_config import get_user_agent  # noqa: PLC0415
+
+            ua = get_user_agent()
+            logger.info(
+                "[%s] client_params=None (stateless) ua=%s",
+                tool_name,
+                ua or "-",
+            )
+            return
+        name = cp.clientInfo.name if cp.clientInfo else "unknown"
+        version = cp.clientInfo.version if cp.clientInfo else "unknown"
+        caps = cp.capabilities
+        experimental = (caps.experimental or {}) if caps else {}
+        logger.info(
+            "[%s] client=%s/%s sampling=%s elicitation=%s roots=%s ui=%s",
+            tool_name,
+            name,
+            version,
+            caps.sampling is not None if caps else False,
+            caps.elicitation is not None if caps else False,
+            caps.roots is not None if caps else False,
+            experimental.get("io.modelcontextprotocol/ui") is not None,
+        )
+    except Exception:
+        logger.debug("Could not log client info for %s", tool_name, exc_info=True)
+
+
+def client_supports_widgets(ctx: EveryRowContext) -> bool:
+    """Return True if the connected MCP client can render widgets.
+
+    Uses a three-tier approach:
+
+    1. **MCP Apps UI capability** (spec-recommended, future-proof):
+       Clients that advertise ``experimental["io.modelcontextprotocol/ui"]``
+       explicitly support widget rendering.  This is the long-term signal.
+
+    2. **Name-based whitelist** (pragmatic fallback):
+       Claude.ai and Claude Desktop can render widgets but don't yet
+       advertise the UI capability.  We maintain a whitelist of known
+       widget-capable client names so they get widgets today.
+       This fallback should be removed once clients adopt the capability.
+
+    3. **User-Agent fallback** (stateless HTTP mode):
+       When ``client_params`` is ``None`` (stateless HTTP — no MCP initialize
+       handshake), we check the HTTP User-Agent header.  Clients known to
+       NOT support widgets (e.g. Claude Code) are excluded.  If the
+       User-Agent is unknown, we default to **showing widgets** because
+       HTTP mode traffic is overwhelmingly from Claude.ai/Desktop.
+
+    Unknown clients default to **no widget** in stateful mode (tier 2),
+    but to **widget** in stateless HTTP mode (tier 3) where the population
+    is predominantly Claude.ai/Desktop.
+    """
+    try:
+        cp = ctx.session.client_params
+        if not cp:
+            # Stateless HTTP mode — no MCP initialize handshake.
+            # Fall back to User-Agent detection.
+            return _widgets_from_user_agent()
+
+        # Tier 1: explicit UI capability (preferred, spec-recommended)
+        caps = cp.capabilities
+        if caps:
+            experimental = caps.experimental or {}
+            if experimental.get("io.modelcontextprotocol/ui") is not None:
+                return True
+
+        # Tier 2: name-based whitelist for known widget-capable clients
+        # that don't yet advertise the UI capability.
+        # Update this set as new clients are verified via log_client_info().
+        # Known values (from log_client_info, Feb 2026):
+        #   Claude.ai:    "Anthropic/ClaudeAI"  (version "1.0.0")
+        #   Claude Desktop: "Anthropic/ClaudeAI"  (version "1.0.0") — same as Claude.ai
+        #   Claude Code:  "claude-code"
+        # Note: Claude.ai and Claude Desktop report the same clientInfo.name,
+        # so a single whitelist entry covers both.
+        _WIDGET_CAPABLE_CLIENTS = {"anthropic/claudeai"}
+        name = (cp.clientInfo.name or "").lower() if cp.clientInfo else ""
+        return name in _WIDGET_CAPABLE_CLIENTS
+    except Exception:
+        logger.debug("Could not determine widget support", exc_info=True)
+        return False  # unknown client — skip widget to save context tokens
+
+
+def _widgets_from_user_agent() -> bool:
+    """Tier 3: determine widget support from HTTP User-Agent.
+
+    Called when client_params is None (stateless HTTP mode).
+
+    Strategy: block known non-widget clients, allow everything else.
+    HTTP mode traffic is predominantly Claude.ai/Desktop which supports
+    widgets, so defaulting to True minimises false negatives.
+
+    The blocklist below will be populated once we observe actual
+    User-Agent strings from Claude Code's HTTP client in production logs.
+    """
+    from everyrow_mcp.http_config import get_user_agent  # noqa: PLC0415
+
+    ua = get_user_agent().lower()
+
+    # Known non-widget User-Agent substrings.
+    # Observed values (Feb 2026):
+    #   Claude Code: "claude-code/2.1.59 (cli)"
+    #   MCP SDK:     "python-httpx/0.28.1"  (test client)
+    #   OAuth flow:  "Bun/1.3.10"  (Claude Code's OAuth helper)
+    _NO_WIDGET_UA_SUBSTRINGS = {"claude-code", "everyrow-cc"}
+
+    if any(pattern in ua for pattern in _NO_WIDGET_UA_SUBSTRINGS):
+        return False
+
+    # Unknown UA in HTTP mode → assume widget-capable (Claude.ai/Desktop).
+    return True
+
+
+def is_internal_client() -> bool:
+    """Return True if the request comes from EveryRow's own app (CC)."""
+    from everyrow_mcp.http_config import get_user_agent  # noqa: PLC0415
+
+    return "everyrow-cc" in get_user_agent().lower()
+
+
 def _submission_text(
     label: str, session_url: str, task_id: str, session_id: str = ""
 ) -> str:
@@ -77,6 +205,12 @@ def _submission_text(
         Task ID: {task_id}
 
         Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').""")
+    if is_internal_client():
+        return dedent(f"""\
+        {label}
+        Task ID: {task_id}
+
+        Immediately call everyrow_progress(task_id='{task_id}').""")
     session_line = f"\nSession ID: {session_id}" if session_id else ""
     return dedent(f"""\
         {label}{session_line}
@@ -85,15 +219,14 @@ def _submission_text(
         Immediately call everyrow_progress(task_id='{task_id}').""")
 
 
-async def _submission_ui_json(
-    session_url: str,
-    task_id: str,
-    total: int,
-    token: str,
-    mcp_server_url: str = "",
-    session_id: str = "",
-) -> str:
-    """Build JSON for the session MCP App widget, and store the token for polling."""
+async def _record_task_ownership(task_id: str, token: str) -> str:
+    """Record task ownership and create a poll token.
+
+    Must run for every HTTP submission (including internal clients) so that
+    downstream ownership checks in progress/results don't fail.
+
+    Returns the poll_token.
+    """
     poll_token = secrets.token_urlsafe(32)
     await redis_store.store_task_token(task_id, token)
 
@@ -114,6 +247,18 @@ async def _submission_ui_json(
     # Bind the poll token to the same user identity so the REST layer
     # can cross-check poll_owner == task_owner.
     await redis_store.store_poll_token(task_id, poll_token, user_id=user_id)
+    return poll_token
+
+
+async def _submission_ui_json(
+    session_url: str,
+    task_id: str,
+    total: int,
+    poll_token: str,
+    mcp_server_url: str = "",
+    session_id: str = "",
+) -> str:
+    """Build JSON for the session MCP App widget."""
     data: dict[str, Any] = {
         "session_url": session_url,
         "task_id": task_id,
@@ -146,15 +291,17 @@ async def create_tool_response(
     text = _submission_text(label, session_url, task_id, session_id=session_id)
     main_content = TextContent(type="text", text=text)
     if settings.is_http:
-        ui_json = await _submission_ui_json(
-            session_url=session_url,
-            task_id=task_id,
-            total=total,
-            token=token,
-            mcp_server_url=mcp_server_url,
-            session_id=session_id,
-        )
-        return [TextContent(type="text", text=ui_json), main_content]
+        poll_token = await _record_task_ownership(task_id, token)
+        if not is_internal_client():
+            ui_json = await _submission_ui_json(
+                session_url=session_url,
+                task_id=task_id,
+                total=total,
+                poll_token=poll_token,
+                mcp_server_url=mcp_server_url,
+                session_id=session_id,
+            )
+            return [TextContent(type="text", text=ui_json), main_content]
     return [main_content]
 
 
@@ -286,11 +433,15 @@ class TaskState(BaseModel):
                 else:
                     completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
                 if settings.is_http:
-                    next_call = dedent(f"""\
-                        IMPORTANT: Do NOT call everyrow_results yet.\
-                         First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: 50). You will have access to all of them via the widget.".\
-                         The answer the user provides will correspond to the `page_size`.\
-                         After the user responds, call everyrow_results(task_id='{task_id}', page_size=N).""")
+                    if self.total <= settings.auto_page_size_threshold:
+                        next_call = dedent(f"""\
+                            Call everyrow_results(task_id='{task_id}', page_size={max(self.total, 1)}) to load all rows.""")
+                    else:
+                        next_call = dedent(f"""\
+                            IMPORTANT: Do NOT call everyrow_results yet.\
+                             First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: 50). You will have access to all of them via the widget.".\
+                             The answer the user provides will correspond to the `page_size`.\
+                             After the user responds, call everyrow_results(task_id='{task_id}', page_size=N).""")
                 else:
                     next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
                 return f"{completed_msg}\n{next_call}"
