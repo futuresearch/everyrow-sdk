@@ -7,6 +7,7 @@ from uuid import UUID
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
+from dateutil.parser import isoparse
 
 T = TypeVar("T", bound="SessionListItem")
 
@@ -15,8 +16,8 @@ T = TypeVar("T", bound="SessionListItem")
 class SessionListItem:
     """
     Attributes:
-        session_id (UUID): The ID of the session
-        name (str): The name of the session
+        session_id (UUID): The session ID
+        name (str): Name of the session
         created_at (datetime.datetime): When the session was created
         updated_at (datetime.datetime): When the session was last updated
     """
@@ -29,8 +30,11 @@ class SessionListItem:
 
     def to_dict(self) -> dict[str, Any]:
         session_id = str(self.session_id)
+
         name = self.name
+
         created_at = self.created_at.isoformat()
+
         updated_at = self.updated_at.isoformat()
 
         field_dict: dict[str, Any] = {}
@@ -50,9 +54,12 @@ class SessionListItem:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         session_id = UUID(d.pop("session_id"))
+
         name = d.pop("name")
-        created_at = datetime.datetime.fromisoformat(d.pop("created_at"))
-        updated_at = datetime.datetime.fromisoformat(d.pop("updated_at"))
+
+        created_at = isoparse(d.pop("created_at"))
+
+        updated_at = isoparse(d.pop("updated_at"))
 
         session_list_item = cls(
             session_id=session_id,

@@ -1,9 +1,11 @@
 """Input models and schema helpers for everyrow MCP tools."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
+import pandas as pd
 from jsonschema import SchemaError
 from jsonschema.validators import validator_for
 from pydantic import (
@@ -16,7 +18,7 @@ from pydantic import (
 )
 
 from everyrow_mcp.config import settings
-from everyrow_mcp.utils import validate_csv_path
+from everyrow_mcp.utils import is_url, validate_csv_path, validate_url
 
 JSON_TYPE_MAP = {
     "string": str,
@@ -26,6 +28,11 @@ JSON_TYPE_MAP = {
     "array": list,
     "object": dict,
 }
+
+
+class InputDataMode(StrEnum):
+    dataframe = "DATAFRAME"
+    artifact_id = "ARTIFACT_ID"
 
 
 def _validate_response_schema(schema: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -131,50 +138,100 @@ def _check_exactly_one(
         raise ValueError(f"{prefix}Provide exactly one of {fields}.")
 
 
+def _validate_session_id(v: str | None) -> str | None:
+    """Validate session_id is a valid UUID string."""
+    if v is not None:
+        try:
+            UUID(v)
+        except ValueError as exc:
+            raise ValueError(f"session_id must be a valid UUID: {v}") from exc
+    return v
+
+
+def _check_session_exclusivity(
+    session_id: str | None, session_name: str | None
+) -> None:
+    """Raise if both session_id and session_name are provided."""
+    if session_id is not None and session_name is not None:
+        raise ValueError(
+            "session_id and session_name are mutually exclusive — "
+            "pass session_id to resume an existing session, "
+            "or session_name to create a new one."
+        )
+
+
 class _SingleSourceInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    input_csv: str | None = Field(
+    artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to CSV file (local/stdio mode only).",
+        description="Artifact ID (UUID) from upload_data or request_upload_url.",
     )
-    data: str | list[dict[str, Any]] | None = Field(
+    data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data — CSV string or JSON array of objects.",
+        description="Inline data as a list of row objects.",
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID (UUID) to resume. Mutually exclusive with session_name.",
+    )
+    session_name: str | None = Field(
+        default=None,
+        description="Human-readable name for a new session. Mutually exclusive with session_id.",
     )
 
-    @field_validator("input_csv")
+    @field_validator("artifact_id")
     @classmethod
-    def validate_input_csv(cls, v: str | None) -> str | None:
+    def validate_artifact_id(cls, v: str | None) -> str | None:
         if v is not None:
-            validate_csv_path(v)
+            try:
+                UUID(v)
+            except ValueError as exc:
+                raise ValueError(f"artifact_id must be a valid UUID: {v}") from exc
         return v
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str | None) -> str | None:
+        return _validate_session_id(v)
 
     @field_validator("data")
     @classmethod
     def validate_data_size(
-        cls, v: str | list[dict[str, Any]] | None
-    ) -> str | list[dict[str, Any]] | None:
-        if v is None:
-            return v
-        if isinstance(v, str) and len(v) > settings.max_inline_data_bytes:
-            raise ValueError(
-                f"Inline data exceeds {settings.max_inline_data_bytes // (1024 * 1024)} MB limit"
-            )
-        if isinstance(v, list) and len(v) > settings.max_inline_rows:
-            raise ValueError(
-                f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
-            )
+        cls, v: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
     def check_input_source(self):
         _check_exactly_one(
-            values=(self.input_csv, self.data),
-            field_names=("input_csv", "data"),
+            values=(self.artifact_id, self.data),
+            field_names=("artifact_id", "data"),
             label="Input",
         )
+        _check_session_exclusivity(self.session_id, self.session_name)
         return self
+
+    @property
+    def _input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.artifact_id is not None:
+            return UUID(self.artifact_id)
+        return pd.DataFrame(self.data)
 
 
 class AgentInput(_SingleSourceInput):
@@ -276,23 +333,23 @@ class MergeInput(BaseModel):
     )
 
     # LEFT table
-    left_csv: str | None = Field(
+    left_artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to the left CSV (local/stdio mode only).",
+        description="Artifact ID (UUID) for the left table, from upload_data or request_upload_url.",
     )
-    left_data: str | list[dict[str, Any]] | None = Field(
+    left_data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data for the left table — CSV string or JSON array of objects.",
+        description="Inline data for the left table as a list of row objects.",
     )
 
     # RIGHT table
-    right_csv: str | None = Field(
+    right_artifact_id: str | None = Field(
         default=None,
-        description="Absolute path to the right CSV (local/stdio mode only).",
+        description="Artifact ID (UUID) for the right table, from upload_data or request_upload_url.",
     )
-    right_data: str | list[dict[str, Any]] | None = Field(
+    right_data: list[dict[str, Any]] | None = Field(
         default=None,
-        description="Inline data for the right table — CSV string or JSON array of objects.",
+        description="Inline data for the right table as a list of row objects.",
     )
 
     merge_on_left: str | None = Field(
@@ -313,26 +370,86 @@ class MergeInput(BaseModel):
         description='Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.',
     )
 
-    @field_validator("left_csv", "right_csv")
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID (UUID) to resume. Mutually exclusive with session_name.",
+    )
+    session_name: str | None = Field(
+        default=None,
+        description="Human-readable name for a new session. Mutually exclusive with session_id.",
+    )
+
+    @field_validator("left_artifact_id", "right_artifact_id")
     @classmethod
-    def validate_csv_paths(cls, v: str | None) -> str | None:
+    def validate_artifact_ids(cls, v: str | None) -> str | None:
         if v is not None:
-            validate_csv_path(v)
+            try:
+                UUID(v)
+            except ValueError as exc:
+                raise ValueError(f"artifact_id must be a valid UUID: {v}") from exc
+        return v
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str | None) -> str | None:
+        return _validate_session_id(v)
+
+    @field_validator("left_data", "right_data")
+    @classmethod
+    def validate_data_size(
+        cls, v: list[dict[str, Any]] | None
+    ) -> list[dict[str, Any]] | None:
+        if v is not None:
+            if len(v) == 0:
+                raise ValueError("Inline data must not be empty.")
+            if len(v) > settings.max_inline_rows:
+                raise ValueError(
+                    f"Inline data has {len(v)} rows (max {settings.max_inline_rows})"
+                )
         return v
 
     @model_validator(mode="after")
     def check_sources(self) -> "MergeInput":
         _check_exactly_one(
-            values=(self.left_csv, self.left_data),
-            field_names=("left_csv", "left_data"),
+            values=(self.left_artifact_id, self.left_data),
+            field_names=("left_artifact_id", "left_data"),
             label="Left table",
         )
         _check_exactly_one(
-            values=(self.right_csv, self.right_data),
-            field_names=("right_csv", "right_data"),
+            values=(self.right_artifact_id, self.right_data),
+            field_names=("right_artifact_id", "right_data"),
             label="Right table",
         )
+        _check_session_exclusivity(self.session_id, self.session_name)
         return self
+
+    @property
+    def _left_input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.left_artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _left_aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.left_artifact_id is not None:
+            return UUID(self.left_artifact_id)
+        return pd.DataFrame(self.left_data)
+
+    @property
+    def _right_input_data_mode(self) -> InputDataMode:
+        return (
+            InputDataMode.artifact_id
+            if self.right_artifact_id is not None
+            else InputDataMode.dataframe
+        )
+
+    @property
+    def _right_aid_or_dataframe(self) -> UUID | pd.DataFrame:
+        if self.right_artifact_id is not None:
+            return UUID(self.right_artifact_id)
+        return pd.DataFrame(self.right_data)
 
 
 class ForecastInput(_SingleSourceInput):
@@ -346,6 +463,54 @@ class ForecastInput(_SingleSourceInput):
         "(e.g. 'Focus on EU regulatory sources' or 'Assume resolution by end of 2027'). "
         "Leave empty when the rows are self-contained.",
     )
+
+
+class UploadDataInput(BaseModel):
+    """Input for the upload_data tool."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    source: str = Field(
+        ...,
+        description="Data source: http(s) URL (Google Sheets/Drive supported) "
+        "or absolute local file path (stdio mode only).",
+        min_length=1,
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID (UUID) to resume. Mutually exclusive with session_name.",
+    )
+    session_name: str | None = Field(
+        default=None,
+        description="Human-readable name for a new session. Mutually exclusive with session_id.",
+    )
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        if is_url(v):
+            return validate_url(v)
+        # Local path
+        if settings.is_http:
+            raise ValueError(
+                "Local file paths are not supported in HTTP mode. "
+                "To upload a local file: "
+                "1) call everyrow_request_upload_url with the filename, "
+                "2) execute the returned curl command, "
+                "3) use the artifact_id from the response in your processing tool."
+            )
+        validate_csv_path(v)
+        return v
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str | None) -> str | None:
+        return _validate_session_id(v)
+
+    @model_validator(mode="after")
+    def check_session_exclusivity(self) -> "UploadDataInput":
+        _check_session_exclusivity(self.session_id, self.session_name)
+        return self
 
 
 class SingleAgentInput(BaseModel):
@@ -366,6 +531,14 @@ class SingleAgentInput(BaseModel):
         default=None,
         description="Optional JSON schema for the agent response.",
     )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID (UUID) to resume. Mutually exclusive with session_name.",
+    )
+    session_name: str | None = Field(
+        default=None,
+        description="Human-readable name for a new session. Mutually exclusive with session_id.",
+    )
 
     @field_validator("response_schema")
     @classmethod
@@ -373,6 +546,16 @@ class SingleAgentInput(BaseModel):
         cls, v: dict[str, Any] | None
     ) -> dict[str, Any] | None:
         return _validate_response_schema(v)
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str | None) -> str | None:
+        return _validate_session_id(v)
+
+    @model_validator(mode="after")
+    def check_session_exclusivity(self) -> "SingleAgentInput":
+        _check_session_exclusivity(self.session_id, self.session_name)
+        return self
 
 
 def _validate_task_id(v: str) -> str:
@@ -471,8 +654,16 @@ class HttpResultsInput(BaseModel):
         ge=0,
     )
     page_size: int = Field(
-        default=1000,
-        description="Number of rows per page. Default 1000. Max 10000.",
+        default=50,
+        description=(
+            "Number of result rows to load into your context so you can read them. "
+            "The user has access to all rows via the widget regardless of this value. "
+            f"REQUIRED: If the task produced more than {settings.auto_page_size_threshold} rows, "
+            "you must ask the user how many rows they want before calling this tool. "
+            "Do not use the default without asking. "
+            f"If {settings.auto_page_size_threshold} or fewer rows, skip asking and set page_size to the total. "
+            "Use offset to paginate through larger datasets."
+        ),
         ge=1,
         le=10000,
     )
@@ -486,3 +677,14 @@ class HttpResultsInput(BaseModel):
         if v is not None and not v.lower().endswith(".csv"):
             raise ValueError("output_path must end in .csv")
         return v
+
+
+class ListSessionsInput(BaseModel):
+    """Input for listing sessions with pagination."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    offset: int = Field(0, ge=0, description="Number of sessions to skip")
+    limit: int = Field(
+        25, ge=1, le=1000, description="Max sessions per page (default 25, max 1000)"
+    )

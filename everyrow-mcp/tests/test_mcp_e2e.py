@@ -16,9 +16,8 @@ import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
 from everyrow.generated.models.public_task_type import PublicTaskType
@@ -27,25 +26,64 @@ from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 from mcp.server.fastmcp.server import lifespan_wrapper
 from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.types import TextContent
 
 # Import tools module to trigger @mcp.tool() registration on the FastMCP instance
 import everyrow_mcp.tools  # noqa: F401
 from everyrow_mcp import redis_store
 from everyrow_mcp.app import mcp as mcp_app
 from everyrow_mcp.tool_helpers import SessionContext
+from everyrow_mcp.tools import (
+    _RESULTS_ANNOTATIONS,
+    _RESULTS_META,
+    everyrow_results_http,
+    everyrow_results_stdio,
+)
 from tests.conftest import override_settings
 
 # ── Fixtures / helpers ────────────────────────────────────────
 
 
+_TEST_USER_ID = "test-user-123"
+
+
+def _fake_access_token():
+    """Return a mock access token for ownership checks."""
+    tok = MagicMock()
+    tok.client_id = _TEST_USER_ID
+    return tok
+
+
 @pytest.fixture
 def _http_state(fake_redis):
-    """Configure settings for HTTP mode and patch Redis."""
+    """Configure settings for HTTP mode and patch Redis.
+
+    Also swaps everyrow_results from stdio to HTTP variant, matching server.py startup.
+    """
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_http)
+
     with (
-        override_settings(transport="streamable-http"),
+        override_settings(transport="streamable-http", upload_secret="test-secret"),
         patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+        patch("everyrow_mcp.tools.get_access_token", _fake_access_token),
+        patch("everyrow_mcp.tool_helpers.get_access_token", _fake_access_token),
     ):
         yield
+
+    # Restore stdio variant
+    mcp_app._tool_manager.remove_tool("everyrow_results")
+    mcp_app.tool(
+        name="everyrow_results",
+        structured_output=False,
+        annotations=_RESULTS_ANNOTATIONS,
+        meta=_RESULTS_META,
+    )(everyrow_results_stdio)
 
 
 @asynccontextmanager
@@ -104,7 +142,7 @@ def _mock_status_response(
     running: int = 2,
 ) -> TaskStatusResponse:
     return TaskStatusResponse(
-        task_id=task_id or uuid4(),
+        task_id=UUID(task_id) if task_id else uuid4(),
         session_id=uuid4(),
         status=TaskStatus(status),
         task_type=PublicTaskType.AGENT,
@@ -128,13 +166,14 @@ class TestMcpProtocol:
 
     @pytest.mark.asyncio
     async def test_list_tools(self, _http_state):
-        """list_tools returns all 10 registered tools."""
+        """list_tools returns all registered tools (including upload_data)."""
         async with mcp_client() as session:
             result = await session.list_tools()
             tool_names = sorted(t.name for t in result.tools)
             expected = sorted(
                 [
                     "everyrow_agent",
+                    "everyrow_balance",
                     "everyrow_cancel",
                     "everyrow_dedupe",
                     "everyrow_forecast",
@@ -145,17 +184,14 @@ class TestMcpProtocol:
                     "everyrow_results",
                     "everyrow_screen",
                     "everyrow_single_agent",
+                    "everyrow_upload_data",
                 ]
             )
             assert tool_names == expected
 
     @pytest.mark.asyncio
-    async def test_call_screen_tool(self, _http_state, tmp_path):
+    async def test_call_screen_tool(self, _http_state):
         """Submit a screen task via MCP protocol and verify the response."""
-        df = pd.DataFrame([{"company": "Acme", "role": "Engineer"}])
-        csv_path = tmp_path / "test.csv"
-        df.to_csv(csv_path, index=False)
-
         task_id = str(uuid4())
         mock_task = _mock_task(task_id)
         _, fake_create_session = _mock_session()
@@ -181,7 +217,9 @@ class TestMcpProtocol:
                     {
                         "params": {
                             "task": "Filter for engineering roles",
-                            "input_csv": str(csv_path),
+                            "data": [
+                                {"company": "Acme", "role": "Engineer"},
+                            ],
                         }
                     },
                 )
@@ -189,10 +227,12 @@ class TestMcpProtocol:
             assert not result.isError
             # HTTP mode returns 2 content items: widget JSON + human text
             assert len(result.content) == 2
+            assert isinstance(result.content[0], TextContent)
             widget = json.loads(result.content[0].text)
             assert widget["task_id"] == task_id
             assert widget["status"] == "submitted"
             assert "progress_url" in widget
+            assert isinstance(result.content[1], TextContent)
             assert task_id in result.content[1].text
 
     @pytest.mark.asyncio
@@ -206,6 +246,9 @@ class TestMcpProtocol:
             total=10,
             running=3,
         )
+
+        # Store task owner so the ownership check passes
+        await redis_store.store_task_owner(task_id, _TEST_USER_ID)
 
         async with mcp_client() as session:
             with (
@@ -226,6 +269,7 @@ class TestMcpProtocol:
                 )
 
             assert not result.isError
+            assert isinstance(result.content[-1], TextContent)
             human_text = result.content[-1].text
             assert "5/10" in human_text
             assert "running" in human_text.lower() or "Running" in human_text
@@ -250,12 +294,8 @@ class TestMcpProtocol:
             assert result.isError
 
     @pytest.mark.asyncio
-    async def test_call_agent_tool(self, _http_state, tmp_path):
+    async def test_call_agent_tool(self, _http_state):
         """Submit an agent task via MCP protocol."""
-        df = pd.DataFrame([{"name": "Anthropic"}])
-        csv_path = tmp_path / "companies.csv"
-        df.to_csv(csv_path, index=False)
-
         task_id = str(uuid4())
         mock_task = _mock_task(task_id)
         _, fake_create_session = _mock_session()
@@ -281,13 +321,14 @@ class TestMcpProtocol:
                     {
                         "params": {
                             "task": "Find the CEO",
-                            "input_csv": str(csv_path),
+                            "data": [{"name": "Anthropic"}],
                         }
                     },
                 )
 
             assert not result.isError
             assert len(result.content) == 2
+            assert isinstance(result.content[0], TextContent)
             widget = json.loads(result.content[0].text)
             assert widget["task_id"] == task_id
 
@@ -303,6 +344,9 @@ class TestMcpProtocol:
             failed=0,
             running=0,
         )
+
+        # Store task owner so the ownership check passes
+        await redis_store.store_task_owner(task_id, _TEST_USER_ID)
 
         async with mcp_client() as session:
             with (
@@ -323,12 +367,58 @@ class TestMcpProtocol:
                 )
 
             assert not result.isError
+            assert isinstance(result.content[-1], TextContent)
             human_text = result.content[-1].text
             assert "everyrow_results" in human_text
 
+    @pytest.mark.asyncio
+    async def test_call_balance_tool(self, _http_state):
+        """Check billing balance via MCP protocol."""
+        mock_response = MagicMock()
+        mock_response.current_balance_dollars = 42.50
+
+        async with mcp_client() as session:
+            with (
+                patch(
+                    "everyrow_mcp.tools._get_client",
+                    return_value=MagicMock(token="fake-token"),
+                ),
+                patch(
+                    "everyrow_mcp.tools.get_billing_balance_billing_get.asyncio",
+                    new_callable=AsyncMock,
+                    return_value=mock_response,
+                ),
+            ):
+                result = await session.call_tool("everyrow_balance", {})
+
+            assert not result.isError
+            assert len(result.content) == 1
+            assert isinstance(result.content[0], TextContent)
+            assert "$42.50" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_call_balance_tool_error(self, _http_state):
+        """Balance tool returns a friendly error on API failure."""
+        async with mcp_client() as session:
+            with (
+                patch(
+                    "everyrow_mcp.tools._get_client",
+                    return_value=MagicMock(token="fake-token"),
+                ),
+                patch(
+                    "everyrow_mcp.tools.get_billing_balance_billing_get.asyncio",
+                    new_callable=AsyncMock,
+                    side_effect=RuntimeError("API down"),
+                ),
+            ):
+                result = await session.call_tool("everyrow_balance", {})
+
+            assert not result.isError
+            assert len(result.content) == 1
+            assert "Error" in result.content[0].text
+
 
 # ── TestMcpE2ERealApi — real API tests ────────────────────────
-
 _skip_unless_integration = pytest.mark.skipif(
     not os.environ.get("RUN_INTEGRATION_TESTS"),
     reason="Set RUN_INTEGRATION_TESTS=1 to run",
@@ -351,7 +441,7 @@ class TestMcpE2ERealApi:
             yield sdk_client
 
     @pytest.mark.asyncio
-    async def test_screen_pipeline(self, _real_client, jobs_csv):
+    async def test_screen_pipeline(self, _real_client, jobs_csv):  # noqa: ARG002
         """Submit → poll → results via MCP protocol with real API."""
         async with mcp_client() as session:
             with patch(
@@ -363,12 +453,24 @@ class TestMcpE2ERealApi:
                     {
                         "params": {
                             "task": "Filter for remote positions",
-                            "input_csv": jobs_csv,
+                            "data": [
+                                {
+                                    "company": "Airtable",
+                                    "title": "Senior Engineer",
+                                    "location": "Remote",
+                                },
+                                {
+                                    "company": "Vercel",
+                                    "title": "Lead Engineer",
+                                    "location": "NYC",
+                                },
+                            ],
                         }
                     },
                 )
 
             assert not submit_result.isError
+            assert isinstance(submit_result.content[0], TextContent)
             task_id = _extract_task_id(submit_result.content[0].text)
             print(f"\nSubmitted screen task: {task_id}")
 
@@ -384,6 +486,7 @@ class TestMcpE2ERealApi:
                     )
 
                 assert not progress_result.isError
+                assert isinstance(progress_result.content[-1], TextContent)
                 text = progress_result.content[-1].text
                 print(f"  Progress: {text.splitlines()[0]}")
 
@@ -417,15 +520,12 @@ class TestMcpE2ERealApi:
                 )
 
             assert not results.isError
+            assert isinstance(results.content[-1], TextContent)
             print(f"  Results: {results.content[-1].text}")
 
     @pytest.mark.asyncio
-    async def test_agent_pipeline(self, _real_client, tmp_path):
+    async def test_agent_pipeline(self, _real_client, tmp_path):  # noqa: ARG002
         """Submit agent → poll → results via MCP protocol with real API."""
-        df = pd.DataFrame([{"name": "Anthropic"}, {"name": "OpenAI"}])
-        csv_path = tmp_path / "companies.csv"
-        df.to_csv(csv_path, index=False)
-
         async with mcp_client() as session:
             with patch(
                 "everyrow_mcp.tools._get_client",
@@ -436,7 +536,7 @@ class TestMcpE2ERealApi:
                     {
                         "params": {
                             "task": "Find the company's headquarters city.",
-                            "input_csv": str(csv_path),
+                            "data": [{"name": "Anthropic"}, {"name": "OpenAI"}],
                             "response_schema": {
                                 "properties": {
                                     "headquarters": {
@@ -451,6 +551,7 @@ class TestMcpE2ERealApi:
                 )
 
             assert not submit_result.isError
+            assert isinstance(submit_result.content[0], TextContent)
             task_id = _extract_task_id(submit_result.content[0].text)
             print(f"\nSubmitted agent task: {task_id}")
 
@@ -466,6 +567,7 @@ class TestMcpE2ERealApi:
                     )
 
                 assert not progress_result.isError
+                assert isinstance(progress_result.content[-1], TextContent)
                 text = progress_result.content[-1].text
                 print(f"  Progress: {text.splitlines()[0]}")
 
@@ -499,4 +601,5 @@ class TestMcpE2ERealApi:
                 )
 
             assert not results.isError
+            assert isinstance(results.content[-1], TextContent)
             print(f"  Results: {results.content[-1].text}")

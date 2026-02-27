@@ -15,11 +15,13 @@ from cryptography.hazmat.primitives.serialization import (
 )
 from mcp.server.auth.provider import AccessToken, AuthorizationParams
 from mcp.shared.auth import OAuthClientInformationFull
+from pydantic import AnyUrl
 
 from everyrow_mcp.auth import (
     EveryRowAuthorizationCode,
     EveryRowAuthProvider,
     EveryRowRefreshToken,
+    PendingAuth,
     SupabaseTokenResponse,
     SupabaseTokenVerifier,
 )
@@ -53,6 +55,7 @@ def mock_redis():
     async def _setex(*args, name=None, time=None, value=None):  # noqa: ARG001
         key = name if name is not None else args[0]
         val = value if value is not None else args[2] if len(args) > 2 else None
+        assert val is not None
         store[key] = val
 
     async def _exists(key):
@@ -61,7 +64,14 @@ def mock_redis():
     async def _delete(key):
         store.pop(key, None)
 
+    async def _set(key, value, *, ex=None, nx=False):  # noqa: ARG001
+        if nx and key in store:
+            return None  # NX: skip if key exists
+        store[key] = value
+        return True
+
     redis.setex = AsyncMock(side_effect=_setex)
+    redis.set = AsyncMock(side_effect=_set)
     redis.exists = AsyncMock(side_effect=_exists)
     redis.delete = AsyncMock(side_effect=_delete)
     redis._store = store  # exposed for assertions
@@ -89,7 +99,7 @@ def verifier(rsa_keypair, mock_redis):
 
 def _make_jwt(
     private_key,
-    claims: dict | None = None,
+    claims: dict[str, str | int] | None = None,
     *,
     remove_claims: list[str] | None = None,
 ) -> str:
@@ -356,12 +366,16 @@ def provider_redis():
 
     redis = AsyncMock()
 
-    async def _set(key, value):
+    async def _set(key, value, *, ex=None, nx=False):  # noqa: ARG001
+        if nx and key in store:
+            return None  # NX: skip if key exists
         store[key] = value
+        return True
 
     async def _setex(*args, name=None, time=None, value=None):  # noqa: ARG001
         key = name if name is not None else args[0]
         val = value if value is not None else args[2] if len(args) > 2 else None
+        assert val is not None
         store[key] = val
 
     async def _get(key):
@@ -414,7 +428,7 @@ def test_client():
     """A minimal OAuthClientInformationFull for tests."""
     return OAuthClientInformationFull(
         client_id="test-client-id",
-        redirect_uris=["https://example.com/callback"],
+        redirect_uris=[AnyUrl("https://example.com/callback")],
     )
 
 
@@ -427,7 +441,7 @@ class TestAuthProvider:
         auth_code_obj = EveryRowAuthorizationCode(
             code=auth_code_str,
             client_id="test-client-id",
-            redirect_uri="https://example.com/callback",
+            redirect_uri=AnyUrl("https://example.com/callback"),
             redirect_uri_provided_explicitly=True,
             code_challenge="test-challenge",
             scopes=["read"],
@@ -563,7 +577,7 @@ class TestRedirectUriValidation:
         params = AuthorizationParams(
             state="s1",
             scopes=["read"],
-            redirect_uri="https://evil.example.com/callback",
+            redirect_uri=AnyUrl("https://evil.example.com/callback"),
             code_challenge="challenge",
             redirect_uri_provided_explicitly=True,
         )
@@ -576,7 +590,7 @@ class TestRedirectUriValidation:
         params = AuthorizationParams(
             state="s1",
             scopes=["read"],
-            redirect_uri="https://example.com/callback",
+            redirect_uri=AnyUrl("https://example.com/callback"),
             code_challenge="challenge",
             redirect_uri_provided_explicitly=True,
         )
@@ -653,7 +667,7 @@ class TestClientIdMismatch:
         auth_code_obj = EveryRowAuthorizationCode(
             code=auth_code_str,
             client_id="other-client-id",
-            redirect_uri="https://example.com/callback",
+            redirect_uri=AnyUrl("https://example.com/callback"),
             redirect_uri_provided_explicitly=True,
             code_challenge="test-challenge",
             scopes=["read"],
@@ -669,7 +683,7 @@ class TestClientIdMismatch:
 
         wrong_client = OAuthClientInformationFull(
             client_id="wrong-client-id",
-            redirect_uris=["https://example.com/callback"],
+            redirect_uris=[AnyUrl("https://example.com/callback")],
         )
         result = await provider.load_authorization_code(wrong_client, auth_code_str)
         assert result is None
@@ -692,7 +706,7 @@ class TestClientIdMismatch:
 
         wrong_client = OAuthClientInformationFull(
             client_id="wrong-client-id",
-            redirect_uris=["https://example.com/callback"],
+            redirect_uris=[AnyUrl("https://example.com/callback")],
         )
         result = await provider.load_refresh_token(wrong_client, "rt-mismatch")
         assert result is None
@@ -731,7 +745,7 @@ class TestAuthCodeExpiration:
         auth_code_obj = EveryRowAuthorizationCode(
             code=auth_code_str,
             client_id="test-client-id",
-            redirect_uri="https://example.com/callback",
+            redirect_uri=AnyUrl("https://example.com/callback"),
             redirect_uri_provided_explicitly=True,
             code_challenge="test-challenge",
             scopes=["read"],
@@ -830,6 +844,61 @@ class TestSupabaseResponseValidation:
 
 
 # ── Deny list fail-closed tests ───────────────────────────────────────
+
+
+# ── Cookie prefix tests ───────────────────────────────────────────────
+
+
+class TestHostCookiePrefix:
+    @pytest.mark.asyncio
+    async def test_handle_start_sets_host_prefixed_cookie(
+        self, provider, provider_redis
+    ):
+        """handle_start sets a __Host- prefixed cookie with path=/."""
+        # Create a PendingAuth entry in Redis
+        state = secrets.token_urlsafe(32)
+        pending = PendingAuth(
+            client_id="test-client-id",
+            params=AuthorizationParams(
+                state="s1",
+                scopes=["read"],
+                redirect_uri=AnyUrl("https://example.com/callback"),
+                code_challenge="challenge",
+                redirect_uri_provided_explicitly=True,
+            ),
+            supabase_code_verifier="verifier",
+            supabase_redirect_url="https://supabase.test/auth",
+        )
+        await provider_redis.setex(
+            f"mcp:pending:{state}",
+            600,
+            pending.model_dump_json(),
+        )
+
+        # Fix pipeline mock to be an async context manager
+        pipe_mock = MagicMock()
+        pipe_mock.incr = MagicMock()
+        pipe_mock.expire = MagicMock()
+        pipe_mock.execute = AsyncMock(return_value=[1, True])
+        pipe_mock.__aenter__ = AsyncMock(return_value=pipe_mock)
+        pipe_mock.__aexit__ = AsyncMock(return_value=False)
+        provider_redis.pipeline = MagicMock(return_value=pipe_mock)
+
+        # Build a fake request
+        request = MagicMock()
+        request.path_params = {"state": state}
+        request.headers = {}
+        request.client = MagicMock()
+        request.client.host = "1.2.3.4"
+
+        response = await provider.handle_start(request)
+
+        # Check cookie name and path
+        cookie_header = response.headers.getlist("set-cookie")
+        assert any("mcp_auth_state" in c for c in cookie_header)
+        assert any("Path=/" in c for c in cookie_header)
+        # Must not have the old path
+        assert not any("Path=/auth/callback" in c for c in cookie_header)
 
 
 # ── Two-phase refresh token tests ─────────────────────────────────────

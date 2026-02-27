@@ -69,6 +69,16 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 | 2,000 × 50 | ~8 min | ~$9 |
 | 1,000 × 1,000 | ~12 min | ~$15 |
 
+## Via MCP
+
+MCP tool: `everyrow_merge`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `left_csv_path` | string | Path to the table being enriched (left join) |
+| `right_csv_path` | string | Path to the lookup/reference table |
+| `task` | string | How to match rows across tables |
+
 ## Related docs
 
 ### Guides

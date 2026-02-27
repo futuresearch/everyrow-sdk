@@ -3,7 +3,7 @@
 _APP_SCRIPT_SRC = "https://unpkg.com/@modelcontextprotocol/ext-apps@1.0.1/app-with-deps"
 
 RESULTS_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
+<html><head><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light dark">
 <style>
 :root{
   --bg:#fff;--bg-alt:#f8f9fa;--bg-hover:rgba(25,118,210,0.06);
@@ -32,7 +32,7 @@ RESULTS_HTML = """<!DOCTYPE html>
   --input-bg:#2d2d2d;--input-border:#555;--input-focus:#64b5f6;
 }}
 *{box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:12px;color:var(--text);background:var(--bg);font-size:13px}
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:0;color:var(--text);background:var(--bg);font-size:13px;height:0;overflow:hidden}
 #toolbar{display:flex;align-items:center;gap:8px;padding:8px 4px;margin-bottom:8px;flex-wrap:wrap}
 #toolbar #sum{font-weight:600;font-size:13px;flex:1;min-width:150px;color:var(--text-sec)}
 #toolbar button{padding:5px 12px;border:1px solid var(--border);border-radius:5px;font-size:12px;cursor:pointer;background:var(--btn-bg);color:var(--btn-text);transition:background .15s}
@@ -82,8 +82,9 @@ body.fullscreen .resize-handle{display:none}
 .copy-modal-box textarea{width:100%;height:300px;font-family:monospace;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:8px;background:var(--input-bg);color:var(--text);resize:vertical}
 .copy-modal-box .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 .copy-modal-box button{padding:6px 16px;border:1px solid var(--border);border-radius:5px;background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px}
-.session-link{margin-bottom:6px;font-size:12px}
+.session-link{margin-bottom:6px;font-size:12px;display:flex;align-items:center;gap:8px}
 .session-link a{font-weight:500}
+.session-link .spacer{flex:1}
 .col-resize-handle{position:absolute;top:0;right:-2px;width:4px;height:100%;cursor:col-resize;z-index:5;user-select:none}
 .col-resize-handle:hover{background:var(--accent);opacity:.3}
 body.col-resizing,body.col-resizing *{cursor:col-resize!important;user-select:none!important}
@@ -93,6 +94,9 @@ body.row-resizing,body.row-resizing *{cursor:row-resize!important;user-select:no
 .cell-more:hover,.cell-less:hover{text-decoration:underline}
 .export-btns{display:inline-flex;gap:2px}
 .export-btns button{padding:3px 8px;font-size:11px}
+#globalSearch{padding:4px 8px;border:1px solid var(--input-border);border-radius:5px;font-size:12px;background:var(--input-bg);color:var(--text);outline:none;width:160px;transition:border-color .15s,width .2s}
+#globalSearch:focus{border-color:var(--input-focus);width:220px}
+#globalSearch::placeholder{color:var(--text-dim)}
 .col-ghost{position:fixed;background:var(--bg-toolbar);border:1px solid var(--accent);border-radius:4px;padding:4px 8px;font-size:12px;font-weight:600;opacity:.85;pointer-events:none;z-index:200;white-space:nowrap}
 body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none!important}
 .hdr-row th.drag-over-left{box-shadow:inset 3px 0 0 var(--accent)}
@@ -107,13 +111,13 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 .settings-drop input[type="radio"]{margin:0}
 .settings-drop .drop-sep{border-top:1px solid var(--border-light);margin:4px 0}
 </style></head><body>
-<div id="sessionLink" class="session-link"></div>
+<div id="sessionLink" class="session-link"><span class="spacer"></span><input id="globalSearch" type="text" placeholder="Search all columns..."></div>
 <div id="toolbar">
   <span id="sum">Loading...</span>
   <button id="selAllBtn">Select all</button>
-  <button id="copyBtn" disabled>Copy TSV (0)</button>
+  <button id="copyBtn" disabled>Copy CSV (0)</button>
   <span class="export-btns"><button id="exportLink" title="Copy CSV download link to clipboard">Copy link</button></span>
-  <span class="settings-wrap"><button id="settingsBtn" title="Settings">Settings</button><div id="settingsDrop" class="settings-drop"><div class="drop-hdr">Copy format</div><label><input type="radio" name="cfmt" value="tsv" checked> TSV (tabs)</label><label><input type="radio" name="cfmt" value="csv"> CSV</label><label><input type="radio" name="cfmt" value="json"> JSON</label><div class="drop-sep"></div><div class="drop-hdr">Table height</div><label><input type="radio" name="tsize" value="250"> Small</label><label><input type="radio" name="tsize" value="420" checked> Medium</label><label><input type="radio" name="tsize" value="700"> Large</label></div></span>
+  <span class="settings-wrap"><button id="settingsBtn" title="Settings">Settings</button><div id="settingsDrop" class="settings-drop"><div class="drop-hdr">Copy format</div><label><input type="radio" name="cfmt" value="csv" checked> CSV</label><label><input type="radio" name="cfmt" value="tsv"> TSV (tabs)</label><label><input type="radio" name="cfmt" value="json"> JSON</label><div class="drop-sep"></div><div class="drop-hdr">Table height</div><label><input type="radio" name="tsize" value="250"> Small</label><label><input type="radio" name="tsize" value="420" checked> Medium</label><label><input type="radio" name="tsize" value="700"> Large</label></div></span>
   <button id="expandBtn" title="Toggle fullscreen">&#x2922;</button>
 </div>
 <div class="wrap" id="wrap"><table id="tbl"></table></div>
@@ -143,13 +147,14 @@ const copyArea=document.getElementById("copyArea");
 const closeCopyModal=document.getElementById("closeCopyModal");
 const sessionLinkEl=document.getElementById("sessionLink");
 
-let sessionUrl="",csvUrl="";
+let sessionUrl="",csvUrl="",pollToken="",downloadTokenUrl="";
 const TRUNC=200;
 let didDrag=false;
-let copyFmt="tsv";
+let copyFmt="csv";
+let widgetActive=false;
 const settingsBtn=document.getElementById("settingsBtn");
 const settingsDrop=document.getElementById("settingsDrop");
-const S={rows:[],allCols:[],filteredIdx:[],sortCol:null,sortDir:0,filters:{},selected:new Set(),lastClick:null,isFullscreen:false,focusedCell:null};
+const S={rows:[],allCols:[],filteredIdx:[],sortCol:null,sortDir:0,filters:{},globalQuery:"",selected:new Set(),lastClick:null,isFullscreen:false,focusedCell:null};
 
 /* --- theming & display mode --- */
 app.onhostcontextchanged=(ctx)=>{
@@ -166,7 +171,7 @@ app.onhostcontextchanged=(ctx)=>{
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 function escAttr(s){return esc(s).replace(/"/g,"&quot;");}
 function truncSafe(s,len){if(s.length<=len)return s;let t=s.slice(0,len);const urlRe=/(https?:\\/\\/[^\\s<>"'\\]]+)$/;const m=t.match(urlRe);if(m){const full=s.slice(m.index).match(/^https?:\\/\\/[^\\s<>"'\\]]+/);if(full&&full[0].length>m[1].length)t=s.slice(0,m.index+full[0].length);}return t;}
-function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
+function linkify(s){const re=/(https?:\\/\\/[^\\s<>"'\\]]+)/g;let last=0,out="",m;while((m=re.exec(s))!==null){let url=m[1];while(url.endsWith(")")&&(url.split("(").length-1)<(url.split(")").length-1))url=url.slice(0,-1);re.lastIndex=m.index+url.length;if(m.index>last)out+=esc(s.slice(last,m.index));out+='<a href="'+escAttr(url)+'" target="_blank" rel="noopener noreferrer">'+esc(url)+"</a>";last=re.lastIndex;}if(last<s.length)out+=esc(s.slice(last));return out;}
 
 /* --- data processing --- */
 function flat(obj,pre){
@@ -181,12 +186,14 @@ function flat(obj,pre){
 
 function flatWithResearch(obj){
   const research={};
-  if(obj.research&&typeof obj.research==="object"&&!Array.isArray(obj.research)){
+  if(obj.research!=null&&typeof obj.research==="object"&&!Array.isArray(obj.research)){
     for(const[k,v]of Object.entries(obj.research)){
       if(v!=null)research[k]=typeof v==="string"?v:String(v);
     }
   }
-  return{display:flat(obj),research};
+  const display=flat(obj);
+  delete display.research;
+  return{display,research};
 }
 
 function processData(data){
@@ -196,9 +203,9 @@ function processData(data){
   const colSet=new Set();
   S.rows.forEach(r=>{for(const k of Object.keys(r.display))colSet.add(k)});
   const all=[...colSet];
-  const visible=all.filter(k=>!k.startsWith("research."));
+  const visible=all.filter(k=>k!=="research"&&!k.startsWith("research."));
   S.allCols=[...visible.filter(k=>!k.includes(".")),...visible.filter(k=>k.includes("."))];
-  S.sortCol=null;S.sortDir=0;S.filters={};S.selected.clear();S.lastClick=null;
+  S.sortCol=null;S.sortDir=0;S.filters={};S.globalQuery="";globalSearchEl.value="";S.selected.clear();S.lastClick=null;
   S.filteredIdx=S.rows.map((_,i)=>i);
   renderTable();
 }
@@ -206,6 +213,10 @@ function processData(data){
 /* --- filter & sort --- */
 function applyFilterAndSort(){
   let idx=S.rows.map((_,i)=>i);
+  if(S.globalQuery){
+    const gq=S.globalQuery.toLowerCase();
+    idx=idx.filter(i=>{const row=S.rows[i].display;return Object.values(row).some(v=>v!=null&&String(v).toLowerCase().includes(gq));});
+  }
   for(const[col,q]of Object.entries(S.filters)){
     if(!q)continue;
     const lq=q.toLowerCase();
@@ -227,6 +238,8 @@ function applyFilterAndSort(){
 
 let filterTimer=null;
 function onFilterInput(col,val){S.filters[col]=val;clearTimeout(filterTimer);filterTimer=setTimeout(()=>applyFilterAndSort(),150);}
+const globalSearchEl=document.getElementById("globalSearch");
+globalSearchEl.addEventListener("input",()=>{S.globalQuery=globalSearchEl.value;clearTimeout(filterTimer);filterTimer=setTimeout(()=>applyFilterAndSort(),150);});
 
 /* --- research lookup --- */
 function getResearch(row,col){
@@ -651,10 +664,22 @@ async function copyToClipboard(text){
   return false;
 }
 
+async function getFreshDownloadUrl(){
+  if(downloadTokenUrl&&pollToken){
+    try{
+      const r=await fetch(downloadTokenUrl,{headers:{"Authorization":"Bearer "+pollToken}});
+      if(r.ok){const d=await r.json();if(d.download_url){csvUrl=d.download_url;return d.download_url;}}
+      else{showToast("Download link expired — please re-run the query");}
+    }catch(e){showToast("Failed to refresh download link");}
+  }
+  return csvUrl;
+}
 function updateDownloadLink(){updateSessionLink();}
-document.getElementById("exportLink")?.addEventListener("click",()=>{
-  if(!csvUrl){showToast("No download link yet");return;}
-  copyToClipboard(csvUrl).then(ok=>{if(ok)showToast("Link copied");});
+document.getElementById("exportLink")?.addEventListener("click",async()=>{
+  if(!csvUrl&&!downloadTokenUrl){showToast("No download link yet");return;}
+  const url=await getFreshDownloadUrl();
+  if(!url){showToast("No download link yet");return;}
+  copyToClipboard(url).then(ok=>{if(ok)showToast("Link copied (valid 5 min, single use)");});
 });
 
 /* --- row resize (drag bottom border) --- */
@@ -695,22 +720,32 @@ function onRowResizeUp(){
 }
 
 /* --- session URL display --- */
+const linksEl=document.createElement("span");linksEl.id="sessionLinks";
+sessionLinkEl.insertBefore(linksEl,sessionLinkEl.querySelector(".spacer"));
 function updateSessionLink(){
   let h="";
   if(sessionUrl)h+='<a href="#" id="sessionOpenLink">Open everyrow session &#x2197;</a>';
   if(csvUrl){if(h)h+=" &nbsp;|&nbsp; ";h+='<a href="#" id="csvOpenLink">Download CSV &#x2913;</a>';}
-  sessionLinkEl.innerHTML=h;
+  linksEl.innerHTML=h;
   document.getElementById("sessionOpenLink")?.addEventListener("click",e=>{
     e.preventDefault();
-    app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
+    if(!/^https?:\\/\\//i.test(sessionUrl))return;app.openLink({url:sessionUrl}).catch(()=>window.open(sessionUrl,"_blank"));
   });
-  document.getElementById("csvOpenLink")?.addEventListener("click",e=>{
+  document.getElementById("csvOpenLink")?.addEventListener("click",async e=>{
     e.preventDefault();
-    app.openLink({url:csvUrl}).catch(()=>window.open(csvUrl,"_blank"));
+    const url=await getFreshDownloadUrl();
+    if(!url||!/^https?:\\/\\//i.test(url))return;
+    app.openLink({url}).catch(()=>window.open(url,"_blank"));
   });
 }
 
 /* --- data loading --- */
+async function fetchFullResultsWithFreshToken(hasPreview,total){
+  const base=await getFreshDownloadUrl();
+  if(!base){if(!hasPreview)sum.textContent="Download link expired";return;}
+  const url=base+(base.includes("?")?"&":"?")+"format=json";
+  fetchFullResults(url,{},hasPreview,total);
+}
 function fetchFullResults(url,opts,hasPreview,total){
   if(!hasPreview)sum.textContent="Loading"+(total?" "+total+" rows":"")+"...";
   fetch(url,opts).then(r=>{
@@ -720,22 +755,30 @@ function fetchFullResults(url,opts,hasPreview,total){
     if(hasPreview){showToast("Full load failed, showing preview");}
     else{
       sum.innerHTML=esc("Failed to load: "+err.message)+' <button id="retryBtn" style="margin-left:8px;padding:2px 10px;border:1px solid var(--border);border-radius:4px;background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:12px">Retry</button>';
-      document.getElementById("retryBtn")?.addEventListener("click",()=>fetchFullResults(url,opts,hasPreview,total));
+      document.getElementById("retryBtn")?.addEventListener("click",()=>fetchFullResultsWithFreshToken(hasPreview,total));
     }
   });
 }
 app.ontoolresult=({content})=>{
   const t=content?.find(c=>c.type==="text");if(!t)return;
-  let meta;try{meta=JSON.parse(t.text);}catch{sum.textContent=t.text;return;}
+  let meta;try{meta=JSON.parse(t.text);}catch{
+    /* Non-JSON (e.g. summary text) — ignore if widget already active */
+    return;
+  }
+  /* Only show the widget for recognized data shapes */
+  const isWidget=meta.fetch_full_results||meta.preview||Array.isArray(meta);
+  if(!isWidget){return;}
+  widgetActive=true;
+  document.body.style.height="auto";document.body.style.overflow="visible";document.body.style.padding="12px";
   if(meta.session_url&&!sessionUrl){sessionUrl=meta.session_url;updateSessionLink();}
+  if(meta.poll_token){pollToken=meta.poll_token;}
+  if(meta.download_token_url){downloadTokenUrl=meta.download_token_url;}
   if(meta.csv_url){csvUrl=meta.csv_url;updateDownloadLink();}
-  if(meta.results_url){
+  if(meta.fetch_full_results){
     if(meta.preview)processData(meta.preview);
-    const opts=meta.download_token?{headers:{"Authorization":"Bearer "+meta.download_token}}:{};
-    fetchFullResults(meta.results_url,opts,!!meta.preview,meta.total);
+    fetchFullResultsWithFreshToken(!!meta.preview,meta.total);
   }else if(meta.preview){processData(meta.preview);}
   else if(Array.isArray(meta)){processData(meta);}
-  else{sum.textContent=JSON.stringify(meta);}
 };
 
 await app.connect();
@@ -743,7 +786,7 @@ applyTheme();
 </script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
 
 SESSION_HTML = """<!DOCTYPE html>
-<html><head><meta name="color-scheme" content="light dark">
+<html><head><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light dark">
 <style>
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:12px;color:#333;font-size:13px}
@@ -775,14 +818,14 @@ a:hover{text-decoration:underline}
 import{App}from"SCRIPT_SRC";
 const app=new App({name:"EveryRow Session",version:"1.0.0"});
 const el=document.getElementById("c");
-let pollUrl=null,pollTimer=null,sessionUrl="",wasDone=false;
+let pollUrl=null,pollToken=null,pollTimer=null,sessionUrl="",wasDone=false;
 function esc(s){const d=document.createElement("div");d.textContent=String(s);return d.innerHTML;}
 
 app.ontoolresult=({content})=>{
   const t=content?.find(c=>c.type==="text");if(!t)return;
   try{
     const d=JSON.parse(t.text);sessionUrl=d.session_url||"";render(d);
-    if(d.progress_url&&!pollTimer){pollUrl=d.progress_url;startPoll()}
+    if(d.progress_url&&!pollTimer){pollUrl=d.progress_url;pollToken=d.poll_token||null;startPoll()}
   }catch{el.textContent=t.text}
 };
 
@@ -834,7 +877,7 @@ function render(d){
   const link=el.querySelector(".session-open");
   if(link){link.addEventListener("click",e=>{
     e.preventDefault();
-    app.openLink({url:url}).catch(()=>window.open(url,"_blank"));
+    if(!/^https?:\\/\\//i.test(url))return;app.openLink({url:url}).catch(()=>window.open(url,"_blank"));
   });}
 
   if(done&&!wasDone){wasDone=true;el.classList.add("flash")}
@@ -848,8 +891,9 @@ function fmtTime(s){
 }
 
 function startPoll(){
+  const opts=pollToken?{headers:{"Authorization":"Bearer "+pollToken}}:{};
   pollTimer=setInterval(async()=>{
-    try{const r=await fetch(pollUrl);if(r.ok)render(await r.json())}catch{}
+    try{const r=await fetch(pollUrl,opts);if(r.ok)render(await r.json())}catch{}
   },5000);
 }
 

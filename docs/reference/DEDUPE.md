@@ -136,6 +136,15 @@ Output (selected rows only):
 | 500 | ~2 min | ~$1.67 |
 | 2,000 | ~8 min | ~$7 |
 
+## Via MCP
+
+MCP tool: `everyrow_dedupe`
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `csv_path` | string | Path to input CSV file |
+| `equivalence_relation` | string | What makes two rows duplicates |
+
 ## Related docs
 
 ### Guides

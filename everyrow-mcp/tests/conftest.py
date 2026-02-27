@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Set env vars for HttpSettings before any everyrow imports
 import os
+from collections.abc import AsyncGenerator
 
 os.environ.setdefault("EVERYROW_API_KEY", "test-api-key")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
@@ -16,6 +17,7 @@ import subprocess
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -24,6 +26,7 @@ import redis.asyncio as aioredis
 from everyrow.api_utils import create_client
 
 from everyrow_mcp.config import settings
+from everyrow_mcp.redis_store import _get_fernet
 from everyrow_mcp.tool_helpers import SessionContext
 
 _REDIS_PORT = 16379  # non-default port to avoid clashing with local Redis
@@ -64,7 +67,7 @@ def _redis_server():
 
 
 @pytest.fixture
-async def fake_redis(_redis_server) -> aioredis.Redis:
+async def fake_redis(_redis_server) -> AsyncGenerator[aioredis.Redis, None]:
     """A real Redis client, flushed after each test."""
     r = aioredis.Redis(host="localhost", port=_REDIS_PORT, decode_responses=True)
     await r.flushdb()
@@ -94,15 +97,17 @@ def override_settings(**overrides):
     orig = {k: getattr(settings, k) for k in overrides}
     for k, v in overrides.items():
         setattr(settings, k, v)
+    _get_fernet.cache_clear()
     try:
         yield
     finally:
         for k, v in orig.items():
             setattr(settings, k, v)
+        _get_fernet.cache_clear()
 
 
 @pytest.fixture
-async def everyrow_client():
+async def everyrow_client() -> AsyncGenerator[object, None]:
     """Provide a real everyrow SDK client for integration tests."""
     with create_client() as client:
         yield client
@@ -148,6 +153,43 @@ def jobs_csv(tmp_path: Path) -> str:
     path = tmp_path / "jobs.csv"
     df.to_csv(path, index=False)
     return str(path)
+
+
+@pytest.fixture
+def jobs_data() -> list[dict[str, Any]]:
+    """Return jobs data as inline rows for tools using the unified input API."""
+    return [
+        {
+            "company": "Airtable",
+            "title": "Senior Engineer",
+            "salary": "$185000",
+            "location": "Remote",
+        },
+        {
+            "company": "Vercel",
+            "title": "Lead Engineer",
+            "salary": "Competitive",
+            "location": "NYC",
+        },
+        {
+            "company": "Notion",
+            "title": "Staff Engineer",
+            "salary": "$200000",
+            "location": "San Francisco",
+        },
+        {
+            "company": "Linear",
+            "title": "Junior Developer",
+            "salary": "$85000",
+            "location": "Remote",
+        },
+        {
+            "company": "Descript",
+            "title": "Principal Architect",
+            "salary": "$250000",
+            "location": "Remote",
+        },
+    ]
 
 
 @pytest.fixture

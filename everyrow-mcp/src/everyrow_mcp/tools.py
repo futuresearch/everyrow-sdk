@@ -8,12 +8,15 @@ from textwrap import dedent
 from typing import Any
 from uuid import UUID
 
+import pandas as pd
 from everyrow.api_utils import handle_response
 from everyrow.constants import EveryrowError
+from everyrow.generated.api.billing import get_billing_balance_billing_get
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.ops import (
     agent_map_async,
+    create_table_artifact,
     dedupe_async,
     forecast_async,
     merge_async,
@@ -23,27 +26,30 @@ from everyrow.ops import (
 )
 from everyrow.session import create_session, get_session_url, list_sessions
 from everyrow.task import cancel_task
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.types import TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp import redis_store
 from everyrow_mcp.app import _clear_task_state, mcp
+from everyrow_mcp.config import settings
 from everyrow_mcp.models import (
     AgentInput,
     CancelInput,
     DedupeInput,
     ForecastInput,
     HttpResultsInput,
+    ListSessionsInput,
     MergeInput,
     ProgressInput,
     RankInput,
     ScreenInput,
     SingleAgentInput,
     StdioResultsInput,
+    UploadDataInput,
     _schema_to_model,
 )
 from everyrow_mcp.result_store import (
-    _sanitize_records,
     try_cached_result,
     try_store_result,
 )
@@ -53,12 +59,47 @@ from everyrow_mcp.tool_helpers import (
     TaskState,
     _fetch_task_result,
     _get_client,
+    client_supports_widgets,
     create_tool_response,
+    is_internal_client,
+    log_client_info,
     write_initial_task_state,
 )
-from everyrow_mcp.utils import load_data, save_result_to_csv
+from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
 
 logger = logging.getLogger(__name__)
+
+
+async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
+    """Verify the current user owns *task_id*. Returns an error response if
+    access should be denied, or ``None`` if the caller may proceed.
+
+    Only active in HTTP mode; always returns ``None`` for stdio.
+    Fail-closed: if ownership cannot be verified, access is denied.
+    """
+    if not settings.is_http:
+        return None
+
+    owner = await redis_store.get_task_owner(task_id)
+    if not owner:
+        logger.error("No owner recorded for task %s — denying access", task_id)
+        return [
+            TextContent(
+                type="text",
+                text="Access denied: task ownership could not be verified.",
+            )
+        ]
+
+    access_token = get_access_token()
+    user_id = access_token.client_id if access_token else None
+    if not user_id or user_id != owner:
+        return [
+            TextContent(
+                type="text",
+                text="Access denied: this task belongs to another user.",
+            )
+        ]
+    return None
 
 
 @mcp.tool(
@@ -89,36 +130,54 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info(
+        "everyrow_agent: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_data(data=params.data, input_csv=params.input_csv)
+    input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("AgentResult", params.response_schema)
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
-        kwargs: dict[str, Any] = {"task": params.task, "session": session, "input": df}
+        session_id_str = str(session.session_id)
+        kwargs: dict[str, Any] = {
+            "task": params.task,
+            "session": session,
+            "input": input_data,
+        }
         if response_model:
             kwargs["response_model"] = response_model
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
-            total=len(df),
+            total=total,
+            input_source=params._input_data_mode.value,
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(df)} agents starting.",
+        label=f"Submitted: {total} agents starting."
+        if total
+        else "Submitted: agents starting (artifact).",
         token=client.token,
-        total=len(df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -152,6 +211,8 @@ async def everyrow_single_agent(
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info("everyrow_single_agent: task=%.80s", params.task)
+    log_client_info(ctx, "everyrow_single_agent")
     client = _get_client(ctx)
 
     _clear_task_state()
@@ -167,8 +228,11 @@ async def everyrow_single_agent(
         DynamicInput = create_model("DynamicInput", **fields)  # pyright: ignore[reportArgumentType, reportCallIssue]
         input_model = DynamicInput()
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         kwargs: dict[str, Any] = {"task": params.task, "session": session}
         if input_model is not None:
             kwargs["input"] = input_model
@@ -181,6 +245,7 @@ async def everyrow_single_agent(
             task_type=PublicTaskType.AGENT,
             session_url=session_url,
             total=1,
+            input_source="single_agent",
         )
 
     return await create_tool_response(
@@ -190,6 +255,7 @@ async def everyrow_single_agent(
         token=client.token,
         total=1,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -228,41 +294,55 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_rank: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_rank")
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_data(data=params.data, input_csv=params.input_csv)
+    input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("RankResult", params.response_schema)
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         cohort_task = await rank_async(
             task=params.task,
             session=session,
-            input=df,
+            input=input_data,
             field_name=params.field_name,
             field_type=params.field_type,
             response_model=response_model,
             ascending_order=params.ascending_order,
         )
         task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.RANK,
             session_url=session_url,
-            total=len(df),
+            total=total,
+            input_source=params._input_data_mode.value,
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(df)} rows for ranking.",
+        label=f"Submitted: {total} rows for ranking."
+        if total
+        else "Submitted: artifact for ranking.",
         token=client.token,
-        total=len(df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -308,38 +388,52 @@ async def everyrow_screen(
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_screen: task=%.80s rows=%s",
+        params.task,
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_screen")
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_data(data=params.data, input_csv=params.input_csv)
+    input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("ScreenResult", params.response_schema)
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         cohort_task = await screen_async(
             task=params.task,
             session=session,
-            input=df,
+            input=input_data,
             response_model=response_model,
         )
         task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.SCREEN,
             session_url=session_url,
-            total=len(df),
+            total=total,
+            input_source=params._input_data_mode.value,
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(df)} rows for screening.",
+        label=f"Submitted: {total} rows for screening."
+        if total
+        else "Submitted: artifact for screening.",
         token=client.token,
-        total=len(df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -381,33 +475,47 @@ async def everyrow_dedupe(
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_dedupe: equivalence=%.80s rows=%s",
+        params.equivalence_relation,
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_dedupe")
     client = _get_client(ctx)
     _clear_task_state()
 
-    df = load_data(data=params.data, input_csv=params.input_csv)
+    input_data = params._aid_or_dataframe
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         cohort_task = await dedupe_async(
             equivalence_relation=params.equivalence_relation,
             session=session,
-            input=df,
+            input=input_data,
         )
         task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.DEDUPE,
             session_url=session_url,
-            total=len(df),
+            total=total,
+            input_source=params._input_data_mode.value,
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(df)} rows for deduplication.",
+        label=f"Submitted: {total} rows for deduplication."
+        if total
+        else "Submitted: artifact for deduplication.",
         token=client.token,
-        total=len(df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -465,39 +573,54 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         Success message containing session_url (for the user to open) and
         task_id (for monitoring progress)
     """
+    logger.info(
+        "everyrow_merge: task=%.80s left_rows=%s right_rows=%s",
+        params.task,
+        len(params.left_data) if params.left_data else "artifact",
+        len(params.right_data) if params.right_data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_merge")
     client = _get_client(ctx)
     _clear_task_state()
 
-    left_df = load_data(data=params.left_data, input_csv=params.left_csv)
-    right_df = load_data(data=params.right_data, input_csv=params.right_csv)
+    left_input = params._left_aid_or_dataframe
+    right_input = params._right_aid_or_dataframe
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         cohort_task = await merge_async(
             task=params.task,
             session=session,
-            left_table=left_df,
-            right_table=right_df,
+            left_table=left_input,
+            right_table=right_input,
             merge_on_left=params.merge_on_left,
             merge_on_right=params.merge_on_right,
             use_web_search=params.use_web_search,
             relationship_type=params.relationship_type,
         )
         task_id = str(cohort_task.task_id)
+        total = len(left_input) if isinstance(left_input, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.MERGE,
             session_url=session_url,
-            total=len(left_df),
+            total=total,
+            input_source=f"left={params._left_input_data_mode.value}, right={params._right_input_data_mode.value}",
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(left_df)} left rows for merging.",
+        label=f"Submitted: {total} left rows for merging."
+        if total
+        else "Submitted: artifacts for merging.",
         token=client.token,
-        total=len(left_df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
 
 
@@ -537,34 +660,112 @@ async def everyrow_forecast(
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
+    logger.info(
+        "everyrow_forecast: context=%.80s rows=%s",
+        params.context or "",
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_forecast")
     client = _get_client(ctx)
 
     _clear_task_state()
-    df = load_data(data=params.data, input_csv=params.input_csv)
+    input_data = params._aid_or_dataframe
 
-    async with create_session(client=client) as session:
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
         session_url = session.get_url()
+        session_id_str = str(session.session_id)
         cohort_task = await forecast_async(
             task=params.context or "",
             session=session,
-            input=df,
+            input=input_data,
         )
         task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
         write_initial_task_state(
             task_id,
             task_type=PublicTaskType.FORECAST,
             session_url=session_url,
-            total=len(df),
+            total=total,
+            input_source=params._input_data_mode.value,
         )
 
     return await create_tool_response(
         task_id=task_id,
         session_url=session_url,
-        label=f"Submitted: {len(df)} rows for forecasting (6 research dimensions + dual forecaster per row).",
+        label=f"Submitted: {total} rows for forecasting (6 research dimensions + dual forecaster per row)."
+        if total
+        else "Submitted: artifact for forecasting.",
         token=client.token,
-        total=len(df),
+        total=total,
         mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
     )
+
+
+@mcp.tool(
+    name="everyrow_upload_data",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Upload Data",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
+async def everyrow_upload_data(
+    params: UploadDataInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """Upload data from a URL or local file. Returns an artifact_id for use in processing tools.
+
+    Use this tool to ingest data before calling everyrow_agent, everyrow_screen,
+    everyrow_rank, everyrow_dedupe, everyrow_merge, or everyrow_forecast.
+
+    Supported sources:
+    - HTTP(S) URLs (including Google Sheets — auto-converted to CSV export)
+    - Local CSV file paths (stdio/local mode only — not available over HTTP)
+
+    For local files over HTTP, use everyrow_request_upload_url instead:
+    1. Call everyrow_request_upload_url with the filename
+    2. Execute the returned curl command to upload the file
+    3. Use the artifact_id from the curl response in your processing tool
+
+    Returns an artifact_id (UUID) that can be passed to any processing tool's
+    artifact_id parameter. The data is stored server-side and can be reused
+    across multiple tool calls.
+    """
+    logger.info("everyrow_upload_data: source=%.80s", params.source)
+    log_client_info(ctx, "everyrow_upload_data")
+    client = _get_client(ctx)
+
+    if is_url(params.source):
+        df = await fetch_csv_from_url(params.source)
+    else:
+        df = pd.read_csv(params.source)
+        if df.empty:
+            raise ValueError(f"CSV file is empty: {params.source}")
+
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
+        session_id_str = str(session.session_id)
+        artifact_id = await create_table_artifact(df, session)
+
+    return [
+        TextContent(
+            type="text",
+            text=json.dumps(
+                {
+                    "artifact_id": str(artifact_id),
+                    "session_id": session_id_str,
+                    "rows": len(df),
+                    "columns": list(df.columns),
+                }
+            ),
+        )
+    ]
 
 
 @mcp.tool(
@@ -589,8 +790,20 @@ async def everyrow_progress(
     Do not add commentary between progress calls, just call again immediately.
     """
     client = _get_client(ctx)
-
     task_id = params.task_id
+
+    # ── Cross-user access check ──────────────────────────────────
+    try:
+        if denied := await _check_task_ownership(task_id):
+            return denied
+    except Exception:
+        logger.exception("Could not verify task ownership for %s", task_id)
+        return [
+            TextContent(
+                type="text",
+                text="Unable to verify task ownership. Please try again.",
+            )
+        ]
 
     # Block server-side before polling — controls the cadence
     await asyncio.sleep(redis_store.PROGRESS_POLL_DELAY)
@@ -670,15 +883,41 @@ async def everyrow_results_http(
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
-    Results are returned as a paginated preview with a download link.
+    The user always has access to all rows via the widget — page_size only
+    controls how many rows _you_ can read.
+    After results load, tell the user how many rows you can see vs the total.
     """
     client = _get_client(ctx)
     task_id = params.task_id
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
+    log_client_info(ctx, "everyrow_results")
+    skip_widget = not client_supports_widgets(ctx)
+    skip_session = False
+    if is_internal_client():
+        skip_widget = True
+        skip_session = True
+
+    # ── Cross-user access check ──────────────────────────────────
+    try:
+        if denied := await _check_task_ownership(task_id):
+            return denied
+    except Exception:
+        logger.exception("Could not verify task ownership for %s", task_id)
+        return [
+            TextContent(
+                type="text",
+                text="Unable to verify task ownership. Please try again.",
+            )
+        ]
 
     # ── Return from cache if available ───────────────────────────
     cached = await try_cached_result(
-        task_id, params.offset, params.page_size, mcp_server_url=mcp_server_url
+        task_id,
+        params.offset,
+        params.page_size,
+        mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
+        skip_session=skip_session,
     )
     if cached is not None:
         return cached
@@ -686,7 +925,7 @@ async def everyrow_results_http(
     # ── Fetch from API ────────────────────────────────────────────
     try:
         df, session_id = await _fetch_task_result(client, task_id)
-        session_url = get_session_url(session_id) if session_id else ""
+        session_url = get_session_url(UUID(session_id)) if session_id else ""
     except TaskNotReady as e:
         return [
             TextContent(
@@ -708,33 +947,17 @@ async def everyrow_results_http(
     # output_path is accepted by the schema but ignored in HTTP mode —
     # the server must not write to its own filesystem on remote request.
 
-    # ── Store in Redis and return paginated response ──────────────
-    store_response = await try_store_result(
+    # ── Store in Redis and return response ──────────────────────
+    return await try_store_result(
         task_id,
         df,
         params.offset,
         params.page_size,
         session_url,
         mcp_server_url=mcp_server_url,
+        skip_widget=skip_widget,
+        skip_session=skip_session,
     )
-    if store_response is not None:
-        return store_response
-
-    # ── Fallback: return inline preview when Redis is unavailable ──
-    page_df = df.iloc[params.offset : params.offset + params.page_size]
-    preview = _sanitize_records(page_df.to_dict(orient="records"))
-    cols = ", ".join(df.columns)
-    return [
-        TextContent(
-            type="text",
-            text=json.dumps({"preview": preview, "total": len(df)}),
-        ),
-        TextContent(
-            type="text",
-            text=f"Results: {len(df)} rows, {len(df.columns)} columns ({cols}). "
-            f"Showing {len(page_df)} rows inline (Redis unavailable, no download link).",
-        ),
-    ]
 
 
 @mcp.tool(
@@ -748,24 +971,43 @@ async def everyrow_results_http(
         openWorldHint=False,
     ),
 )
-async def everyrow_list_sessions(ctx: EveryRowContext) -> list[TextContent]:
-    """List all everyrow sessions owned by the authenticated user.
+async def everyrow_list_sessions(
+    params: ListSessionsInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """List everyrow sessions owned by the authenticated user (paginated).
 
     Returns session names, IDs, timestamps, and dashboard URLs.
     Use this to find past sessions or check what's been run.
+    Results are paginated — 25 sessions per page by default.
     """
+    log_client_info(ctx, "everyrow_list_sessions")
     client = _get_client(ctx)
 
     try:
-        sessions = await list_sessions(client=client)
+        result = await list_sessions(
+            client=client, offset=params.offset, limit=params.limit
+        )
     except Exception as e:
         return [TextContent(type="text", text=f"Error listing sessions: {e!r}")]
 
-    if not sessions:
+    if not result.sessions:
+        if result.total > 0:
+            return [
+                TextContent(
+                    type="text",
+                    text=f"No sessions on this page (offset={params.offset}). "
+                    f"Total sessions: {result.total}.",
+                )
+            ]
         return [TextContent(type="text", text="No sessions found.")]
 
-    lines = [f"Found {len(sessions)} session(s):\n"]
-    for s in sessions:
+    start = result.offset + 1
+    end = result.offset + len(result.sessions)
+    total_pages = (result.total + result.limit - 1) // result.limit
+    current_page = (result.offset // result.limit) + 1
+
+    lines = [f"Found {result.total} session(s) (showing {start}-{end}):\n"]
+    for s in result.sessions:
         lines.append(
             f"- **{s.name}** (id: {s.session_id})\n"
             f"  Created: {s.created_at:%Y-%m-%d %H:%M UTC} | "
@@ -773,7 +1015,57 @@ async def everyrow_list_sessions(ctx: EveryRowContext) -> list[TextContent]:
             f"  URL: {s.get_url()}"
         )
 
+    has_more = (result.offset + result.limit) < result.total
+    lines.append(
+        f"\nPage {current_page} of {total_pages}"
+        + (
+            f" | Use offset={result.offset + result.limit} to see next page"
+            if has_more
+            else ""
+        )
+    )
+
     return [TextContent(type="text", text="\n".join(lines))]
+
+
+@mcp.tool(
+    name="everyrow_balance",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Check Account Balance",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_balance(ctx: EveryRowContext) -> list[TextContent]:
+    """Check the current billing balance for the authenticated user.
+
+    Returns the account balance in dollars. Use this to verify available
+    credits before submitting tasks.
+    """
+    client = _get_client(ctx)
+
+    try:
+        response = await get_billing_balance_billing_get.asyncio(client=client)
+        if response is None:
+            raise RuntimeError("Failed to get billing balance")
+    except Exception:
+        logger.exception("Failed to get billing balance")
+        return [
+            TextContent(
+                type="text",
+                text="Error retrieving billing balance. Please try again.",
+            )
+        ]
+
+    return [
+        TextContent(
+            type="text",
+            text=f"Current balance: ${response.current_balance_dollars:.2f}",
+        )
+    ]
 
 
 @mcp.tool(
@@ -791,9 +1083,23 @@ async def everyrow_cancel(
     params: CancelInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    log_client_info(ctx, "everyrow_cancel")
     client = _get_client(ctx)
-
     task_id = params.task_id
+
+    # ── Cross-user access check ──────────────────────────────────
+    try:
+        if denied := await _check_task_ownership(task_id):
+            return denied
+    except Exception:
+        logger.exception("Could not verify task ownership for %s", task_id)
+        return [
+            TextContent(
+                type="text",
+                text="Unable to verify task ownership. Please try again.",
+            )
+        ]
+
     try:
         await cancel_task(task_id=UUID(task_id), client=client)
         _clear_task_state()

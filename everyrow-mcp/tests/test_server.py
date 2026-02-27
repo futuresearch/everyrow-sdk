@@ -8,6 +8,7 @@ import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -36,12 +37,14 @@ from everyrow_mcp.models import (
     CancelInput,
     DedupeInput,
     HttpResultsInput,
+    ListSessionsInput,
     MergeInput,
     ProgressInput,
     RankInput,
     ScreenInput,
     SingleAgentInput,
     StdioResultsInput,
+    UploadDataInput,
     _schema_to_model,
 )
 from everyrow_mcp.tools import (
@@ -54,6 +57,7 @@ from everyrow_mcp.tools import (
     everyrow_results_http,
     everyrow_results_stdio,
     everyrow_single_agent,
+    everyrow_upload_data,
 )
 from tests.conftest import make_test_context, override_settings
 
@@ -118,73 +122,66 @@ class TestSchemaToModel:
 class TestInputValidation:
     """Tests for input validation."""
 
-    def test_screen_input_validates_csv_path(self, tmp_path: Path):
-        """Test ScreenInput validates CSV path."""
-        with pytest.raises(ValueError, match="does not exist"):
+    def test_screen_input_rejects_invalid_artifact_id(self):
+        """Test ScreenInput rejects an invalid artifact_id."""
+        with pytest.raises(ValidationError, match="artifact_id must be a valid UUID"):
             ScreenInput(
                 task="test",
-                input_csv=str(tmp_path / "nonexistent.csv"),
+                artifact_id="not-a-uuid",
             )
 
-    def test_rank_input_validates_field_type(self, tmp_path: Path):
-        """Test RankInput validates field_type."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
+    def test_screen_input_accepts_valid_artifact_id(self):
+        """Test ScreenInput accepts a valid UUID artifact_id."""
+        uid = str(uuid4())
+        params = ScreenInput(task="test", artifact_id=uid)
+        assert params.artifact_id == uid
 
+    def test_rank_input_validates_field_type(self):
+        """Test RankInput validates field_type."""
         with pytest.raises(ValidationError, match="Input should be"):
             RankInput(
                 task="test",
-                input_csv=str(csv_file),
+                artifact_id=str(uuid4()),
                 field_name="score",
                 field_type="invalid",  # pyright: ignore[reportArgumentType]
             )
 
-    def test_merge_input_validates_both_csvs(self, tmp_path: Path):
-        """Test MergeInput validates both CSV paths."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
-
-        with pytest.raises(ValueError, match="does not exist"):
+    def test_merge_input_validates_artifact_ids(self):
+        """Test MergeInput validates artifact IDs."""
+        with pytest.raises(ValidationError, match="artifact_id must be a valid UUID"):
             MergeInput(
                 task="test",
-                left_csv=str(csv_file),
-                right_csv=str(tmp_path / "nonexistent.csv"),
+                left_artifact_id="not-a-uuid",
+                right_artifact_id=str(uuid4()),
             )
 
-    def test_agent_input_rejects_empty_response_schema(self, tmp_path: Path):
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
-
+    def test_agent_input_rejects_empty_response_schema(self):
         with pytest.raises(
             ValidationError, match="must include a non-empty top-level 'properties'"
         ):
             AgentInput(
                 task="test",
-                input_csv=str(csv_file),
+                artifact_id=str(uuid4()),
                 response_schema={},
             )
 
-    def test_agent_input_rejects_shorthand_response_schema(self, tmp_path: Path):
+    def test_agent_input_rejects_shorthand_response_schema(self):
         """response_schema must be JSON Schema, not a field map."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
-
         with pytest.raises(
             ValidationError, match="must include a non-empty top-level 'properties'"
         ):
             AgentInput(
                 task="test",
-                input_csv=str(csv_file),
+                artifact_id=str(uuid4()),
                 response_schema={"population": "string", "year": "string"},
             )
 
-    def test_tool_inputs_accept_example_schemas(self, tmp_path: Path):
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
+    def test_tool_inputs_accept_example_schemas(self):
+        uid = str(uuid4())
 
         ScreenInput(
             task="test",
-            input_csv=str(csv_file),
+            artifact_id=uid,
             response_schema={
                 "type": "object",
                 "properties": {
@@ -196,7 +193,7 @@ class TestInputValidation:
         )
         AgentInput(
             task="test",
-            input_csv=str(csv_file),
+            artifact_id=uid,
             response_schema={
                 "type": "object",
                 "properties": {
@@ -208,7 +205,7 @@ class TestInputValidation:
         )
         AgentInput(
             task="test",
-            input_csv=str(csv_file),
+            data=[{"col": "val"}],
             response_schema={
                 "type": "object",
                 "properties": {
@@ -225,15 +222,14 @@ class TestInputValidation:
             },
         )
 
-    def test_screen_input_requires_boolean_property(self, tmp_path: Path):
+    def test_screen_input_requires_boolean_property(self):
         """Screen schemas must include at least one boolean property."""
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("a,b\n1,2\n")
+        uid = str(uuid4())
 
         with pytest.raises(ValidationError, match="must include at least one boolean"):
             ScreenInput(
                 task="test",
-                input_csv=str(csv_file),
+                artifact_id=uid,
                 response_schema={
                     "type": "object",
                     "properties": {"reason": {"type": "string"}},
@@ -242,7 +238,7 @@ class TestInputValidation:
 
         ScreenInput(
             task="test",
-            input_csv=str(csv_file),
+            artifact_id=uid,
             response_schema={
                 "type": "object",
                 "properties": {"pass": {"type": "boolean"}},
@@ -314,7 +310,7 @@ def _make_task_status_response(
 
 
 def _make_task_result_response(
-    data: list[dict],
+    data: list[dict[str, Any]],
     *,
     task_id: UUID | None = None,
 ) -> TaskResultResponse:
@@ -331,7 +327,7 @@ class TestAgent:
     """Tests for everyrow_agent."""
 
     @pytest.mark.asyncio
-    async def test_submit_returns_task_id(self, companies_csv: str):
+    async def test_submit_returns_task_id(self):
         """Test that submit returns immediately with task_id and session_url."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
@@ -351,7 +347,10 @@ class TestAgent:
 
             params = AgentInput(
                 task="Find HQ for each company",
-                input_csv=companies_csv,
+                data=[
+                    {"name": "TechStart", "industry": "Software"},
+                    {"name": "AILabs", "industry": "AI/ML"},
+                ],
             )
             result = await everyrow_agent(params, ctx)
 
@@ -776,8 +775,8 @@ class TestResults:
         assert result == cached_response
 
     @pytest.mark.asyncio
-    async def test_results_http_store_failure_falls_back_to_inline(self):
-        """In HTTP mode, Redis failure falls back to inline results."""
+    async def test_results_http_store_failure_raises(self):
+        """In HTTP mode, Redis failure propagates as an error."""
         task_id = str(uuid4())
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
@@ -804,21 +803,26 @@ class TestResults:
             patch(
                 "everyrow_mcp.tools.try_store_result",
                 new_callable=AsyncMock,
-                return_value=None,
+                side_effect=RuntimeError("Redis down"),
             ),
+            pytest.raises(RuntimeError, match="Redis down"),
         ):
-            result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
-
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert widget_data["preview"] == [{"name": "A"}]
-        assert widget_data["total"] == 1
-        assert "Redis unavailable" in result[1].text
-        assert "1 rows" in result[1].text
+            await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
 
 class TestListSessions:
     """Tests for everyrow_list_sessions."""
+
+    @staticmethod
+    def _make_session_list_result(sessions, *, total=None, offset=0, limit=25):
+        """Create a mock SessionListResult."""
+        tc = total if total is not None else len(sessions)
+        result = MagicMock()
+        result.sessions = sessions
+        result.total = tc
+        result.offset = offset
+        result.limit = limit
+        return result
 
     @pytest.mark.asyncio
     async def test_list_sessions_returns_sessions(self):
@@ -845,9 +849,9 @@ class TestListSessions:
         with patch(
             "everyrow_mcp.tools.list_sessions",
             new_callable=AsyncMock,
-            return_value=mock_sessions,
+            return_value=self._make_session_list_result(mock_sessions),
         ):
-            result = await everyrow_list_sessions(ctx)
+            result = await everyrow_list_sessions(ListSessionsInput(), ctx)
 
         text = result[0].text
         assert "2 session(s)" in text
@@ -863,9 +867,9 @@ class TestListSessions:
         with patch(
             "everyrow_mcp.tools.list_sessions",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=self._make_session_list_result([]),
         ):
-            result = await everyrow_list_sessions(ctx)
+            result = await everyrow_list_sessions(ListSessionsInput(), ctx)
 
         assert "No sessions found" in result[0].text
 
@@ -880,24 +884,24 @@ class TestListSessions:
             new_callable=AsyncMock,
             side_effect=RuntimeError("API error"),
         ):
-            result = await everyrow_list_sessions(ctx)
+            result = await everyrow_list_sessions(ListSessionsInput(), ctx)
 
         assert "Error listing sessions" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_list_sessions_passes_client_from_context(self):
-        """Test that the tool passes the context client to list_sessions."""
+    async def test_list_sessions_passes_client_and_pagination(self):
+        """Test that the tool passes the context client and pagination params to list_sessions."""
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
 
         with patch(
             "everyrow_mcp.tools.list_sessions",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=self._make_session_list_result([], offset=5, limit=10),
         ) as mock_ls:
-            await everyrow_list_sessions(ctx)
+            await everyrow_list_sessions(ListSessionsInput(offset=5, limit=10), ctx)
 
-        mock_ls.assert_called_once_with(client=mock_client)
+        mock_ls.assert_called_once_with(client=mock_client, offset=5, limit=10)
 
     @pytest.mark.asyncio
     async def test_list_sessions_output_contains_urls_and_dates(self):
@@ -918,15 +922,79 @@ class TestListSessions:
         with patch(
             "everyrow_mcp.tools.list_sessions",
             new_callable=AsyncMock,
-            return_value=mock_sessions,
+            return_value=self._make_session_list_result(mock_sessions),
         ):
-            result = await everyrow_list_sessions(ctx)
+            result = await everyrow_list_sessions(ListSessionsInput(), ctx)
 
         text = result[0].text
         assert "Pipeline Run" in text
         assert "2025-08-15 09:30 UTC" in text
         assert "2025-08-15 10:45 UTC" in text
         assert f"https://everyrow.io/sessions/{session_id}" in text
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_pagination_params(self):
+        """Test that limit and offset are passed through to SDK."""
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        with patch(
+            "everyrow_mcp.tools.list_sessions",
+            new_callable=AsyncMock,
+            return_value=self._make_session_list_result(
+                [], total=0, offset=5, limit=10
+            ),
+        ) as mock_ls:
+            await everyrow_list_sessions(ListSessionsInput(limit=10, offset=5), ctx)
+
+        mock_ls.assert_called_once_with(client=mock_client, offset=5, limit=10)
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_shows_pagination_info(self):
+        """Test that output includes page info and next-page hint."""
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+        now = datetime.now(UTC)
+        mock_sessions = [
+            MagicMock(
+                session_id=uuid4(),
+                name=f"Session {i}",
+                created_at=now,
+                updated_at=now,
+                get_url=lambda: "https://everyrow.io/sessions/x",
+            )
+            for i in range(10)
+        ]
+
+        with patch(
+            "everyrow_mcp.tools.list_sessions",
+            new_callable=AsyncMock,
+            return_value=self._make_session_list_result(
+                mock_sessions, total=30, offset=0, limit=10
+            ),
+        ):
+            result = await everyrow_list_sessions(ListSessionsInput(limit=10), ctx)
+
+        text = result[0].text
+        assert "showing 1-10" in text
+        assert "30 session(s)" in text
+        assert "Page 1 of 3" in text
+        assert "offset=10" in text
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_default_pagination(self):
+        """Test that default params are offset=0, limit=25."""
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        with patch(
+            "everyrow_mcp.tools.list_sessions",
+            new_callable=AsyncMock,
+            return_value=self._make_session_list_result([]),
+        ) as mock_ls:
+            await everyrow_list_sessions(ListSessionsInput(), ctx)
+
+        mock_ls.assert_called_once_with(client=mock_client, offset=0, limit=25)
 
 
 class TestCancel:
@@ -1036,15 +1104,15 @@ class TestCancel:
 
         # Extra fields forbidden
         with pytest.raises(ValidationError):
-            CancelInput(task_id=valid_uuid, extra_field="x")  # type: ignore[call-arg]
+            CancelInput(task_id=valid_uuid, extra_field="x")  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
 
 
 class TestAgentInlineInput:
-    """Tests for everyrow_agent with inline CSV data."""
+    """Tests for everyrow_agent with inline data."""
 
     @pytest.mark.asyncio
     async def test_submit_with_inline_data(self):
-        """Test agent submission with data instead of input_csv."""
+        """Test agent submission with data instead of artifact_id."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
@@ -1063,7 +1131,10 @@ class TestAgentInlineInput:
 
             params = AgentInput(
                 task="Find HQ for each company",
-                data="name,industry\nTechStart,Software\nAILabs,AI\n",
+                data=[
+                    {"name": "TechStart", "industry": "Software"},
+                    {"name": "AILabs", "industry": "AI"},
+                ],
             )
             result = await everyrow_agent(params, ctx)
 
@@ -1077,6 +1148,37 @@ class TestAgentInlineInput:
             call_kwargs = mock_op.call_args[1]
             assert len(call_kwargs["input"]) == 2
 
+    @pytest.mark.asyncio
+    async def test_submit_with_artifact_id(self):
+        """Test agent submission with artifact_id."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+        uid = str(uuid4())
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+
+            params = AgentInput(task="Find HQ", artifact_id=uid)
+            result = await everyrow_agent(params, ctx)
+
+            assert len(result) == 1
+            text = result[0].text
+            assert str(mock_task.task_id) in text
+
+            # Verify the UUID was passed to the SDK
+            call_kwargs = mock_op.call_args[1]
+            assert call_kwargs["input"] == UUID(uid)
+
 
 class TestAgentInputValidation:
     """Tests for AgentInput model validation with inline data."""
@@ -1086,26 +1188,21 @@ class TestAgentInputValidation:
         with pytest.raises(ValidationError, match="Provide exactly one of"):
             AgentInput(task="test")
 
-    def test_rejects_both_input_sources(self, companies_csv: str):
+    def test_rejects_both_input_sources(self):
         """Test that providing both raises."""
         with pytest.raises(ValidationError, match="Provide exactly one of"):
             AgentInput(
                 task="test",
-                input_csv=companies_csv,
-                data="name,industry\nA,B\n",
+                artifact_id=str(uuid4()),
+                data=[{"a": "b"}],
             )
 
-    def test_accepts_input_csv(self, companies_csv: str):
-        """Test that input_csv alone is valid."""
-        params = AgentInput(task="test", input_csv=companies_csv)
-        assert params.input_csv == companies_csv
+    def test_accepts_artifact_id(self):
+        """Test that artifact_id alone is valid."""
+        uid = str(uuid4())
+        params = AgentInput(task="test", artifact_id=uid)
+        assert params.artifact_id == uid
         assert params.data is None
-
-    def test_accepts_data_csv_string(self):
-        """Test that data as CSV string is valid."""
-        params = AgentInput(task="test", data="a,b\n1,2\n")
-        assert params.data is not None
-        assert params.input_csv is None
 
     def test_accepts_data_json_list(self):
         """Test that data as JSON list of dicts is valid."""
@@ -1115,7 +1212,103 @@ class TestAgentInputValidation:
         ]
         params = AgentInput(task="test", data=records)
         assert params.data == records
-        assert params.input_csv is None
+        assert params.artifact_id is None
+
+
+class TestUploadData:
+    """Tests for everyrow_upload_data."""
+
+    @pytest.mark.asyncio
+    async def test_upload_from_url(self):
+        """Test uploading data from a URL."""
+        mock_client = _make_mock_client()
+        mock_session = _make_mock_session()
+        ctx = make_test_context(mock_client)
+        artifact_uuid = uuid4()
+
+        mock_df = pd.DataFrame([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
+
+        with (
+            patch(
+                "everyrow_mcp.tools.fetch_csv_from_url",
+                new_callable=AsyncMock,
+                return_value=mock_df,
+            ),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+            patch(
+                "everyrow_mcp.tools.create_table_artifact",
+                new_callable=AsyncMock,
+                return_value=artifact_uuid,
+            ) as mock_create,
+        ):
+            params = UploadDataInput(source="https://example.com/data.csv")
+            result = await everyrow_upload_data(params, ctx)
+
+        assert len(result) == 1
+        data = json.loads(result[0].text)
+        assert data["artifact_id"] == str(artifact_uuid)
+        assert data["rows"] == 2
+        assert data["columns"] == ["a", "b"]
+        mock_create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_upload_from_local_path(self, tmp_path: Path):
+        """Test uploading data from a local CSV file (stdio mode)."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x,y\n1,2\n3,4\n")
+
+        mock_client = _make_mock_client()
+        mock_session = _make_mock_session()
+        ctx = make_test_context(mock_client)
+        artifact_uuid = uuid4()
+
+        with (
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+            patch(
+                "everyrow_mcp.tools.create_table_artifact",
+                new_callable=AsyncMock,
+                return_value=artifact_uuid,
+            ),
+        ):
+            params = UploadDataInput(source=str(csv_file))
+            result = await everyrow_upload_data(params, ctx)
+
+        data = json.loads(result[0].text)
+        assert data["artifact_id"] == str(artifact_uuid)
+        assert data["rows"] == 2
+
+    def test_upload_rejects_local_path_in_http_mode(self, tmp_path: Path):
+        """Test that local paths are rejected in HTTP mode."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x,y\n1,2\n")
+
+        with override_settings(
+            transport="streamable-http", upload_secret="test-secret"
+        ):
+            with pytest.raises(
+                ValidationError, match="Local file paths are not supported"
+            ):
+                UploadDataInput(source=str(csv_file))
+
+    def test_upload_accepts_url_in_http_mode(self):
+        """Test that URLs are accepted in HTTP mode."""
+        with override_settings(
+            transport="streamable-http", upload_secret="test-secret"
+        ):
+            params = UploadDataInput(source="https://example.com/data.csv")
+            assert params.source == "https://example.com/data.csv"
+
+    def test_upload_google_sheets_url(self):
+        """Test that Google Sheets URLs are accepted."""
+        url = "https://docs.google.com/spreadsheets/d/1abc/edit#gid=0"
+        params = UploadDataInput(source=url)
+        assert params.source == url
 
 
 class TestResultsInputValidation:
@@ -1124,7 +1317,7 @@ class TestResultsInputValidation:
     def test_stdio_requires_output_path(self):
         """Test that StdioResultsInput requires output_path."""
         with pytest.raises(ValidationError):
-            StdioResultsInput(task_id="00000000-0000-0000-0000-000000000000")
+            StdioResultsInput(task_id="00000000-0000-0000-0000-000000000000")  # pyright: ignore[reportCallIssue]
 
     def test_stdio_output_path_validated(self, tmp_path: Path):
         """Test that output_path is validated when provided."""
@@ -1205,44 +1398,52 @@ class TestInputModelsUnchanged:
     """Verify that input models require an input source."""
 
     def test_rank_requires_input_source(self):
-        """RankInput requires either input_csv or data."""
+        """RankInput requires either artifact_id or data."""
         with pytest.raises(ValidationError):
             RankInput(task="test", field_name="score")
 
     def test_rank_accepts_data(self):
-        """RankInput accepts data as alternative to input_csv."""
-        params = RankInput(task="test", field_name="score", data="col\nval")
-        assert params.data == "col\nval"
-        assert params.input_csv is None
+        """RankInput accepts data as alternative to artifact_id."""
+        params = RankInput(
+            task="test",
+            field_name="score",
+            data=[{"col": "val"}],
+        )
+        assert params.data == [{"col": "val"}]
+        assert params.artifact_id is None
 
     def test_rank_rejects_both_inputs(self):
-        """RankInput rejects both input_csv and data."""
+        """RankInput rejects both artifact_id and data."""
         with pytest.raises(ValidationError):
             RankInput(
                 task="test",
                 field_name="score",
-                input_csv="/tmp/test.csv",
-                data="col\nval",
+                artifact_id=str(uuid4()),
+                data=[{"col": "val"}],
             )
 
     def test_screen_requires_input_source(self):
-        """ScreenInput requires either input_csv or data."""
+        """ScreenInput requires either artifact_id or data."""
         with pytest.raises(ValidationError):
             ScreenInput(task="test")
 
     def test_screen_accepts_data(self):
-        """ScreenInput accepts data as alternative to input_csv."""
-        params = ScreenInput(task="test", data="col\nval")
-        assert params.data == "col\nval"
-        assert params.input_csv is None
+        """ScreenInput accepts data as alternative to artifact_id."""
+        params = ScreenInput(task="test", data=[{"col": "val"}])
+        assert params.data == [{"col": "val"}]
+        assert params.artifact_id is None
 
     def test_screen_rejects_both_inputs(self):
-        """ScreenInput rejects both input_csv and data."""
+        """ScreenInput rejects both artifact_id and data."""
         with pytest.raises(ValidationError):
-            ScreenInput(task="test", input_csv="/tmp/test.csv", data="col\nval")
+            ScreenInput(
+                task="test",
+                artifact_id=str(uuid4()),
+                data=[{"col": "val"}],
+            )
 
     def test_dedupe_requires_input_source(self):
-        """DedupeInput requires either input_csv or data."""
+        """DedupeInput requires either artifact_id or data."""
         with pytest.raises(ValidationError):
             DedupeInput(equivalence_relation="same entity")
 
@@ -1256,7 +1457,7 @@ class TestStdioVsHttpGating:
     """Verify that widget JSON is only included in HTTP mode responses."""
 
     @pytest.mark.asyncio
-    async def test_submit_stdio_returns_single_content(self, companies_csv: str):
+    async def test_submit_stdio_returns_single_content(self):
         """In stdio mode, submission tools return only human-readable text."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
@@ -1273,24 +1474,28 @@ class TestStdioVsHttpGating:
             ),
         ):
             mock_op.return_value = mock_task
-            params = AgentInput(task="test", input_csv=companies_csv)
+            params = AgentInput(
+                task="test",
+                data=[{"name": "TechStart", "industry": "Software"}],
+            )
             result = await everyrow_agent(params, ctx)
 
         assert len(result) == 1
         assert "Task ID:" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_submit_http_returns_widget_and_text(
-        self, companies_csv: str, fake_redis
-    ):
+    async def test_submit_http_returns_widget_and_text(self, fake_redis):
         """In HTTP mode, submission tools return widget JSON + human text."""
         mock_task = _make_mock_task()
         mock_session = _make_mock_session()
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
 
+        fake_token = MagicMock()
+        fake_token.client_id = "test-user-123"
+
         with (
-            override_settings(transport="streamable-http"),
+            override_settings(transport="streamable-http", upload_secret="test-secret"),
             patch(
                 "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
             ) as mock_op,
@@ -1299,9 +1504,16 @@ class TestStdioVsHttpGating:
                 return_value=_make_async_context_manager(mock_session),
             ),
             patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+            patch(
+                "everyrow_mcp.tool_helpers.get_access_token",
+                return_value=fake_token,
+            ),
         ):
             mock_op.return_value = mock_task
-            params = AgentInput(task="test", input_csv=companies_csv)
+            params = AgentInput(
+                task="test",
+                data=[{"name": "TechStart", "industry": "Software"}],
+            )
             result = await everyrow_agent(params, ctx)
 
         assert len(result) == 2
@@ -1345,7 +1557,7 @@ class TestStdioVsHttpGating:
         )
 
         with (
-            override_settings(transport="streamable-http"),
+            override_settings(transport="streamable-http", upload_secret="test-secret"),
             patch(
                 "everyrow_mcp.tools.get_task_status_tasks_task_id_status_get.asyncio",
                 new_callable=AsyncMock,
@@ -1353,6 +1565,11 @@ class TestStdioVsHttpGating:
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
             patch("everyrow_mcp.tools.write_initial_task_state"),
+            patch(
+                "everyrow_mcp.tools._check_task_ownership",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -1524,3 +1741,213 @@ class TestResultsWidgetData:
         assert len(result) == 2
         widget_data = json.loads(result[0].text)
         assert widget_data["session_url"] == session_url
+
+
+# ---------- Session resumption / naming ----------
+
+
+class TestSessionParams:
+    """Tests for session_id and session_name fields on input models."""
+
+    # ── Input validation ─────────────────────────────────────
+
+    def test_single_source_accepts_session_id(self):
+        uid = str(uuid4())
+        params = AgentInput(task="test", artifact_id=str(uuid4()), session_id=uid)
+        assert params.session_id == uid
+
+    def test_single_source_accepts_session_name(self):
+        params = AgentInput(
+            task="test", artifact_id=str(uuid4()), session_name="My Session"
+        )
+        assert params.session_name == "My Session"
+
+    def test_single_source_rejects_both_session_params(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            AgentInput(
+                task="test",
+                artifact_id=str(uuid4()),
+                session_id=str(uuid4()),
+                session_name="conflict",
+            )
+
+    def test_single_source_rejects_invalid_session_id(self):
+        with pytest.raises(ValidationError, match="session_id must be a valid UUID"):
+            AgentInput(
+                task="test",
+                artifact_id=str(uuid4()),
+                session_id="not-a-uuid",
+            )
+
+    def test_merge_accepts_session_id(self):
+        params = MergeInput(
+            task="match",
+            left_data=[{"a": 1}],
+            right_data=[{"b": 2}],
+            session_id=str(uuid4()),
+        )
+        assert params.session_id is not None
+
+    def test_merge_rejects_both_session_params(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            MergeInput(
+                task="match",
+                left_data=[{"a": 1}],
+                right_data=[{"b": 2}],
+                session_id=str(uuid4()),
+                session_name="conflict",
+            )
+
+    def test_single_agent_accepts_session_id(self):
+        params = SingleAgentInput(task="test", session_id=str(uuid4()))
+        assert params.session_id is not None
+
+    def test_single_agent_rejects_both_session_params(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            SingleAgentInput(
+                task="test",
+                session_id=str(uuid4()),
+                session_name="conflict",
+            )
+
+    def test_upload_data_accepts_session_id(self):
+        params = UploadDataInput(
+            source="https://example.com/data.csv", session_id=str(uuid4())
+        )
+        assert params.session_id is not None
+
+    def test_upload_data_rejects_both_session_params(self):
+        with pytest.raises(ValidationError, match="mutually exclusive"):
+            UploadDataInput(
+                source="https://example.com/data.csv",
+                session_id=str(uuid4()),
+                session_name="conflict",
+            )
+
+    # ── Tool invocations ─────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_agent_passes_session_params(self):
+        """everyrow_agent forwards session_id and session_name to create_session."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+        sid = str(uuid4())
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch("everyrow_mcp.tools.create_session") as mock_cs,
+        ):
+            mock_cs.return_value = _make_async_context_manager(mock_session)
+            mock_op.return_value = mock_task
+
+            params = AgentInput(
+                task="Find HQ",
+                data=[{"name": "Acme"}],
+                session_id=sid,
+            )
+            result = await everyrow_agent(params, ctx)
+
+            mock_cs.assert_called_once_with(
+                client=mock_client, session_id=sid, name=None
+            )
+            text = result[0].text
+            assert str(mock_session.session_id) in text
+
+    @pytest.mark.asyncio
+    async def test_agent_passes_session_name(self):
+        """everyrow_agent forwards session_name to create_session."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch("everyrow_mcp.tools.create_session") as mock_cs,
+        ):
+            mock_cs.return_value = _make_async_context_manager(mock_session)
+            mock_op.return_value = mock_task
+
+            params = AgentInput(
+                task="Find HQ",
+                data=[{"name": "Acme"}],
+                session_name="My Pipeline",
+            )
+            await everyrow_agent(params, ctx)
+
+            mock_cs.assert_called_once_with(
+                client=mock_client, session_id=None, name="My Pipeline"
+            )
+
+    @pytest.mark.asyncio
+    async def test_upload_data_passes_session_id(self):
+        """everyrow_upload_data forwards session_id to create_session."""
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+        artifact_uuid = uuid4()
+        sid = str(uuid4())
+
+        mock_df = pd.DataFrame([{"a": 1}])
+
+        with (
+            patch(
+                "everyrow_mcp.tools.fetch_csv_from_url",
+                new_callable=AsyncMock,
+                return_value=mock_df,
+            ),
+            patch("everyrow_mcp.tools.create_session") as mock_cs,
+            patch(
+                "everyrow_mcp.tools.create_table_artifact",
+                new_callable=AsyncMock,
+                return_value=artifact_uuid,
+            ),
+        ):
+            mock_cs.return_value = _make_async_context_manager(mock_session)
+
+            params = UploadDataInput(
+                source="https://example.com/data.csv", session_id=sid
+            )
+            result = await everyrow_upload_data(params, ctx)
+
+            mock_cs.assert_called_once_with(
+                client=mock_client, session_id=sid, name=None
+            )
+            data = json.loads(result[0].text)
+            assert data["session_id"] == str(mock_session.session_id)
+
+    # ── Response includes session_id ─────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_response_includes_session_id(self):
+        """Submission response text includes the session ID."""
+        mock_task = _make_mock_task()
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        with (
+            patch(
+                "everyrow_mcp.tools.agent_map_async", new_callable=AsyncMock
+            ) as mock_op,
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+        ):
+            mock_op.return_value = mock_task
+
+            params = AgentInput(
+                task="Find HQ",
+                data=[{"name": "Acme"}],
+            )
+            result = await everyrow_agent(params, ctx)
+
+        text = result[0].text
+        assert f"Session ID: {mock_session.session_id}" in text
