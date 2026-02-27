@@ -176,6 +176,7 @@ class TestMcpProtocol:
                     "everyrow_balance",
                     "everyrow_browse_lists",
                     "everyrow_cancel",
+                    "everyrow_classify",
                     "everyrow_dedupe",
                     "everyrow_forecast",
                     "everyrow_list_sessions",

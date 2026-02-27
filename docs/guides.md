@@ -1,11 +1,15 @@
 ---
 title: Guides
-description: Step-by-step tutorials for using everyrow to screen, rank, dedupe, merge, and research data with LLM-powered agents.
+description: Step-by-step tutorials for using everyrow to classify, screen, rank, dedupe, merge, forecast, and research data with LLM-powered agents.
 ---
 
 # Guides
 
 Practical walkthroughs that show you how to use everyrow for common data processing tasks. Each guide covers a single operation end-to-end with working code.
+
+## Classify
+
+- [Classify and Label Rows](/docs/classify-dataframe-rows-llm)
 
 ## Screen
 
@@ -25,8 +29,11 @@ Practical walkthroughs that show you how to use everyrow for common data process
 
 - [Join Tables Without Shared Keys](/docs/fuzzy-join-without-keys)
 
+## Forecast
+
+- [Forecast Binary Questions](/docs/reference/FORECAST)
+
 ## Research
 
 - [Add a Column via Web Research](/docs/add-column-web-lookup)
-- [Classify and Label Rows](/docs/classify-dataframe-rows-llm)
 - [LLM-Powered Data Labeling](/docs/active-learning-llm-oracle)
