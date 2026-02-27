@@ -13,7 +13,10 @@ async def test_classify_assigns_categories():
     """Test that classify returns a TableResult with correct categories."""
     input_df = pd.DataFrame(
         [
-            {"company": "Apple Inc.", "description": "Consumer electronics and software"},
+            {
+                "company": "Apple Inc.",
+                "description": "Consumer electronics and software",
+            },
             {
                 "company": "JPMorgan Chase",
                 "description": "Investment banking and financial services",
