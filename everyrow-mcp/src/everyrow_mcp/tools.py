@@ -1307,7 +1307,11 @@ async def everyrow_list_session_tasks(
 
     tasks = data.get("tasks", [])
     if not tasks:
-        return [TextContent(type="text", text=f"No tasks found in session {params.session_id}.")]
+        return [
+            TextContent(
+                type="text", text=f"No tasks found in session {params.session_id}."
+            )
+        ]
 
     lines = [f"Found {len(tasks)} task(s) in session {params.session_id}:\n"]
     for t in tasks:
