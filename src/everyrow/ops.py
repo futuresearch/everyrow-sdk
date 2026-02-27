@@ -583,7 +583,10 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None = None,
+    relationship_type: Literal[
+        "many_to_one", "one_to_one", "one_to_many", "many_to_many"
+    ]
+    | None = None,
 ) -> MergeResult:
     """Merge two tables using AI (LEFT JOIN semantics).
 
@@ -642,7 +645,10 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None = None,
+    relationship_type: Literal[
+        "many_to_one", "one_to_one", "one_to_many", "many_to_many"
+    ]
+    | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
