@@ -211,7 +211,7 @@ async def everyrow_use_list(
             )
 
             # Fetch the copied data and save as CSV
-            df, _ = await _fetch_task_result(client, str(result.task_id))
+            df, _, _ = await _fetch_task_result(client, str(result.task_id))
 
             csv_path = Path.cwd() / f"built-in-list-{result.artifact_id}.csv"
             df.to_csv(csv_path, index=False)
