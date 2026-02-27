@@ -85,7 +85,7 @@ async def no_auth_http_lifespan(_server: FastMCP):
         )
 
 
-_INSTRUCTIONS_COMMON = """\
+_INSTRUCTIONS_COMMON = f"""\
 You are connected to the everyrow MCP server. everyrow dispatches web research \
 agents that search the internet, read pages, and return structured results for \
 every row in a dataset.
@@ -103,7 +103,7 @@ Do NOT add commentary between progress calls — just call again immediately.
 ## Key rules
 - If a session_url appears in the submission response, share it with the user. If none is present, do not mention it.
 - Never guess or fabricate results — always wait for the task to complete.
-- For small datasets (< 50 rows), prefer passing `data` directly.
+- For small datasets (<= {settings.auto_page_size_threshold} rows), prefer passing `data` directly.
 - For larger datasets, use `everyrow_upload_data` to get an artifact_id first.
 """
 

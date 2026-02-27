@@ -446,7 +446,7 @@ class TaskState(BaseModel):
                     else:
                         next_call = dedent(f"""\
                             IMPORTANT: Do NOT call everyrow_results yet.\
-                             First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: 50). You will have access to all of them via the widget.".\
+                             First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: {settings.auto_page_size_threshold}). You will have access to all of them via the widget.".\
                              The answer the user provides will correspond to the `page_size`.\
                              After the user responds, call everyrow_results(task_id='{task_id}', page_size=N).""")
                 else:

@@ -707,7 +707,7 @@ class HttpResultsInput(BaseModel):
         ge=0,
     )
     page_size: int = Field(
-        default=50,
+        default=settings.auto_page_size_threshold,
         description=(
             "Number of result rows to load into your context so you can read them. "
             "The user has access to all rows via the widget regardless of this value. "
