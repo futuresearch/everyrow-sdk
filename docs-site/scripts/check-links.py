@@ -64,7 +64,7 @@ SKIPPED_URLS: set[str] = {
     "https://github.com/anthropics/claude-code/issues/20377",
     "https://github.com/futuresearch/everyrow-sdk",
     "https://github.com/futuresearch/everyrow-sdk/releases",
-    "https://github.com/user-attachments/assets/254fa2ed-c1f3-4ee8-b93d-d169edf32f27",
+    "https://github.com/user-attachments/assets/8b746b6c-2acb-4591-9328-daebdb472f50",
     "https://huggingface.co/datasets/fancyzhx/dbpedia_14",
     "https://huggingface.co/datasets/google-research-datasets/paws",
     "https://hugovk.github.io/top-pypi-packages/",
@@ -82,7 +82,6 @@ SKIPPED_URLS: set[str] = {
     "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
     "https://arxiv.org/abs/2506.21558",
     "https://arxiv.org/abs/2506.06287",
-    "https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/fda_products.csv"
 }
 
 
