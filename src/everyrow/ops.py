@@ -1,7 +1,7 @@
-import json
 from typing import Any, Literal, TypeVar, overload
 from uuid import UUID
 
+import pandas as pd
 from pandas import DataFrame
 from pydantic import BaseModel
 
@@ -21,9 +21,6 @@ from everyrow.generated.models import (
     AgentMapOperation,
     AgentMapOperationInputType1Item,
     AgentMapOperationResponseSchemaType0,
-    CreateArtifactRequest,
-    CreateArtifactRequestDataType0Item,
-    CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
     DedupeOperationStrategy,
@@ -66,10 +63,16 @@ class DefaultScreenResult(BaseModel):
 
 
 def _df_to_records(df: DataFrame) -> list[dict[str, Any]]:
-    """Convert a DataFrame to a list of records, handling NaN/NaT."""
-    json_str = df.to_json(orient="records")
-    assert json_str is not None
-    return json.loads(json_str)
+    """Convert a DataFrame to a list of records, handling NaN/NaT → None."""
+    records: list[dict[str, Any]] = df.to_dict(orient="records")
+    for rec in records:
+        for k, v in rec.items():
+            try:
+                if pd.isna(v):
+                    rec[k] = None
+            except (TypeError, ValueError):
+                pass
+    return records
 
 
 def _prepare_table_input[T](
@@ -112,14 +115,35 @@ def _prepare_single_input[TItem, TObj](
 # --- Artifact creation ---
 
 
+class _RawArtifactBody:
+    """Thin body that skips the generated-model wrap/unwrap cycle.
+
+    The generated ``CreateArtifactRequest`` wraps every dict in a
+    ``CreateArtifactRequestDataType0Item`` (via ``from_dict``) only for
+    ``to_dict`` to unwrap it again.  This class satisfies the same
+    ``to_dict()`` protocol that ``_get_kwargs`` expects while keeping the
+    data as plain dicts throughout.
+    """
+
+    def __init__(
+        self,
+        data: list[dict[str, Any]] | dict[str, Any],
+        session_id: UUID | None,
+    ) -> None:
+        self._body: dict[str, Any] = {"data": data}
+        if session_id is not None:
+            self._body["session_id"] = str(session_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._body
+
+
 async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
     """Create a scalar artifact by uploading a single record."""
-    body = CreateArtifactRequest(
-        data=CreateArtifactRequestDataType1.from_dict(input.model_dump()),
-        session_id=session.session_id,
-    )
+    body = _RawArtifactBody(data=input.model_dump(), session_id=session.session_id)
     response = await create_artifact_artifacts_post.asyncio(
-        client=session.client, body=body
+        client=session.client,
+        body=body,  # type: ignore[arg-type]
     )
     response = handle_response(response)
     return response.artifact_id
@@ -128,12 +152,10 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
     """Create a table artifact by uploading a list of records."""
     records = _df_to_records(input)
-    body = CreateArtifactRequest(
-        data=[CreateArtifactRequestDataType0Item.from_dict(r) for r in records],
-        session_id=session.session_id,
-    )
+    body = _RawArtifactBody(data=records, session_id=session.session_id)
     response = await create_artifact_artifacts_post.asyncio(
-        client=session.client, body=body
+        client=session.client,
+        body=body,  # type: ignore[arg-type]
     )
     response = handle_response(response)
     return response.artifact_id

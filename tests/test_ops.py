@@ -355,8 +355,7 @@ async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
 
     call_args = mock_create.call_args
     body = call_args.kwargs["body"]
-    # data is a list of CreateArtifactRequestDataType0Item
-    records = [item.additional_properties for item in body.data]
+    records = body.to_dict()["data"]
     assert records == [{"name": "Alice", "age": None}]
 
 
@@ -378,7 +377,7 @@ async def test_create_table_artifact_preserves_valid_values(mocker, mock_session
 
     call_args = mock_create.call_args
     body = call_args.kwargs["body"]
-    records = [item.additional_properties for item in body.data]
+    records = body.to_dict()["data"]
     assert records == [{"name": "Alice", "age": 30}]
 
 
