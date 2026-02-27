@@ -10,6 +10,7 @@ from uuid import UUID
 
 import pandas as pd
 from everyrow.api_utils import handle_response
+from everyrow.built_in_lists import list_built_in_datasets, use_built_in_list
 from everyrow.constants import EveryrowError
 from everyrow.generated.api.billing import get_billing_balance_billing_get
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
@@ -35,6 +36,7 @@ from everyrow_mcp.app import _clear_task_state, mcp
 from everyrow_mcp.config import settings
 from everyrow_mcp.models import (
     AgentInput,
+    BrowseListsInput,
     CancelInput,
     DedupeInput,
     ForecastInput,
@@ -47,6 +49,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     StdioResultsInput,
     UploadDataInput,
+    UseListInput,
     _schema_to_model,
 )
 from everyrow_mcp.result_store import (
@@ -100,6 +103,124 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
             )
         ]
     return None
+
+
+@mcp.tool(
+    name="everyrow_browse_lists",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Browse Reference Lists",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_browse_lists(
+    params: BrowseListsInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """Browse available reference lists of well-known entities.
+
+    Includes company lists (S&P 500, FTSE 100, Russell 3000, sector breakdowns
+    like Global Banks or Semiconductor companies), geographic lists (all countries,
+    EU members, US states, major cities), people (billionaires, heads of state,
+    AI leaders), institutions (top universities, regulators), and infrastructure
+    (airports, ports, power stations).
+
+    Use this when the user's analysis involves a well-known group that we might
+    already have a list for. Returns names, fields, and artifact_ids to pass to
+    everyrow_use_list.
+
+    Call with no parameters to see all available lists, or use search/category
+    to narrow results.
+    """
+    client = _get_client(ctx)
+
+    try:
+        results = await list_built_in_datasets(
+            client, search=params.search, category=params.category
+        )
+    except Exception as e:
+        return [TextContent(type="text", text=f"Error browsing built-in lists: {e!r}")]
+
+    if not results:
+        search_desc = f" matching '{params.search}'" if params.search else ""
+        cat_desc = f" in category '{params.category}'" if params.category else ""
+        return [
+            TextContent(
+                type="text",
+                text=f"No built-in lists found{search_desc}{cat_desc}.",
+            )
+        ]
+
+    lines = [f"Found {len(results)} built-in list(s):\n"]
+    for i, item in enumerate(results, 1):
+        fields_str = ", ".join(item.fields) if item.fields else "(no fields listed)"
+        lines.append(
+            f"{i}. {item.name} [{item.category}]\n"
+            f"   Fields: {fields_str}\n"
+            f"   artifact_id: {item.artifact_id}\n"
+        )
+    lines.append(
+        "To use one of these lists, call everyrow_use_list with the artifact_id."
+    )
+
+    return [TextContent(type="text", text="\n".join(lines))]
+
+
+@mcp.tool(
+    name="everyrow_use_list",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Import Reference List",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_use_list(
+    params: UseListInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """Import a reference list into your session and save it as a CSV file.
+
+    This copies the dataset into a new session, fetches the data, and saves
+    it as a CSV file ready to pass to other everyrow utilities for analysis
+    or research.
+
+    The copy is a fast database operation (<1s) — no polling needed.
+    """
+    client = _get_client(ctx)
+
+    try:
+        async with create_session(client=client) as session:
+            session_url = session.get_url()
+            result = await use_built_in_list(
+                artifact_id=UUID(params.artifact_id),
+                session=session,
+            )
+
+            # Fetch the copied data and save as CSV
+            df, _ = await _fetch_task_result(client, str(result.task_id))
+
+            csv_path = Path.cwd() / f"built-in-list-{result.artifact_id}.csv"
+            df.to_csv(csv_path, index=False)
+    except Exception as e:
+        return [TextContent(type="text", text=f"Error importing built-in list: {e!r}")]
+
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Imported built-in list into your session.\n\n"
+                f"CSV saved to: {csv_path}\n"
+                f"Rows: {len(df)}\n"
+                f"Columns: {', '.join(df.columns)}\n"
+                f"Session: {session_url}\n\n"
+                f"Pass {csv_path} as input_csv to other everyrow utilities for analysis or research."
+            ),
+        )
+    ]
 
 
 @mcp.tool(

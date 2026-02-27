@@ -80,6 +80,14 @@
     {
       "name": "everyrow_balance",
       "description": "Check the current billing balance for the authenticated user."
+    },
+    {
+      "name": "everyrow_browse_lists",
+      "description": "Browse available reference lists of well-known entities."
+    },
+    {
+      "name": "everyrow_use_list",
+      "description": "Import a reference list into your session and save it as a CSV file."
     }
   ],
   "user_config": {

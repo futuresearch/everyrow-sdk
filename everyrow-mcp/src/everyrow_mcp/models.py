@@ -569,6 +569,32 @@ def _validate_task_id(v: str) -> str:
     return v
 
 
+class BrowseListsInput(BaseModel):
+    """Input for browsing reference lists."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    search: str | None = Field(
+        default=None,
+        description="Search term to match against list names (case-insensitive).",
+    )
+    category: str | None = Field(
+        default=None,
+        description="Filter by category (e.g. 'Finance', 'Geography').",
+    )
+
+
+class UseListInput(BaseModel):
+    """Input for importing a reference list into a session."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    artifact_id: str = Field(
+        ...,
+        description="artifact_id from everyrow_browse_lists results.",
+    )
+
+
 class ProgressInput(BaseModel):
     """Input for checking task progress."""
 
