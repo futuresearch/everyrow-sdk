@@ -1,11 +1,15 @@
 ---
 title: Case Studies
-description: Runnable case studies demonstrating everyrow operations on real datasets — screen, rank, dedupe, merge, and research with LLM-powered agents.
+description: Runnable case studies demonstrating everyrow operations on real datasets — classify, screen, rank, dedupe, merge, forecast, and research with LLM-powered agents.
 ---
 
 # Case Studies
 
 Runnable case studies with real datasets. Each case study demonstrates an everyrow operation end-to-end with output you can inspect.
+
+## Classify
+
+- [Classify and Label Data](/docs/classify-dataframe-rows-llm)
 
 ## Screen
 
@@ -32,6 +36,10 @@ Runnable case studies with real datasets. Each case study demonstrates an everyr
 - [Deduplicate Contact Lists](/docs/case-studies/merge-overlapping-contact-lists)
 - [Link Records Across Medical Datasets](/docs/case-studies/match-clinical-trials-to-papers)
 - [Merge Costs and Speed](/docs/case-studies/understanding-costs-and-speed-for-merge)
+
+## Forecast
+
+- [Automating Forecasting Questions](https://futuresearch.ai/automating-forecasting-questions/)
 
 ## Multi-Method
 

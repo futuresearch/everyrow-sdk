@@ -715,8 +715,7 @@ async def everyrow_classify(
 ) -> list[TextContent]:
     """Classify each row of a dataset into one of the provided categories.
 
-    Uses a two-phase approach: Phase 1 attempts fast batch classification with
-    web research, and Phase 2 follows up with deeper research on ambiguous rows.
+    Uses web research that scales to the difficulty of the classification.
     Each row is assigned exactly one of the provided categories.
 
     Examples:

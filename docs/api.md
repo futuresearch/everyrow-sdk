@@ -65,7 +65,7 @@ result = await classify(
 )
 ```
 
-`classify` assigns each row in a DataFrame to one of the provided categories using a two-phase approach: Phase 1 attempts fast batch classification with web research, and Phase 2 follows up with deeper research on ambiguous rows. Supports binary (yes/no) and multi-category classification with optional reasoning output.
+`classify` assigns each row in a DataFrame to one of the provided categories using web research that scales to the difficulty of the classification. Supports binary (yes/no) and multi-category classification with optional reasoning output.
 
 [Full reference →](/docs/reference/CLASSIFY)
 

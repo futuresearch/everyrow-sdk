@@ -5,29 +5,56 @@ description: API reference for the EveryRow classify tool, which assigns each ro
 
 # Classify
 
-`classify` takes a DataFrame and a list of allowed categories, then assigns each row to exactly one category. Uses a two-phase approach: Phase 1 attempts fast batch classification with web research, and Phase 2 follows up with deeper research on ambiguous rows.
+`classify` takes a DataFrame and a list of allowed categories, then assigns each row to exactly one category using web research that scales to the difficulty of the classification. Supports binary (yes/no) and multi-category classification with optional reasoning output.
 
 ## Examples
+
+### GICS sector classification
 
 ```python
 from pandas import DataFrame
 from everyrow.ops import classify
 
 companies = DataFrame([
-    {"company": "Apple Inc.", "description": "Consumer electronics and software"},
-    {"company": "JPMorgan Chase", "description": "Investment banking and financial services"},
-    {"company": "ExxonMobil", "description": "Oil and gas exploration and production"},
+    {"company": "Apple"},
+    {"company": "JPMorgan Chase"},
+    {"company": "ExxonMobil"},
+    {"company": "Pfizer"},
+    {"company": "Procter & Gamble"},
+    {"company": "Tesla"},
+    {"company": "AT&T"},
+    {"company": "Caterpillar"},
+    {"company": "Duke Energy"},
+    {"company": "Simon Property Group"},
 ])
 
 result = await classify(
-    task="Classify each company by its primary industry sector",
-    categories=["Technology", "Finance", "Healthcare", "Energy"],
+    task="Classify this company by its GICS industry sector",
+    categories=[
+        "Energy", "Materials", "Industrials", "Consumer Discretionary",
+        "Consumer Staples", "Health Care", "Financials",
+        "Information Technology", "Communication Services",
+        "Utilities", "Real Estate",
+    ],
     input=companies,
 )
 print(result.data[["company", "classification"]])
 ```
 
-The output DataFrame contains the original columns plus the classification column (default name: `classification`).
+Output:
+
+| company              | classification         |
+|----------------------|------------------------|
+| Apple                | Information Technology |
+| JPMorgan Chase       | Financials             |
+| ExxonMobil           | Energy                 |
+| Pfizer               | Health Care            |
+| Procter & Gamble     | Consumer Staples       |
+| Tesla                | Consumer Discretionary |
+| AT&T                 | Communication Services |
+| Caterpillar          | Industrials            |
+| Duke Energy          | Utilities              |
+| Simon Property Group | Real Estate            |
 
 ### Binary classification
 

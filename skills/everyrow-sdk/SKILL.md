@@ -12,10 +12,12 @@ everyrow gives Claude a research team for your data. Use this skill when writing
 > - GitHub: [github.com/futuresearch/everyrow-sdk](https://github.com/futuresearch/everyrow-sdk)
 
 **Operations:**
+- Classify rows into predefined categories
 - Rank/score rows based on qualitative criteria
 - Deduplicate data using semantic understanding
 - Merge tables using AI-powered matching
 - Screen/filter rows based on research-intensive criteria
+- Forecast probabilities for binary questions
 - Run AI agents over dataframe rows
 
 ## Installation
@@ -28,7 +30,7 @@ pip install everyrow
 
 ### MCP Server (for Claude Code, Claude Desktop, Cursor, etc.)
 
-If an MCP server is available (`everyrow_screen`, `everyrow_rank`, etc. tools), you can use it directly without writing Python code. The MCP server operates on local CSV files.
+If an MCP server is available (`everyrow_classify`, `everyrow_screen`, `everyrow_rank`, etc. tools), you can use it directly without writing Python code. The MCP server operates on local CSV files.
 
 To install the MCP server, add to your MCP config:
 
@@ -84,6 +86,16 @@ export EVERYROW_API_KEY=<their_key>
 
 If you have the everyrow MCP server configured, these tools operate directly on CSV files.
 
+### everyrow_classify
+Classify each row into one of the provided categories.
+```
+Parameters:
+- task: Natural language classification instructions
+- categories: Allowed categories (minimum 2)
+- classification_field: (optional) Output column name (default: "classification")
+- include_reasoning: (optional) Include reasoning column (default: false)
+```
+
 ### everyrow_screen
 Filter CSV rows based on criteria that require judgment.
 ```
@@ -127,6 +139,13 @@ Parameters:
 - merge_on_right: (optional) Only set if you expect exact string matches on the chosen column or want to draw agent attention to it. Fine to omit.
 - relationship_type: (optional) Defaults to "many_to_one", which is correct in most cases (e.g. products → companies). Only set "one_to_one" when both tables have unique entities of the same kind.
 - use_web_search: (optional) "auto" (default), "yes", or "no"
+```
+
+### everyrow_forecast
+Forecast the probability of binary questions.
+```
+Parameters:
+- context: (optional) Batch-level context for all questions
 ```
 
 ### everyrow_agent
@@ -244,6 +263,48 @@ print(result.data.head())
 
 Parameters: `task`, `left_table`, `right_table`, `merge_on_left`, `merge_on_right`, `relationship_type`, `use_web_search`, `session`
 
+### classify - Categorize rows
+
+Assign each row to one of the provided categories:
+
+```python
+from everyrow.ops import classify
+
+result = await classify(
+    task="Classify this company by its GICS industry sector",
+    categories=["Energy", "Materials", "Industrials", "Consumer Discretionary",
+                 "Consumer Staples", "Health Care", "Financials",
+                 "Information Technology", "Communication Services",
+                 "Utilities", "Real Estate"],
+    input=companies,
+)
+print(result.data[["company", "classification"]])
+```
+
+**Binary classification** - for yes/no questions, use two categories:
+
+```python
+result = await classify(
+    task="Is this company founder-led?",
+    categories=["yes", "no"],
+    input=companies,
+)
+```
+
+**With reasoning** - understand why each row was classified:
+
+```python
+result = await classify(
+    task="Classify each company by its primary industry sector",
+    categories=["Technology", "Finance", "Healthcare", "Energy"],
+    input=companies,
+    classification_field="sector",
+    include_reasoning=True,
+)
+```
+
+Parameters: `task`, `categories`, `input`, `classification_field` (default: "classification"), `include_reasoning` (default: False), `session`
+
 ### screen - Evaluate and filter rows
 
 Filter rows based on criteria that require research:
@@ -283,6 +344,24 @@ result = await screen(
 ```
 
 Parameters: `task`, `input`, `response_model`, `session`
+
+### forecast - Predict probabilities
+
+Produce calibrated probability estimates for binary questions:
+
+```python
+from everyrow.ops import forecast
+
+result = await forecast(
+    input=DataFrame([
+        {"question": "Will the US Federal Reserve cut rates by at least 25bp before July 1, 2027?",
+         "resolution_criteria": "Resolves YES if the Fed announces at least one rate cut of 25bp or more."},
+    ]),
+)
+print(result.data[["question", "probability", "rationale"]])
+```
+
+Parameters: `input`, `context`, `session`
 
 ### single_agent - Single input task
 
@@ -412,7 +491,7 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 
 ## Everyrow Long-Running Operations (MCP)
 
-Everyrow operations (screen, rank, dedupe, merge, agent) take 1-10+ minutes.
+Everyrow operations (classify, screen, rank, dedupe, merge, forecast, agent) take 1-10+ minutes.
 All MCP tools use an async pattern:
 
 1. Call the operation tool (e.g., `everyrow_agent(...)`) to get task_id and session_url

@@ -65,6 +65,29 @@ Join two CSVs using intelligent entity matching (LEFT JOIN semantics).
 
 Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
 
+### everyrow_classify
+
+Classify each row into one of the provided categories.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `task` | string | Yes | Classification instructions. |
+| `categories` | list[string] | Yes | Allowed categories (minimum 2). Each row is assigned exactly one. |
+| `classification_field` | string | No | Output column name (default: `"classification"`). |
+| `include_reasoning` | boolean | No | Include a reasoning column (default: false). |
+
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
+
+### everyrow_forecast
+
+Forecast the probability of binary questions.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `context` | string | No | Optional batch-level context for all questions. |
+
+Returns `task_id` and `session_url`. Call `everyrow_progress` to monitor.
+
 ### everyrow_agent
 
 Run web research agents on each row.

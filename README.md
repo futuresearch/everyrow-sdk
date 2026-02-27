@@ -29,7 +29,7 @@ Spin up a team of:
 | [**Agents**](https://everyrow.io/docs/reference/RESEARCH)       | Research, then analyze     | 1–3¢/researcher    | 10k rows |
 | [**Forecasters**](https://everyrow.io/docs/reference/FORECAST)  | Predict outcomes           | 20-50¢/researcher  | 10k rows |
 | [**Scorers**](https://everyrow.io/docs/reference/RANK)          | Research, then score       | 1-5¢/researcher    | 10k rows |
-| [**Classifiers**](https://everyrow.io/docs/reference/SCREEN)    | Research, then categorize  | 0.1-0.7¢/researcher | 10k rows |
+| [**Classifiers**](https://everyrow.io/docs/reference/CLASSIFY)  | Research, then categorize  | 0.1-0.7¢/researcher | 10k rows |
 | [**Matchers**](https://everyrow.io/docs/reference/MERGE)        | Find matching rows         | 0.2-0.5¢/researcher | 20k rows |
 
 See the full [API reference](https://everyrow.io/docs/api), [guides](https://everyrow.io/docs/guides), and [case studies](https://everyrow.io/docs/case-studies), (for example, see our [case study](https://everyrow.io/docs/case-studies/llm-web-research-agents-at-scale) running a `Research` task on 10k rows, running agents that used 120k LLM calls.)
@@ -203,23 +203,23 @@ Requires Python 3.12+. Then you can use the SDK directly:
 ```python
 import asyncio
 import pandas as pd
-from everyrow.ops import screen
-from pydantic import BaseModel, Field
+from everyrow.ops import classify
 
 companies = pd.DataFrame([
-    {"company": "Airtable",}, {"company": "Vercel",}, {"company": "Notion",}
+    {"company": "Apple"}, {"company": "JPMorgan Chase"}, {"company": "ExxonMobil"},
+    {"company": "Tesla"}, {"company": "Pfizer"}, {"company": "Duke Energy"},
 ])
 
-class JobScreenResult(BaseModel):
-    qualifies: bool = Field(description="True if company lists jobs with all criteria")
-
 async def main():
-    result = await screen(
-        task="""Qualifies if: 1. Remote-friendly, 2. Senior, and 3. Discloses salary""",
+    result = await classify(
+        task="Classify this company by its GICS industry sector",
+        categories=["Energy", "Materials", "Industrials", "Consumer Discretionary",
+                     "Consumer Staples", "Health Care", "Financials",
+                     "Information Technology", "Communication Services",
+                     "Utilities", "Real Estate"],
         input=companies,
-        response_model=JobScreenResult,
     )
-    print(result.data.head())
+    print(result.data[["company", "classification"]])
 
 asyncio.run(main())
 ```
