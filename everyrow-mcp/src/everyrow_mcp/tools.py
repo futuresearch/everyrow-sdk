@@ -544,7 +544,8 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
     - merge_on_left/merge_on_right: only set if you expect exact string matches on
       the chosen columns or want to draw agent attention to them. Fine to omit.
     - relationship_type: defaults to many_to_one, which is correct in most cases.
-      Only set one_to_one when both tables have unique entities of the same kind.
+      For one_to_many and many_to_many, multiple right-table matches are joined
+      with " | " in each added column.
 
     Examples:
     - Match software products (left, enriched) to parent companies (right, lookup):
@@ -553,6 +554,12 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
       Genentech -> Roche. relationship_type: many_to_one.
     - Join two contact lists with different name formats:
       relationship_type: one_to_one (each person appears once in each list).
+    - Match a company (left) to its products (right):
+      relationship_type: one_to_many (one company has many products;
+      matched product names joined with " | ").
+    - Match companies (left) to investors (right):
+      relationship_type: many_to_many (companies share investors and vice versa;
+      matched values joined with " | ").
 
     This function submits the task and returns immediately with a task_id and session_url.
     After receiving a result from this tool, share the session_url with the user.

@@ -354,20 +354,22 @@ class MergeInput(BaseModel):
 
     merge_on_left: str | None = Field(
         default=None,
-        description="Column name in the left table to match on.",
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
     merge_on_right: str | None = Field(
         default=None,
-        description="Column name in the right table to match on.",
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
 
     use_web_search: Literal["auto", "yes", "no"] | None = Field(
         default=None,
         description='Control web search: "auto", "yes", or "no".',
     )
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+    relationship_type: (
+        Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None
+    ) = Field(
         default=None,
-        description="Relationship type: many_to_one (default) or one_to_one.",
+        description='Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.',
     )
 
     session_id: str | None = Field(

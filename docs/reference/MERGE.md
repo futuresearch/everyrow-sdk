@@ -57,7 +57,7 @@ A DataFrame with all left table columns plus matched right table columns. Rows t
 | `right_table` | DataFrame | The lookup/reference table — its columns are appended to matches; unmatched left rows get nulls. |
 | `merge_on_left` | Optional[str] | Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted. |
 | `merge_on_right` | Optional[str] | Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted. |
-| `relationship_type` | Optional[str] | `"many_to_one"` (default) — multiple left rows can match one right row. `"one_to_one"` — only when both tables have unique entities of the same kind. |
+| `relationship_type` | Optional[str] | `"many_to_one"` (default) — multiple left rows can match one right row. `"one_to_one"` — unique matching between left and right rows. `"one_to_many"` — one left row can match multiple right rows. `"many_to_many"` — multiple left rows can match multiple right rows. For `one_to_many` and `many_to_many`, multiple matches are joined with `" \| "` in each added column. |
 | `use_web_search` | Optional[str] | `"auto"` (default), `"yes"`, or `"no"`. Controls whether agents use web search to resolve matches. |
 | `session` | Session | Optional, auto-created if omitted |
 

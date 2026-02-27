@@ -71,6 +71,7 @@ SKIPPED_URLS: set[str] = {
     "https://www.kaggle.com/code/rafaelpoyiadzi/active-learning-with-an-llm-oracle",
     "https://www.kaggle.com/datasets/tunguz/pubmed-title-abstracts-2019-baseline",
     "https://arxiv.org/abs/2506.21558",
+    "https://media.githubusercontent.com/media/futuresearch/everyrow-sdk/refs/heads/main/docs/data/fda_products.csv"
 }
 
 
