@@ -1316,17 +1316,17 @@ async def everyrow_list_session_tasks(
     lines = [f"Found {len(tasks)} task(s) in session {params.session_id}:\n"]
     for t in tasks:
         output = (
-            f" | output_artifact: {t['output_artifact_id']}"
+            f" | output_artifact_id: {t['output_artifact_id']}"
             if t.get("output_artifact_id")
             else ""
         )
         inputs = (
-            f" | inputs: {t['input_artifact_ids']}"
+            f" | input_artifact_ids: {t['input_artifact_ids']}"
             if t.get("input_artifact_ids")
             else ""
         )
         context = (
-            f" | context: {t['context_artifact_ids']}"
+            f" | context_artifact_ids: {t['context_artifact_ids']}"
             if t.get("context_artifact_ids")
             else ""
         )
