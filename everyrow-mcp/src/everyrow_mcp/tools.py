@@ -122,6 +122,10 @@ async def _write_results_to_sheet(
         get_google_token,
         records_to_values,
     )
+    from everyrow_mcp.sheets_tools import _check_sheets_rate_limit  # noqa: PLC0415
+
+    if denied := await _check_sheets_rate_limit():
+        return denied
 
     token = await get_google_token()
     async with GoogleSheetsClient(token) as client:
@@ -1146,7 +1150,7 @@ async def everyrow_results_stdio(
     ]
 
 
-async def everyrow_results_http(
+async def everyrow_results_http(  # noqa: PLR0911
     params: HttpResultsInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Retrieve results from a completed everyrow task.

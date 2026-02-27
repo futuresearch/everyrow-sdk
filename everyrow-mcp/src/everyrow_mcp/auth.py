@@ -487,7 +487,11 @@ class EveryRowAuthProvider(
                     expires_in=expires_in,
                 )
             except Exception:
-                logger.warning("Could not store Google token during token issue")
+                logger.error(
+                    "Google token storage failed for user=%s — Sheets tools will be unavailable",
+                    jwt_claims.get("sub", "unknown"),
+                    exc_info=True,
+                )
 
         rt_str = secrets.token_urlsafe(32)
         rt = EveryRowRefreshToken(
