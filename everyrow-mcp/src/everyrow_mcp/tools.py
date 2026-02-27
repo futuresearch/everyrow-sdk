@@ -1005,7 +1005,7 @@ async def everyrow_progress(
     unless the task is completed or failed. The tool handles pacing internally.
     Do not add commentary between progress calls, just call again immediately.
     """
-    logger.info("everyrow_progress: task_id=%s", params.task_id)
+    logger.debug("everyrow_progress: task_id=%s", params.task_id)
     client = _get_client(ctx)
     task_id = params.task_id
 
@@ -1045,6 +1045,10 @@ async def everyrow_progress(
 
     ts = TaskState(status_response)
     ts.write_file(task_id)
+
+    # Only log at INFO for terminal states to avoid noise from polling loops
+    if ts.is_terminal:
+        logger.info("everyrow_progress: task_id=%s status=%s", task_id, ts.status.value)
 
     return [TextContent(type="text", text=ts.progress_message(task_id))]
 
