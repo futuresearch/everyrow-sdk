@@ -1323,6 +1323,7 @@ async def everyrow_list_session_tasks(
     Use this to find task IDs for a session so you can display previous results
     with mcp__display__show_task(task_id, label).
     """
+    logger.info("everyrow_list_session_tasks: session_id=%s", params.session_id)
     client = _get_client(ctx)
 
     try:
