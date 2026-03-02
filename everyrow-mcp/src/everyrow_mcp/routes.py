@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import secrets
@@ -314,7 +315,7 @@ async def api_download(request: Request) -> Response:  # noqa: PLR0911
 
     # CSV generated on-the-fly from the stored JSON.
     records: list[dict] = json.loads(json_text)
-    csv_text = pd.DataFrame(records).to_csv(index=False)
+    csv_text = pd.DataFrame(records).to_csv(index=False, quoting=csv.QUOTE_ALL)
 
     safe_prefix = "".join(c for c in task_id[:8] if c.isalnum() or c == "-")
     return Response(

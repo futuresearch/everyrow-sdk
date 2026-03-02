@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import secrets
 from datetime import UTC, datetime
@@ -424,6 +426,67 @@ class TestApiDownloadToken:
         dl_resp = await api_download(dl_req)  # pyright: ignore[reportArgumentType]
         assert dl_resp.status_code == 200
         assert "val1" in dl_resp.body.decode()  # pyright: ignore[reportAttributeAccessIssue]
+
+
+    @pytest.mark.asyncio
+    async def test_csv_download_quotes_all_fields(self):
+        """CSV download uses QUOTE_ALL so commas in text never break parsing."""
+        task_id = str(uuid4())
+        poll_token = secrets.token_urlsafe(16)
+        json_text = json.dumps(
+            [
+                {
+                    "company": "Acme, Inc.",
+                    "description": 'Makes "great" widgets, bolts',
+                    "revenue": 1000000,
+                },
+                {
+                    "company": "Simple Co",
+                    "description": "No special chars",
+                    "revenue": 500,
+                },
+            ]
+        )
+
+        await redis_store.store_poll_token(task_id, poll_token, user_id="test-user")
+        await redis_store.store_task_owner(task_id, "test-user")
+        await redis_store.store_result_json(task_id, json_text)
+
+        # Mint a download token
+        mint_req = FakeRequest(
+            path_params={"task_id": task_id},
+            headers={"authorization": f"Bearer {poll_token}"},
+        )
+        mint_resp = await api_download_token(mint_req)  # pyright: ignore[reportArgumentType]
+        dl_token = json.loads(bytes(mint_resp.body).decode())["download_url"].split(
+            "token="
+        )[1]
+
+        # Download CSV
+        dl_req = FakeRequest(
+            path_params={"task_id": task_id},
+            query_params={"token": dl_token},
+        )
+        dl_resp = await api_download(dl_req)  # pyright: ignore[reportArgumentType]
+        assert dl_resp.status_code == 200
+
+        csv_body = dl_resp.body.decode()  # pyright: ignore[reportAttributeAccessIssue]
+
+        # Every field (including headers and numbers) should be quoted
+        reader = csv.reader(io.StringIO(csv_body))
+        rows = list(reader)
+        assert len(rows) == 3  # header + 2 data rows
+
+        # Headers are quoted
+        assert rows[0] == ["company", "description", "revenue"]
+
+        # Commas and embedded quotes survive round-trip
+        assert rows[1][0] == "Acme, Inc."
+        assert rows[1][1] == 'Makes "great" widgets, bolts'
+        assert rows[1][2] == "1000000"
+
+        # Simple values also quoted (QUOTE_ALL)
+        assert rows[2][0] == "Simple Co"
 
 
 class TestCorsHeaders:

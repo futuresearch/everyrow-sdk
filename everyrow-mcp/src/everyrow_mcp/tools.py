@@ -1,6 +1,7 @@
 """MCP tool functions for the everyrow MCP server."""
 
 import asyncio
+import csv
 import json
 import logging
 from pathlib import Path
@@ -214,7 +215,7 @@ async def everyrow_use_list(
             df, _, _ = await _fetch_task_result(client, str(result.task_id))
 
             csv_path = Path.cwd() / f"built-in-list-{result.artifact_id}.csv"
-            df.to_csv(csv_path, index=False)
+            df.to_csv(csv_path, index=False, quoting=csv.QUOTE_ALL)
     except Exception as e:
         return [TextContent(type="text", text=f"Error importing built-in list: {e!r}")]
 
