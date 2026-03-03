@@ -89,7 +89,7 @@ class Settings(BaseSettings):
         description="Maximum rows allowed in inline data (list[dict]).",
     )
     auto_page_size_threshold: int = Field(
-        default=100,
+        default=10,
         description="If total rows <= this value, skip asking the user for page_size and load all rows directly.",
     )
 
