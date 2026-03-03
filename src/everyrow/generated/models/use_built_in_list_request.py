@@ -9,46 +9,41 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="CreateArtifactResponse")
+T = TypeVar("T", bound="UseBuiltInListRequest")
 
 
 @_attrs_define
-class CreateArtifactResponse:
+class UseBuiltInListRequest:
     """
     Attributes:
-        artifact_id (UUID): The ID of the created artifact
-        session_id (UUID): The session ID (auto-created if not provided)
-        task_id (None | Unset | UUID): The task ID (present for CSV and upload_data uploads)
+        artifact_id (UUID): Artifact ID from browse results
+        session_id (None | Unset | UUID): Session to copy the list into. If not provided, a new session is auto-created.
     """
 
     artifact_id: UUID
-    session_id: UUID
-    task_id: None | Unset | UUID = UNSET
+    session_id: None | Unset | UUID = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         artifact_id = str(self.artifact_id)
 
-        session_id = str(self.session_id)
-
-        task_id: None | str | Unset
-        if isinstance(self.task_id, Unset):
-            task_id = UNSET
-        elif isinstance(self.task_id, UUID):
-            task_id = str(self.task_id)
+        session_id: None | str | Unset
+        if isinstance(self.session_id, Unset):
+            session_id = UNSET
+        elif isinstance(self.session_id, UUID):
+            session_id = str(self.session_id)
         else:
-            task_id = self.task_id
+            session_id = self.session_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
                 "artifact_id": artifact_id,
-                "session_id": session_id,
             }
         )
-        if task_id is not UNSET:
-            field_dict["task_id"] = task_id
+        if session_id is not UNSET:
+            field_dict["session_id"] = session_id
 
         return field_dict
 
@@ -57,9 +52,7 @@ class CreateArtifactResponse:
         d = dict(src_dict)
         artifact_id = UUID(d.pop("artifact_id"))
 
-        session_id = UUID(d.pop("session_id"))
-
-        def _parse_task_id(data: object) -> None | Unset | UUID:
+        def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:
                 return data
             if isinstance(data, Unset):
@@ -67,23 +60,22 @@ class CreateArtifactResponse:
             try:
                 if not isinstance(data, str):
                     raise TypeError()
-                task_id_type_0 = UUID(data)
+                session_id_type_0 = UUID(data)
 
-                return task_id_type_0
+                return session_id_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(None | Unset | UUID, data)
 
-        task_id = _parse_task_id(d.pop("task_id", UNSET))
+        session_id = _parse_session_id(d.pop("session_id", UNSET))
 
-        create_artifact_response = cls(
+        use_built_in_list_request = cls(
             artifact_id=artifact_id,
             session_id=session_id,
-            task_id=task_id,
         )
 
-        create_artifact_response.additional_properties = d
-        return create_artifact_response
+        use_built_in_list_request.additional_properties = d
+        return use_built_in_list_request
 
     @property
     def additional_keys(self) -> list[str]:

@@ -87,11 +87,11 @@ async def test_create_scalar_artifact(mocker, mock_session):
 
     model = MyModel(name="John", age=30)
     artifact_id = uuid.uuid4()
-
-    mock_create = mocker.patch(
-        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
+    mock_upload = mocker.patch(
+        "everyrow.ops.upload_data_artifacts_upload_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_create.return_value = CreateArtifactResponse(
+    mock_upload.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
         session_id=mock_session.session_id,
     )
@@ -99,7 +99,11 @@ async def test_create_scalar_artifact(mocker, mock_session):
     result_artifact_id = await create_scalar_artifact(model, mock_session)
 
     assert result_artifact_id == artifact_id
-    assert mock_create.called
+    mock_upload.assert_awaited_once()
+    call_kwargs = mock_upload.call_args.kwargs
+    body = call_kwargs["body"]
+    assert body.to_dict()["data"] == {"name": "John", "age": 30}
+    assert body.session_id == mock_session.session_id
 
 
 @pytest.mark.asyncio
@@ -341,11 +345,11 @@ async def test_rank_model_validation(mock_session) -> None:
 async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
     """NaN values should be converted to None for JSON compatibility."""
     artifact_id = uuid.uuid4()
-
-    mock_create = mocker.patch(
-        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
+    mock_upload = mocker.patch(
+        "everyrow.ops.upload_data_artifacts_upload_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_create.return_value = CreateArtifactResponse(
+    mock_upload.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
         session_id=mock_session.session_id,
     )
@@ -353,10 +357,9 @@ async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
     df_with_nan = pd.DataFrame([{"name": "Alice", "age": np.nan}])
     await create_table_artifact(df_with_nan, mock_session)
 
-    call_args = mock_create.call_args
-    body = call_args.kwargs["body"]
-    # data is a list of CreateArtifactRequestDataType0Item
-    records = [item.additional_properties for item in body.data]
+    call_kwargs = mock_upload.call_args.kwargs
+    body = call_kwargs["body"]
+    records = [item.to_dict() for item in body.data]
     assert records == [{"name": "Alice", "age": None}]
 
 
@@ -364,11 +367,11 @@ async def test_create_table_artifact_converts_nan_to_none(mocker, mock_session):
 async def test_create_table_artifact_preserves_valid_values(mocker, mock_session):
     """Non-NaN values should be passed through unchanged."""
     artifact_id = uuid.uuid4()
-
-    mock_create = mocker.patch(
-        "everyrow.ops.create_artifact_artifacts_post.asyncio", new_callable=AsyncMock
+    mock_upload = mocker.patch(
+        "everyrow.ops.upload_data_artifacts_upload_post.asyncio",
+        new_callable=AsyncMock,
     )
-    mock_create.return_value = CreateArtifactResponse(
+    mock_upload.return_value = CreateArtifactResponse(
         artifact_id=artifact_id,
         session_id=mock_session.session_id,
     )
@@ -376,9 +379,9 @@ async def test_create_table_artifact_preserves_valid_values(mocker, mock_session
     df = pd.DataFrame([{"name": "Alice", "age": 30}])
     await create_table_artifact(df, mock_session)
 
-    call_args = mock_create.call_args
-    body = call_args.kwargs["body"]
-    records = [item.additional_properties for item in body.data]
+    call_kwargs = mock_upload.call_args.kwargs
+    body = call_kwargs["body"]
+    records = [item.to_dict() for item in body.data]
     assert records == [{"name": "Alice", "age": 30}]
 
 

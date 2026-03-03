@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from everyrow.api_utils import handle_response
 from everyrow.constants import EveryrowError
-from everyrow.generated.api.artifacts import create_artifact_artifacts_post
+from everyrow.generated.api.artifacts import upload_data_artifacts_upload_post
 from everyrow.generated.api.operations import (
     agent_map_operations_agent_map_post,
     classify_operations_classify_post,
@@ -24,9 +24,6 @@ from everyrow.generated.models import (
     AgentMapOperationResponseSchemaType0,
     ClassifyOperation,
     ClassifyOperationInputType1Item,
-    CreateArtifactRequest,
-    CreateArtifactRequestDataType0Item,
-    CreateArtifactRequestDataType1,
     DedupeOperation,
     DedupeOperationInputType1Item,
     DedupeOperationStrategy,
@@ -47,6 +44,9 @@ from everyrow.generated.models import (
     SingleAgentOperationInputType1Item,
     SingleAgentOperationInputType2,
     SingleAgentOperationResponseSchemaType0,
+    UploadDataArtifactsUploadPostJsonBody,
+    UploadDataArtifactsUploadPostJsonBodyDataType0Item,
+    UploadDataArtifactsUploadPostJsonBodyDataType1,
 )
 from everyrow.generated.types import UNSET
 from everyrow.result import MergeResult, Result, ScalarResult, TableResult
@@ -117,11 +117,13 @@ def _prepare_single_input[TItem, TObj](
 
 async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
     """Create a scalar artifact by uploading a single record."""
-    body = CreateArtifactRequest(
-        data=CreateArtifactRequestDataType1.from_dict(input.model_dump()),
+    body = UploadDataArtifactsUploadPostJsonBody(
+        data=UploadDataArtifactsUploadPostJsonBodyDataType1.from_dict(
+            input.model_dump()
+        ),
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(
+    response = await upload_data_artifacts_upload_post.asyncio(
         client=session.client, body=body
     )
     response = handle_response(response)
@@ -131,11 +133,14 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
     """Create a table artifact by uploading a list of records."""
     records = _df_to_records(input)
-    body = CreateArtifactRequest(
-        data=[CreateArtifactRequestDataType0Item.from_dict(r) for r in records],
+    body = UploadDataArtifactsUploadPostJsonBody(
+        data=[
+            UploadDataArtifactsUploadPostJsonBodyDataType0Item.from_dict(r)
+            for r in records
+        ],
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(
+    response = await upload_data_artifacts_upload_post.asyncio(
         client=session.client, body=body
     )
     response = handle_response(response)

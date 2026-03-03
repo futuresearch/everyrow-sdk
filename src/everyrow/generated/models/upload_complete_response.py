@@ -7,23 +7,25 @@ from uuid import UUID
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..types import UNSET, Unset
-
-T = TypeVar("T", bound="CreateArtifactResponse")
+T = TypeVar("T", bound="UploadCompleteResponse")
 
 
 @_attrs_define
-class CreateArtifactResponse:
+class UploadCompleteResponse:
     """
     Attributes:
-        artifact_id (UUID): The ID of the created artifact
-        session_id (UUID): The session ID (auto-created if not provided)
-        task_id (None | Unset | UUID): The task ID (present for CSV and upload_data uploads)
+        artifact_id (UUID): The ID of the created group artifact
+        session_id (UUID): The session ID
+        rows (int): Number of data rows in the uploaded CSV
+        columns (list[str]): Column names from the CSV header
+        size_bytes (int): Size of the uploaded file in bytes
     """
 
     artifact_id: UUID
     session_id: UUID
-    task_id: None | Unset | UUID = UNSET
+    rows: int
+    columns: list[str]
+    size_bytes: int
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -31,13 +33,11 @@ class CreateArtifactResponse:
 
         session_id = str(self.session_id)
 
-        task_id: None | str | Unset
-        if isinstance(self.task_id, Unset):
-            task_id = UNSET
-        elif isinstance(self.task_id, UUID):
-            task_id = str(self.task_id)
-        else:
-            task_id = self.task_id
+        rows = self.rows
+
+        columns = self.columns
+
+        size_bytes = self.size_bytes
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -45,10 +45,11 @@ class CreateArtifactResponse:
             {
                 "artifact_id": artifact_id,
                 "session_id": session_id,
+                "rows": rows,
+                "columns": columns,
+                "size_bytes": size_bytes,
             }
         )
-        if task_id is not UNSET:
-            field_dict["task_id"] = task_id
 
         return field_dict
 
@@ -59,31 +60,22 @@ class CreateArtifactResponse:
 
         session_id = UUID(d.pop("session_id"))
 
-        def _parse_task_id(data: object) -> None | Unset | UUID:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            try:
-                if not isinstance(data, str):
-                    raise TypeError()
-                task_id_type_0 = UUID(data)
+        rows = d.pop("rows")
 
-                return task_id_type_0
-            except (TypeError, ValueError, AttributeError, KeyError):
-                pass
-            return cast(None | Unset | UUID, data)
+        columns = cast(list[str], d.pop("columns"))
 
-        task_id = _parse_task_id(d.pop("task_id", UNSET))
+        size_bytes = d.pop("size_bytes")
 
-        create_artifact_response = cls(
+        upload_complete_response = cls(
             artifact_id=artifact_id,
             session_id=session_id,
-            task_id=task_id,
+            rows=rows,
+            columns=columns,
+            size_bytes=size_bytes,
         )
 
-        create_artifact_response.additional_properties = d
-        return create_artifact_response
+        upload_complete_response.additional_properties = d
+        return upload_complete_response
 
     @property
     def additional_keys(self) -> list[str]:

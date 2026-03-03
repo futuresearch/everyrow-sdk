@@ -9,6 +9,8 @@ class PublicTaskType(str, Enum):
     MERGE = "merge"
     RANK = "rank"
     SCREEN = "screen"
+    UPLOAD_CSV = "upload_csv"
+    UPLOAD_DATA = "upload_data"
 
     def __str__(self) -> str:
         return str(self.value)
