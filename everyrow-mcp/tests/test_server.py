@@ -27,7 +27,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
-from mcp.types import TextContent
+from mcp.types import CallToolResult, TextContent
 from pydantic import ValidationError
 
 from everyrow_mcp import redis_store
@@ -693,25 +693,23 @@ class TestResults:
             [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
         )
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://storage.googleapis.com/signed/data.csv",
-                        "preview": [
-                            {"name": "A", "val": "1"},
-                            {"name": "B", "val": "2"},
-                        ],
-                        "total": 2,
-                    }
+        store_response = CallToolResult(
+            content=[
+                TextContent(
+                    type="text",
+                    text="Results: 2 rows, 2 columns (name, val). All rows shown.",
                 ),
-            ),
-            TextContent(
-                type="text",
-                text="Results: 2 rows, 2 columns (name, val). All rows shown.",
-            ),
-        ]
+            ],
+            structuredContent={
+                "csv_url": "https://storage.googleapis.com/signed/data.csv",
+                "preview": [
+                    {"name": "A", "val": "1"},
+                    {"name": "B", "val": "2"},
+                ],
+                "total": 2,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -737,10 +735,11 @@ class TestResults:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert "csv_url" in widget_data
-        assert "2 rows" in result[1].text
+        assert result.structuredContent is not None
+        assert "csv_url" in result.structuredContent
+        block = result.content[0]
+        assert isinstance(block, TextContent)
+        assert "2 rows" in block.text
 
     @pytest.mark.asyncio
     async def test_results_http_cache_hit(self):
@@ -1591,19 +1590,15 @@ class TestResultsWidgetData:
         result_response = _make_task_result_response([{"name": "A"}])
         csv_url = "https://example.com/api/results/123/download?token=abc"
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": csv_url,
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": csv_url,
+                "preview": [{"name": "A"}],
+                "total": 1,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1629,9 +1624,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert widget_data["csv_url"] == csv_url
+        assert result.structuredContent is not None
+        assert result.structuredContent["csv_url"] == csv_url
 
     @pytest.mark.asyncio
     async def test_http_widget_omits_session_url_when_unavailable(self):
@@ -1643,19 +1637,15 @@ class TestResultsWidgetData:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response([{"name": "A"}])
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://example.com/download",
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": "https://example.com/download",
+                "preview": [{"name": "A"}],
+                "total": 1,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1681,9 +1671,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert "session_url" not in widget_data
+        assert result.structuredContent is not None
+        assert "session_url" not in result.structuredContent
 
     @pytest.mark.asyncio
     async def test_http_widget_includes_session_url(self):
@@ -1699,20 +1688,16 @@ class TestResultsWidgetData:
         )
         result_response = _make_task_result_response([{"name": "A"}])
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://example.com/download",
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                        "session_url": session_url,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": "https://example.com/download",
+                "preview": [{"name": "A"}],
+                "total": 1,
+                "session_url": session_url,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1738,9 +1723,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert widget_data["session_url"] == session_url
+        assert result.structuredContent is not None
+        assert result.structuredContent["session_url"] == session_url
 
 
 # ---------- Session resumption / naming ----------

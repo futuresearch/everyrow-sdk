@@ -30,7 +30,7 @@ from everyrow.ops import (
 from everyrow.session import create_session, get_session_url, list_sessions
 from everyrow.task import cancel_task
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.types import TextContent, ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp import redis_store
@@ -77,6 +77,14 @@ from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
 logger = logging.getLogger(__name__)
 
 
+def _error_result(text: str) -> CallToolResult:
+    """Build an error CallToolResult with a single text message."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        isError=True,
+    )
+
+
 async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
     """Verify the current user owns *task_id*. Returns an error response if
     access should be denied, or ``None`` if the caller may proceed.
@@ -92,8 +100,7 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
         logger.error("No owner recorded for task %s — denying access", task_id)
         return [
             TextContent(
-                type="text",
-                text="Access denied: task ownership could not be verified.",
+                type="text", text="Access denied: task ownership could not be verified."
             )
         ]
 
@@ -102,8 +109,7 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
     if not user_id or user_id != owner:
         return [
             TextContent(
-                type="text",
-                text="Access denied: this task belongs to another user.",
+                type="text", text="Access denied: this task belongs to another user."
             )
         ]
     return None
@@ -1018,8 +1024,7 @@ async def everyrow_progress(
         logger.exception("Could not verify task ownership for %s", task_id)
         return [
             TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
+                type="text", text="Unable to verify task ownership. Please try again."
             )
         ]
 
@@ -1072,8 +1077,8 @@ async def everyrow_results_stdio(
             TextContent(
                 type="text",
                 text=dedent(f"""\
-                    Task status is {e.status}. Cannot fetch results yet.
-                    Call everyrow_progress(task_id='{task_id}') to check again."""),
+            Task status is {e.status}. Cannot fetch results yet.
+            Call everyrow_progress(task_id='{task_id}') to check again."""),
             )
         ]
     except Exception:
@@ -1102,13 +1107,16 @@ async def everyrow_results_stdio(
 
 async def everyrow_results_http(
     params: HttpResultsInput, ctx: EveryRowContext
-) -> list[TextContent]:
+) -> CallToolResult:
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
     The user always has access to all rows via the widget — page_size only
     controls how many rows _you_ can read.
     After results load, tell the user how many rows you can see vs the total.
+
+    Returns CallToolResult with structuredContent for the widget (not sent to
+    the LLM) and content with summary + data for the LLM.
     """
     logger.info(
         "everyrow_results (http): task_id=%s offset=%s page_size=%s",
@@ -1129,15 +1137,10 @@ async def everyrow_results_http(
     # ── Cross-user access check ──────────────────────────────────
     try:
         if denied := await _check_task_ownership(task_id):
-            return denied
+            return CallToolResult(content=denied, isError=True)  # pyright: ignore[reportArgumentType]  # list invariance
     except Exception:
         logger.exception("Could not verify task ownership for %s", task_id)
-        return [
-            TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
-            )
-        ]
+        return _error_result("Unable to verify task ownership. Please try again.")
 
     # ── Return from cache if available ───────────────────────────
     cached = await try_cached_result(
@@ -1156,22 +1159,16 @@ async def everyrow_results_http(
         df, session_id, artifact_id = await _fetch_task_result(client, task_id)
         session_url = get_session_url(UUID(session_id)) if session_id else ""
     except TaskNotReady as e:
-        return [
-            TextContent(
-                type="text",
-                text=dedent(f"""\
-                    Task status is {e.status}. Cannot fetch results yet.
-                    Call everyrow_progress(task_id='{task_id}') to check again."""),
-            )
-        ]
+        return _error_result(
+            dedent(f"""\
+            Task status is {e.status}. Cannot fetch results yet.
+            Call everyrow_progress(task_id='{task_id}') to check again.""")
+        )
     except Exception:
         logger.exception("Failed to retrieve results for task %s", task_id)
-        return [
-            TextContent(
-                type="text",
-                text=f"Error retrieving results for task {task_id}. Please try again.",
-            )
-        ]
+        return _error_result(
+            f"Error retrieving results for task {task_id}. Please try again."
+        )
 
     # output_path is accepted by the schema but ignored in HTTP mode —
     # the server must not write to its own filesystem on remote request.
@@ -1398,8 +1395,7 @@ async def everyrow_cancel(
         logger.exception("Could not verify task ownership for %s", task_id)
         return [
             TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
+                type="text", text="Unable to verify task ownership. Please try again."
             )
         ]
 

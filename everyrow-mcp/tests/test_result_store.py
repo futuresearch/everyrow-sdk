@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import secrets
+from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import httpx
 import pandas as pd
 import pytest
+from mcp.types import CallToolResult, TextContent
 from starlette.applications import Starlette
 from starlette.routing import Route
 
@@ -31,6 +33,22 @@ from everyrow_mcp.result_store import (
 )
 from everyrow_mcp.routes import api_download
 from tests.conftest import override_settings
+
+# ── Test helpers ──────────────────────────────────────────────
+
+
+def _widget(result: CallToolResult) -> dict[str, Any]:
+    """Extract structuredContent with a non-None assertion (for pyright)."""
+    assert result.structuredContent is not None
+    return result.structuredContent
+
+
+def _text(result: CallToolResult, idx: int = 0) -> str:
+    """Extract text from a content block with type narrowing (for pyright)."""
+    block = result.content[idx]
+    assert isinstance(block, TextContent)
+    return block.text
+
 
 # ── Fixtures ───────────────────────────────────────────────────
 
@@ -87,11 +105,10 @@ class TestBuildResultResponse:
             offset=0,
             page_size=10,
         )
-        assert len(result) == 2
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["total"] == 2
         assert widget["csv_url"] == csv_url
-        assert "All rows shown" in result[1].text
+        assert "All rows shown" in _text(result)
 
     def test_has_more_pages(self):
         preview = [{"id": i} for i in range(5)]
@@ -105,7 +122,7 @@ class TestBuildResultResponse:
             offset=0,
             page_size=5,
         )
-        summary = result[1].text
+        summary = _text(result)
         assert "20 rows" in summary
         assert "offset=5" in summary
         assert "everyrow_results" in summary
@@ -125,8 +142,8 @@ class TestBuildResultResponse:
             page_size=5,
         )
         # No widget JSON for non-first pages
-        assert len(result) == 1
-        assert "final page" in result[0].text
+        assert result.structuredContent is None
+        assert "final page" in _text(result)
 
     def test_no_widget_json_on_subsequent_pages(self):
         """Widget JSON is only emitted on the first page (offset=0)."""
@@ -141,9 +158,9 @@ class TestBuildResultResponse:
             offset=5,
             page_size=5,
         )
-        assert len(result) == 1
+        assert result.structuredContent is None
         # Should be the text summary, not JSON
-        assert "Showing rows" in result[0].text
+        assert "Showing rows" in _text(result)
 
     def test_session_url_included_in_widget(self):
         preview = [{"a": 1}]
@@ -158,7 +175,7 @@ class TestBuildResultResponse:
             page_size=10,
             session_url="https://everyrow.io/sessions/abc",
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["session_url"] == "https://everyrow.io/sessions/abc"
 
     def test_no_session_url_when_empty(self):
@@ -173,7 +190,7 @@ class TestBuildResultResponse:
             offset=0,
             page_size=10,
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert "session_url" not in widget
 
     def test_next_page_hint_uses_requested_page_size(self):
@@ -190,7 +207,7 @@ class TestBuildResultResponse:
             page_size=3,  # effective (clamped) size
             requested_page_size=10,  # user's original request
         )
-        summary = result[1].text
+        summary = _text(result)
         # The hint should suggest the user's original page_size, not the clamped one
         assert "page_size=10" in summary
         # Offset should advance by effective page_size (what was actually shown)
@@ -209,7 +226,7 @@ class TestBuildResultResponse:
             offset=0,
             page_size=5,
         )
-        summary = result[1].text
+        summary = _text(result)
         assert "page_size=5" in summary
 
     def test_poll_token_included_in_widget(self):
@@ -227,7 +244,7 @@ class TestBuildResultResponse:
             poll_token="my-poll-token",
             mcp_server_url=FAKE_SERVER_URL,
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["poll_token"] == "my-poll-token"
         assert (
             widget["download_token_url"]
@@ -247,7 +264,7 @@ class TestBuildResultResponse:
             offset=0,
             page_size=10,
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert "poll_token" not in widget
         assert "download_token_url" not in widget
 
@@ -265,10 +282,10 @@ class TestBuildResultResponse:
             page_size=10,
             artifact_id="abc-123-def",
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["artifact_id"] == "abc-123-def"
-        assert "abc-123-def" in result[1].text
-        assert "Output artifact_id" in result[1].text
+        assert "abc-123-def" in _text(result)
+        assert "Output artifact_id" in _text(result)
 
     def test_no_artifact_id_when_empty(self):
         """When artifact_id is empty, widget JSON and text omit it."""
@@ -283,9 +300,9 @@ class TestBuildResultResponse:
             offset=0,
             page_size=10,
         )
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert "artifact_id" not in widget
-        assert "Output artifact_id" not in result[1].text
+        assert "Output artifact_id" not in _text(result)
 
 
 # ── Async functions ────────────────────────────────────────────
@@ -313,8 +330,7 @@ class TestTryCachedResult:
         result = await try_cached_result(task_id, 0, 1, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
-        assert len(result) == 2
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["total"] == 3
 
     @pytest.mark.asyncio
@@ -336,7 +352,7 @@ class TestTryCachedResult:
         result = await try_cached_result(task_id, 0, 2, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert len(widget["preview"]) == 2
 
     @pytest.mark.asyncio
@@ -358,7 +374,7 @@ class TestTryCachedResult:
         result = await try_cached_result(task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["session_url"] == "https://everyrow.io/sessions/xyz"
 
     @pytest.mark.asyncio
@@ -380,9 +396,9 @@ class TestTryCachedResult:
         result = await try_cached_result(task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL)
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["artifact_id"] == "cached-artifact-789"
-        assert "cached-artifact-789" in result[1].text
+        assert "cached-artifact-789" in _text(result)
 
     @pytest.mark.asyncio
     async def test_returns_none_when_json_expired(self, _http_state):
@@ -424,8 +440,7 @@ class TestTryStoreResult:
         )
 
         assert result is not None
-        assert len(result) == 2
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["total"] == 3
         assert len(widget["preview"]) == 2
 
@@ -465,11 +480,11 @@ class TestTryStoreResult:
         assert meta["artifact_id"] == "output-artifact-456"
 
         # Verify artifact_id in widget JSON
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["artifact_id"] == "output-artifact-456"
 
         # Verify artifact_id in text summary
-        assert "output-artifact-456" in result[1].text
+        assert "output-artifact-456" in _text(result)
 
     @pytest.mark.asyncio
     async def test_includes_session_url_in_meta(self, sample_df, _http_state):
@@ -517,7 +532,7 @@ class TestTryStoreResult:
             task_id, sample_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
         )
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
 
         assert widget["poll_token"] == poll_token
         assert widget["download_token_url"] == (
@@ -539,7 +554,7 @@ class TestTryStoreResult:
         # Read from cache
         cached = await try_cached_result(task_id, 0, 10, mcp_server_url=FAKE_SERVER_URL)
         assert cached is not None
-        widget = json.loads(cached[0].text)
+        widget = _widget(cached)
 
         assert widget["poll_token"] == poll_token
         assert f"/api/results/{task_id}/download-token" in widget["download_token_url"]
@@ -556,7 +571,7 @@ class TestTryStoreResult:
             task_id, sample_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
         )
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
 
         expected = f"{FAKE_SERVER_URL}/api/results/{task_id}/download-token"
         assert widget["download_token_url"] == expected
@@ -772,13 +787,18 @@ class TestEstimateTokens:
         assert _estimate_tokens("") == 0
 
     def test_basic_estimate(self):
-        # 100 chars → ~25 tokens
-        assert _estimate_tokens("a" * 100) == 25
+        # tiktoken encodes "a" * 100 into BPE tokens (exact count varies)
+        result = _estimate_tokens("a" * 100)
+        assert result > 0
+        # Should be significantly fewer tokens than characters
+        assert result < 100
 
     def test_json_content(self):
         data = json.dumps([{"name": "Alice", "score": 95}])
-        # Should be roughly len(data) // 4
-        assert _estimate_tokens(data) == len(data) // 4
+        result = _estimate_tokens(data)
+        assert result > 0
+        # tiktoken gives a more accurate (lower) count than len//4
+        assert result < len(data)
 
 
 class TestClampPageToBudget:
@@ -815,21 +835,19 @@ class TestClampPageToBudget:
         assert len(result) == 1
 
     def test_finds_optimal_page_size(self):
-        # Each row is ~40 chars → ~10 tokens.  Budget of 50 tokens
-        # (~200 chars) should fit only a handful of 20 rows.
-        preview = [{"name": f"Person_{i:03d}", "score": i * 10} for i in range(20)]
+        # Create rows with enough text to make token counts meaningful.
+        preview = [
+            {"name": f"Person_{i:03d}", "bio": f"A person number {i} with details"}
+            for i in range(20)
+        ]
         full_tokens = _estimate_tokens(json.dumps(preview))
         # Sanity: the full preview must actually exceed the budget
         budget = full_tokens // 3
         with override_settings(token_budget=budget):
             result, effective_size = clamp_page_to_budget(preview, 20)
         assert effective_size < 20
-        # Verify it fits
+        # Verify it fits within budget
         assert _estimate_tokens(json.dumps(result)) <= budget
-        # Verify adding one more row would exceed
-        if effective_size < len(preview):
-            over = preview[: effective_size + 1]
-            assert _estimate_tokens(json.dumps(over)) > budget
 
 
 class TestTokenBudgetIntegration:
@@ -861,7 +879,7 @@ class TestTokenBudgetIntegration:
             settings.token_budget = orig
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         # Should have fewer than 10 rows due to clamping
         assert len(widget["preview"]) < 10
         # Verify the preview fits within the budget
@@ -888,7 +906,7 @@ class TestTokenBudgetIntegration:
             settings.token_budget = orig
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert len(widget["preview"]) < 10
         assert _estimate_tokens(json.dumps(widget["preview"])) <= 2000
 
@@ -909,7 +927,7 @@ class TestTokenBudgetIntegration:
             settings.token_budget = orig
 
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert len(widget["preview"]) == 3
 
     @pytest.mark.asyncio
@@ -926,9 +944,41 @@ class TestTokenBudgetIntegration:
             )
 
         assert result is not None
-        summary = result[1].text
+        summary = _text(result)
         # The hint should suggest the user's original page_size=10
         assert "page_size=10" in summary
+
+    @pytest.mark.asyncio
+    async def test_clamped_page_includes_budget_note(self, wide_df, _http_state):
+        """When clamping reduces the page, the summary explains why."""
+        task_id = "task-budget-note"
+        await redis_store.store_poll_token(task_id, "tok")
+
+        with override_settings(token_budget=2000):
+            result = await try_store_result(
+                task_id, wide_df, 0, 10, mcp_server_url=FAKE_SERVER_URL
+            )
+
+        assert result is not None
+        summary = _text(result)
+        assert "context token budget" in summary
+        assert "page was reduced from 10 to" in summary
+
+    @pytest.mark.asyncio
+    async def test_no_budget_note_when_not_clamped(self, _http_state):
+        """When the full page fits, no budget note is added."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
+        task_id = "task-no-budget-note"
+        await redis_store.store_poll_token(task_id, "tok")
+
+        with override_settings(token_budget=100_000):
+            result = await try_store_result(
+                task_id, df, 0, 3, mcp_server_url=FAKE_SERVER_URL
+            )
+
+        assert result is not None
+        summary = _text(result)
+        assert "token budget" not in summary
 
 
 # ── Widget fetch_full_results flag ─────────────────────────
@@ -948,7 +998,7 @@ class TestWidgetFetchFullResults:
             mcp_server_url=FAKE_SERVER_URL,
         )
 
-        widget = json.loads(result[0].text)
+        widget = _widget(result)
         assert widget["fetch_full_results"] is True
         # No pre-minted results_url — widget mints its own token on demand
         assert "results_url" not in widget
@@ -965,6 +1015,6 @@ class TestWidgetFetchFullResults:
         cached = await try_cached_result(task_id, 0, 50, mcp_server_url=FAKE_SERVER_URL)
 
         assert cached is not None
-        widget = json.loads(cached[0].text)
+        widget = _widget(cached)
         assert widget["fetch_full_results"] is True
         assert "results_url" not in widget

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         description="Maximum number of properties allowed in a response schema",
     )
     token_budget: int = Field(
-        default=20000,
+        default=10000,
         description="Target token budget per page of inline results",
     )
 
