@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-Give yourself, or your AI, a team of researchers to gather data, forecast, score, or classify every row in a dataset. Available [standalone](https://everyrow.io/app), as a Claude Code plugin, MCP server, or Python SDK. See the [docs site](https://everyrow.io/docs) for how to install into your interface of choice.
+Deploy a team of researchers to forecast, score, classify, or gather data. Use yourself in the [app](https://everyrow.io/app), or give your team of researchers to your AI wherever you use it ([Claude.ai](https://everyrow.io/docs/claude-ai), [Claude Cowork](https://everyrow.io/docs/claude-cowork), [Claude Code](https://everyrow.io/docs/claude-code), or [Gemini/Codex/other AI surfaces](https://everyrow.io/docs/)), or point them to this [Python SDK](https://everyrow.io/docs/getting-started).
 
 Requires Google sign in, no credit card required.
 
