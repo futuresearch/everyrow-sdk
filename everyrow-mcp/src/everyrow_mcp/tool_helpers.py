@@ -114,16 +114,15 @@ def client_supports_widgets(ctx: EveryRowContext) -> bool:
        widget-capable client names so they get widgets today.
        This fallback should be removed once clients adopt the capability.
 
-    3. **User-Agent fallback** (stateless HTTP mode):
+    3. **User-Agent whitelist** (stateless HTTP mode):
        When ``client_params`` is ``None`` (stateless HTTP — no MCP initialize
-       handshake), we check the HTTP User-Agent header.  Clients known to
-       NOT support widgets (e.g. Claude Code) are excluded.  If the
-       User-Agent is unknown, we default to **showing widgets** because
-       HTTP mode traffic is overwhelmingly from Claude.ai/Desktop.
+       handshake), we check the HTTP User-Agent header against a whitelist
+       of known widget-capable UAs (currently ``"Claude-User"``).  If the
+       User-Agent is unknown, we default to **no widget** to avoid wasting
+       context tokens on clients that can't render them.
 
-    Unknown clients default to **no widget** in stateful mode (tier 2),
-    but to **widget** in stateless HTTP mode (tier 3) where the population
-    is predominantly Claude.ai/Desktop.
+    Unknown clients default to **no widget** in both stateful (tier 2) and
+    stateless (tier 3) modes.
     """
     try:
         cp = ctx.session.client_params
@@ -161,36 +160,36 @@ def _widgets_from_user_agent() -> bool:
 
     Called when client_params is None (stateless HTTP mode).
 
-    Strategy: block known non-widget clients, allow everything else.
-    HTTP mode traffic is predominantly Claude.ai/Desktop which supports
-    widgets, so defaulting to True minimises false negatives.
-
-    The blocklist below will be populated once we observe actual
-    User-Agent strings from Claude Code's HTTP client in production logs.
+    Strategy: whitelist known widget-capable clients, deny everything else.
+    Only clients we have confirmed can render widgets get them; unknown UAs
+    default to text-only to avoid wasting context tokens on unsupported UIs.
     """
     from everyrow_mcp.http_config import get_user_agent  # noqa: PLC0415
 
     ua = get_user_agent().lower()
 
-    # Known non-widget User-Agent substrings.
-    # Observed values (Feb 2026):
-    #   Claude Code: "claude-code/2.1.59 (cli)"
-    #   MCP SDK:     "python-httpx/0.28.1"  (test client)
-    #   OAuth flow:  "Bun/1.3.10"  (Claude Code's OAuth helper)
-    _NO_WIDGET_UA_SUBSTRINGS = {"claude-code", "everyrow-cc"}
+    # Whitelist of UA substrings for clients that support widgets.
+    #
+    # Observed User-Agent values (Feb 2026):
+    #   Claude.ai:       "Claude-User"          — supports widgets
+    #   Claude Desktop:  "Claude-User"          — supports widgets
+    #   Claude Code CLI: "claude-code/2.1.62 (cli)" — text-only
+    #   everyrow:        "everyrow/1.0"         — text-only (internal)
+    #   MCP SDK (test):  "python-httpx/0.28.1"  — text-only
+    #   OAuth helper:    "Bun/1.3.10"           — not a tool caller
+    #
+    # Claude.ai and Claude Desktop both send "Claude-User". If Anthropic
+    # changes this, we'll need to update the whitelist.
+    _WIDGET_UA_SUBSTRINGS = {"claude-user"}
 
-    if any(pattern in ua for pattern in _NO_WIDGET_UA_SUBSTRINGS):
-        return False
-
-    # Unknown UA in HTTP mode → assume widget-capable (Claude.ai/Desktop).
-    return True
+    return any(pattern in ua for pattern in _WIDGET_UA_SUBSTRINGS)
 
 
 def is_internal_client() -> bool:
-    """Return True if the request comes from EveryRow's own app (CC)."""
+    """Return True if the request comes from everyrow's own app."""
     from everyrow_mcp.http_config import get_user_agent  # noqa: PLC0415
 
-    return "everyrow-cc" in get_user_agent().lower()
+    return "everyrow" in get_user_agent().lower()
 
 
 def _submission_text(
@@ -204,7 +203,7 @@ def _submission_text(
         Session: {session_url}{session_line}
         Task ID: {task_id}
 
-        Share the session_url with the user, then immediately call everyrow_progress(task_id='{task_id}').""")
+        Immediately call everyrow_progress(task_id='{task_id}').""")
     if is_internal_client():
         return dedent(f"""\
         {label}
@@ -376,6 +375,14 @@ class TaskState(BaseModel):
 
     @computed_field
     @property
+    def artifact_id(self) -> str:
+        aid = self._response.artifact_id
+        if aid is not None and not isinstance(aid, Unset):
+            return str(aid)
+        return ""
+
+    @computed_field
+    @property
     def error(self) -> str | None:
         err = self._response.error
         if err and not isinstance(err, Unset):
@@ -439,11 +446,13 @@ class TaskState(BaseModel):
                     else:
                         next_call = dedent(f"""\
                             IMPORTANT: Do NOT call everyrow_results yet.\
-                             First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: 50). You will have access to all of them via the widget.".\
+                             First, ask the user: "The task produced {self.total} rows. How many would you like me to load into my context so I can read them? (default: {settings.auto_page_size_threshold}). You will have access to all of them via the widget.".\
                              The answer the user provides will correspond to the `page_size`.\
                              After the user responds, call everyrow_results(task_id='{task_id}', page_size=N).""")
                 else:
                     next_call = f"Call everyrow_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
+                if self.artifact_id:
+                    completed_msg += f"\nOutput artifact_id: {self.artifact_id}"
                 return f"{completed_msg}\n{next_call}"
             return f"Task {self.status.value}. Report the error to the user."
 
@@ -536,13 +545,15 @@ class TaskNotReady(Exception):
         super().__init__(status)
 
 
-async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, str]:
-    """Fetch a task's result DataFrame and session ID from the API.
+async def _fetch_task_result(
+    client: Any, task_id: str
+) -> tuple[pd.DataFrame, str, str]:
+    """Fetch a task's result DataFrame, session ID, and output artifact ID from the API.
 
     Checks task status first, then retrieves and parses the result data.
 
     Returns:
-        Tuple of (DataFrame, session_id).
+        Tuple of (DataFrame, session_id, artifact_id).
 
     Raises:
         TaskNotReady: If the task is not in a terminal state.
@@ -577,9 +588,18 @@ async def _fetch_task_result(client: Any, task_id: str) -> tuple[pd.DataFrame, s
         )
     )
 
+    artifact_id = ""
+    aid = result_response.artifact_id
+    if aid is not None and not isinstance(aid, Unset):
+        artifact_id = str(aid)
+
     if isinstance(result_response.data, list):
         records = [item.additional_properties for item in result_response.data]
-        return pd.DataFrame(records), session_id
+        return pd.DataFrame(records), session_id, artifact_id
     if isinstance(result_response.data, TaskResultResponseDataType1):
-        return pd.DataFrame([result_response.data.additional_properties]), session_id
+        return (
+            pd.DataFrame([result_response.data.additional_properties]),
+            session_id,
+            artifact_id,
+        )
     raise ValueError("Task result has no table data.")

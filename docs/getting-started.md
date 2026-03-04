@@ -141,13 +141,15 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 
 ## Operations
 
-| Operation                       | Description                                |
-| ------------------------------- | ------------------------------------------ |
-| [Screen](/docs/reference/SCREEN)     | Filter rows by criteria requiring judgment |
-| [Rank](/docs/reference/RANK)         | Score rows by qualitative factors          |
-| [Dedupe](/docs/reference/DEDUPE)     | Deduplicate when fuzzy matching fails      |
-| [Merge](/docs/reference/MERGE)       | Join tables when keys don't match exactly  |
-| [Research](/docs/reference/RESEARCH) | Run web agents to research each row        |
+| Operation                              | Description                                |
+| -------------------------------------- | ------------------------------------------ |
+| [Classify](/docs/reference/CLASSIFY)   | Categorize rows into predefined classes    |
+| [Screen](/docs/reference/SCREEN)       | Filter rows by criteria requiring judgment |
+| [Rank](/docs/reference/RANK)           | Score rows by qualitative factors          |
+| [Dedupe](/docs/reference/DEDUPE)       | Deduplicate when fuzzy matching fails      |
+| [Merge](/docs/reference/MERGE)         | Join tables when keys don't match exactly  |
+| [Forecast](/docs/reference/FORECAST)   | Predict probabilities for binary questions |
+| [Research](/docs/reference/RESEARCH)   | Run web agents to research each row        |
 
 ## See Also
 

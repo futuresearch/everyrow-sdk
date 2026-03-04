@@ -6,11 +6,11 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="CreateArtifactRequestDataType1")
+T = TypeVar("T", bound="UploadDataArtifactsUploadPostJsonBodyDataType1")
 
 
 @_attrs_define
-class CreateArtifactRequestDataType1:
+class UploadDataArtifactsUploadPostJsonBodyDataType1:
     """ """
 
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
@@ -24,10 +24,10 @@ class CreateArtifactRequestDataType1:
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        create_artifact_request_data_type_1 = cls()
+        upload_data_artifacts_upload_post_json_body_data_type_1 = cls()
 
-        create_artifact_request_data_type_1.additional_properties = d
-        return create_artifact_request_data_type_1
+        upload_data_artifacts_upload_post_json_body_data_type_1.additional_properties = d
+        return upload_data_artifacts_upload_post_json_body_data_type_1
 
     @property
     def additional_keys(self) -> list[str]:

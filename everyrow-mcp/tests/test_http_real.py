@@ -29,6 +29,7 @@ import httpx
 import pandas as pd
 import pytest
 from everyrow.api_utils import create_client
+from mcp.types import CallToolResult, TextContent
 from starlette.applications import Starlette
 from starlette.routing import Route
 
@@ -42,6 +43,14 @@ from everyrow_mcp.tools import (
     everyrow_screen,
 )
 from tests.conftest import make_test_context, override_settings
+
+
+def _text(result: CallToolResult, idx: int = 0) -> str:
+    """Extract text from a content block with type narrowing (for pyright)."""
+    block = result.content[idx]
+    assert isinstance(block, TextContent)
+    return block.text
+
 
 # Skip unless explicitly enabled
 pytestmark = pytest.mark.skipif(
@@ -225,12 +234,12 @@ class TestHttpScreenPipeline:
         # 4. Fetch results via MCP tool — real Redis flow
         results = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(results) == 2
-        result_data = json.loads(results[0].text)
+        assert results.structuredContent is not None
+        result_data = results.structuredContent
         assert "csv_url" in result_data
         assert "preview" in result_data
         assert result_data["total"] > 0
-        print(f"  Results: {results[1].text}")
+        print(f"  Results: {_text(results)}")
 
         # 5. Download CSV via the csv_url
         csv_url = result_data["csv_url"]
@@ -273,13 +282,13 @@ class TestHttpAgentPipeline:
             ctx,
         )
 
-        assert len(result) == 2
-        widget = json.loads(result[0].text)
-        human_text = result[1].text
+        assert result.structuredContent is not None
+        widget = result.structuredContent
+        human_text = _text(result)
         print(f"\nSubmit: {human_text}")
 
         task_id = widget["task_id"]
-        poll_token = extract_poll_token(result[0].text)
+        poll_token = widget.get("poll_token", "")
 
         # 2. Poll via REST until complete
         progress = await poll_via_rest(client, task_id, poll_token)
@@ -291,23 +300,20 @@ class TestHttpAgentPipeline:
             HttpResultsInput(task_id=task_id, page_size=1), ctx
         )
 
-        assert len(results) == 2
-        result_data = json.loads(results[0].text)
+        assert results.structuredContent is not None
+        result_data = results.structuredContent
         assert result_data["total"] == 2
         assert len(result_data["preview"]) == 1  # page_size=1
         assert "csv_url" in result_data
-        print(f"  Page 1: {results[1].text}")
+        print(f"  Page 1: {_text(results)}")
 
         # 4. Fetch second page (should come from Redis cache)
         results_p2 = await everyrow_results_http(
             HttpResultsInput(task_id=task_id, offset=1, page_size=1), ctx
         )
 
-        assert len(results_p2) == 2
-        result_data_p2 = json.loads(results_p2[0].text)
-        assert len(result_data_p2["preview"]) == 1
-        assert result_data_p2["total"] == 2
-        print(f"  Page 2: {results_p2[1].text}")
+        assert results_p2.structuredContent is None  # no widget on page 2
+        print(f"  Page 2: {_text(results_p2)}")
 
         # 5. Download full CSV, verify 2 rows with headquarters column
         csv_url = result_data["csv_url"]

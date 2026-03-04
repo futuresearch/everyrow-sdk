@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "everyrow-local": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/danschwarz/dev/everyrow-sdk-classify/everyrow-mcp",
+        "run",
+        "/Users/danschwarz/dev/everyrow-sdk-classify/everyrow-mcp/src/everyrow_mcp/server.py"
+      ],
+      "env": {
+        "EVERYROW_API_KEY": "${EVERYROW_API_KEY}"
+      }
+    }
+  }
+}

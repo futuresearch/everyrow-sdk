@@ -354,20 +354,22 @@ class MergeInput(BaseModel):
 
     merge_on_left: str | None = Field(
         default=None,
-        description="Column name in the left table to match on.",
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
     merge_on_right: str | None = Field(
         default=None,
-        description="Column name in the right table to match on.",
+        description="Only set if you expect some exact string matches on the chosen column or want to draw special attention of LLM agents to this particular column. Fine to leave unspecified in all other cases.",
     )
 
     use_web_search: Literal["auto", "yes", "no"] | None = Field(
         default=None,
         description='Control web search: "auto", "yes", or "no".',
     )
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = Field(
+    relationship_type: (
+        Literal["many_to_one", "one_to_one", "one_to_many", "many_to_many"] | None
+    ) = Field(
         default=None,
-        description="Relationship type: many_to_one (default) or one_to_one.",
+        description='Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.',
     )
 
     session_id: str | None = Field(
@@ -462,6 +464,31 @@ class ForecastInput(_SingleSourceInput):
         description="Optional batch-level context or instructions that apply to every row "
         "(e.g. 'Focus on EU regulatory sources' or 'Assume resolution by end of 2027'). "
         "Leave empty when the rows are self-contained.",
+    )
+
+
+class ClassifyInput(_SingleSourceInput):
+    """Input for the classify operation."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task: str = Field(
+        ...,
+        description="Natural language instructions describing how to classify each row.",
+        min_length=1,
+    )
+    categories: list[str] = Field(
+        ...,
+        description="Allowed category values (minimum 2). Each row will be assigned one of these.",
+        min_length=2,
+    )
+    classification_field: str = Field(
+        default="classification",
+        description="Name of the output column that will contain the assigned category.",
+    )
+    include_reasoning: bool = Field(
+        default=False,
+        description="If true, adds a 'reasoning' column with the agent's justification.",
     )
 
 
@@ -680,7 +707,7 @@ class HttpResultsInput(BaseModel):
         ge=0,
     )
     page_size: int = Field(
-        default=50,
+        default=settings.auto_page_size_threshold,
         description=(
             "Number of result rows to load into your context so you can read them. "
             "The user has access to all rows via the widget regardless of this value. "
@@ -710,7 +737,18 @@ class ListSessionsInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    offset: int = Field(0, ge=0, description="Number of sessions to skip")
+    offset: int = Field(default=0, ge=0, description="Number of sessions to skip")
     limit: int = Field(
-        25, ge=1, le=1000, description="Max sessions per page (default 25, max 1000)"
+        default=25,
+        ge=1,
+        le=1000,
+        description="Max sessions per page (default 25, max 1000)",
     )
+
+
+class ListSessionTasksInput(BaseModel):
+    """Input for listing tasks in a session."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(description="The session ID to list tasks for")

@@ -27,7 +27,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
-from mcp.types import TextContent
+from mcp.types import CallToolResult, TextContent
 from pydantic import ValidationError
 
 from everyrow_mcp import redis_store
@@ -45,6 +45,7 @@ from everyrow_mcp.models import (
     SingleAgentInput,
     StdioResultsInput,
     UploadDataInput,
+    UseListInput,
     _schema_to_model,
 )
 from everyrow_mcp.tools import (
@@ -58,6 +59,7 @@ from everyrow_mcp.tools import (
     everyrow_results_stdio,
     everyrow_single_agent,
     everyrow_upload_data,
+    everyrow_use_list,
 )
 from tests.conftest import make_test_context, override_settings
 
@@ -693,25 +695,23 @@ class TestResults:
             [{"name": "A", "val": "1"}, {"name": "B", "val": "2"}]
         )
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://storage.googleapis.com/signed/data.csv",
-                        "preview": [
-                            {"name": "A", "val": "1"},
-                            {"name": "B", "val": "2"},
-                        ],
-                        "total": 2,
-                    }
+        store_response = CallToolResult(
+            content=[
+                TextContent(
+                    type="text",
+                    text="Results: 2 rows, 2 columns (name, val). All rows shown.",
                 ),
-            ),
-            TextContent(
-                type="text",
-                text="Results: 2 rows, 2 columns (name, val). All rows shown.",
-            ),
-        ]
+            ],
+            structuredContent={
+                "csv_url": "https://storage.googleapis.com/signed/data.csv",
+                "preview": [
+                    {"name": "A", "val": "1"},
+                    {"name": "B", "val": "2"},
+                ],
+                "total": 2,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -737,10 +737,11 @@ class TestResults:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert "csv_url" in widget_data
-        assert "2 rows" in result[1].text
+        assert result.structuredContent is not None
+        assert "csv_url" in result.structuredContent
+        block = result.content[0]
+        assert isinstance(block, TextContent)
+        assert "2 rows" in block.text
 
     @pytest.mark.asyncio
     async def test_results_http_cache_hit(self):
@@ -1591,19 +1592,15 @@ class TestResultsWidgetData:
         result_response = _make_task_result_response([{"name": "A"}])
         csv_url = "https://example.com/api/results/123/download?token=abc"
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": csv_url,
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": csv_url,
+                "preview": [{"name": "A"}],
+                "total": 1,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1629,9 +1626,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert widget_data["csv_url"] == csv_url
+        assert result.structuredContent is not None
+        assert result.structuredContent["csv_url"] == csv_url
 
     @pytest.mark.asyncio
     async def test_http_widget_omits_session_url_when_unavailable(self):
@@ -1643,19 +1639,15 @@ class TestResultsWidgetData:
         status_response = _make_task_status_response(status="completed")
         result_response = _make_task_result_response([{"name": "A"}])
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://example.com/download",
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": "https://example.com/download",
+                "preview": [{"name": "A"}],
+                "total": 1,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1681,9 +1673,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert "session_url" not in widget_data
+        assert result.structuredContent is not None
+        assert "session_url" not in result.structuredContent
 
     @pytest.mark.asyncio
     async def test_http_widget_includes_session_url(self):
@@ -1699,20 +1690,16 @@ class TestResultsWidgetData:
         )
         result_response = _make_task_result_response([{"name": "A"}])
 
-        store_response = [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "csv_url": "https://example.com/download",
-                        "preview": [{"name": "A"}],
-                        "total": 1,
-                        "session_url": session_url,
-                    }
-                ),
-            ),
-            TextContent(type="text", text="Results: 1 rows. All rows shown."),
-        ]
+        store_response = CallToolResult(
+            content=[TextContent(type="text", text="Results: 1 rows. All rows shown.")],
+            structuredContent={
+                "csv_url": "https://example.com/download",
+                "preview": [{"name": "A"}],
+                "total": 1,
+                "session_url": session_url,
+            },
+            isError=False,
+        )
 
         with (
             patch(
@@ -1738,9 +1725,8 @@ class TestResultsWidgetData:
         ):
             result = await everyrow_results_http(HttpResultsInput(task_id=task_id), ctx)
 
-        assert len(result) == 2
-        widget_data = json.loads(result[0].text)
-        assert widget_data["session_url"] == session_url
+        assert result.structuredContent is not None
+        assert result.structuredContent["session_url"] == session_url
 
 
 # ---------- Session resumption / naming ----------
@@ -1951,3 +1937,119 @@ class TestSessionParams:
 
         text = result[0].text
         assert f"Session ID: {mock_session.session_id}" in text
+
+
+class TestUseList:
+    """Tests for everyrow_use_list."""
+
+    @pytest.mark.asyncio
+    async def test_use_list_stdio_saves_csv(self, tmp_path, monkeypatch):
+        """In stdio mode, CSV is written to disk and artifact_id is in the response."""
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        artifact_id = uuid4()
+        task_id = uuid4()
+        mock_result = MagicMock()
+        mock_result.artifact_id = artifact_id
+        mock_result.task_id = task_id
+
+        mock_df = pd.DataFrame([{"name": "Acme", "industry": "Tech"}])
+
+        monkeypatch.chdir(tmp_path)
+
+        with (
+            override_settings(transport="stdio"),
+            patch(
+                "everyrow_mcp.tools.use_built_in_list",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+            patch(
+                "everyrow_mcp.tools._fetch_task_result",
+                new_callable=AsyncMock,
+                return_value=(mock_df, None, None),
+            ),
+        ):
+            params = UseListInput(artifact_id=str(uuid4()))
+            result = await everyrow_use_list(params, ctx)
+
+        text = result[0].text
+        assert f"Artifact ID: {artifact_id}" in text
+        assert "CSV saved to:" in text
+        assert "Rows: 1" in text
+        assert "name, industry" in text
+        assert 'artifact_id="' in text
+
+        csv_path = tmp_path / f"built-in-list-{artifact_id}.csv"
+        assert csv_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_use_list_http_no_csv(self, tmp_path, monkeypatch):
+        """In HTTP mode, no CSV is written but artifact_id is in the response."""
+        mock_session = _make_mock_session()
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        artifact_id = uuid4()
+        task_id = uuid4()
+        mock_result = MagicMock()
+        mock_result.artifact_id = artifact_id
+        mock_result.task_id = task_id
+
+        mock_df = pd.DataFrame([{"name": "Acme", "industry": "Tech"}])
+
+        monkeypatch.chdir(tmp_path)
+
+        with (
+            override_settings(transport="streamable-http"),
+            patch(
+                "everyrow_mcp.tools.use_built_in_list",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+            patch(
+                "everyrow_mcp.tools._fetch_task_result",
+                new_callable=AsyncMock,
+                return_value=(mock_df, None, None),
+            ),
+        ):
+            params = UseListInput(artifact_id=str(uuid4()))
+            result = await everyrow_use_list(params, ctx)
+
+        text = result[0].text
+        assert f"Artifact ID: {artifact_id}" in text
+        assert "CSV saved to:" not in text
+        assert "Rows: 1" in text
+        assert 'artifact_id="' in text
+
+        # No CSV files should exist in tmp_path
+        assert list(tmp_path.glob("*.csv")) == []
+
+    @pytest.mark.asyncio
+    async def test_use_list_error_handling(self):
+        """Exception during import returns error text."""
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client)
+
+        with (
+            patch(
+                "everyrow_mcp.tools.create_session",
+                side_effect=EveryrowError("connection failed"),
+            ),
+        ):
+            params = UseListInput(artifact_id=str(uuid4()))
+            result = await everyrow_use_list(params, ctx)
+
+        text = result[0].text
+        assert "Error importing built-in list" in text
+        assert "connection failed" in text

@@ -1,6 +1,7 @@
 """MCP tool functions for the everyrow MCP server."""
 
 import asyncio
+import csv
 import json
 import logging
 from pathlib import Path
@@ -17,6 +18,7 @@ from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_ge
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.ops import (
     agent_map_async,
+    classify_async,
     create_table_artifact,
     dedupe_async,
     forecast_async,
@@ -28,7 +30,7 @@ from everyrow.ops import (
 from everyrow.session import create_session, get_session_url, list_sessions
 from everyrow.task import cancel_task
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.types import TextContent, ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp import redis_store
@@ -38,10 +40,12 @@ from everyrow_mcp.models import (
     AgentInput,
     BrowseListsInput,
     CancelInput,
+    ClassifyInput,
     DedupeInput,
     ForecastInput,
     HttpResultsInput,
     ListSessionsInput,
+    ListSessionTasksInput,
     MergeInput,
     ProgressInput,
     RankInput,
@@ -73,6 +77,14 @@ from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
 logger = logging.getLogger(__name__)
 
 
+def _error_result(text: str) -> CallToolResult:
+    """Build an error CallToolResult with a single text message."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        isError=True,
+    )
+
+
 async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
     """Verify the current user owns *task_id*. Returns an error response if
     access should be denied, or ``None`` if the caller may proceed.
@@ -88,8 +100,7 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
         logger.error("No owner recorded for task %s — denying access", task_id)
         return [
             TextContent(
-                type="text",
-                text="Access denied: task ownership could not be verified.",
+                type="text", text="Access denied: task ownership could not be verified."
             )
         ]
 
@@ -98,8 +109,7 @@ async def _check_task_ownership(task_id: str) -> list[TextContent] | None:
     if not user_id or user_id != owner:
         return [
             TextContent(
-                type="text",
-                text="Access denied: this task belongs to another user.",
+                type="text", text="Access denied: this task belongs to another user."
             )
         ]
     return None
@@ -134,6 +144,11 @@ async def everyrow_browse_lists(
     Call with no parameters to see all available lists, or use search/category
     to narrow results.
     """
+    logger.info(
+        "everyrow_browse_lists: search=%s category=%s",
+        params.search,
+        params.category,
+    )
     client = _get_client(ctx)
 
     try:
@@ -153,6 +168,7 @@ async def everyrow_browse_lists(
             )
         ]
 
+    logger.info("everyrow_browse_lists: found %d list(s)", len(results))
     lines = [f"Found {len(results)} built-in list(s):\n"]
     for i, item in enumerate(results, 1):
         fields_str = ", ".join(item.fields) if item.fields else "(no fields listed)"
@@ -182,14 +198,15 @@ async def everyrow_browse_lists(
 async def everyrow_use_list(
     params: UseListInput, ctx: EveryRowContext
 ) -> list[TextContent]:
-    """Import a reference list into your session and save it as a CSV file.
+    """Import a reference list into your session and make it available via artifact_id for other everyrow tools.
 
-    This copies the dataset into a new session, fetches the data, and saves
-    it as a CSV file ready to pass to other everyrow utilities for analysis
-    or research.
+    This copies the dataset into a new session and returns an artifact_id
+    that can be passed directly to other everyrow tools (everyrow_agent,
+    everyrow_rank, etc.) for analysis or research.
 
     The copy is a fast database operation (<1s) — no polling needed.
     """
+    logger.info("everyrow_use_list: artifact_id=%s", params.artifact_id)
     client = _get_client(ctx)
 
     try:
@@ -200,24 +217,34 @@ async def everyrow_use_list(
                 session=session,
             )
 
-            # Fetch the copied data and save as CSV
-            df, _ = await _fetch_task_result(client, str(result.task_id))
+            # Fetch the copied data for summary info
+            df, _, _ = await _fetch_task_result(client, str(result.task_id))
 
-            csv_path = Path.cwd() / f"built-in-list-{result.artifact_id}.csv"
-            df.to_csv(csv_path, index=False)
+            # Stdio mode: also save CSV locally for inspection
+            csv_line = ""
+            if settings.is_stdio:
+                csv_path = Path.cwd() / f"built-in-list-{result.artifact_id}.csv"
+                df.to_csv(csv_path, index=False, quoting=csv.QUOTE_ALL)
+                csv_line = f"CSV saved to: {csv_path}\n"
     except Exception as e:
         return [TextContent(type="text", text=f"Error importing built-in list: {e!r}")]
 
+    logger.info(
+        "everyrow_use_list: imported artifact_id=%s rows=%d",
+        result.artifact_id,
+        len(df),
+    )
     return [
         TextContent(
             type="text",
             text=(
                 f"Imported built-in list into your session.\n\n"
-                f"CSV saved to: {csv_path}\n"
+                f"Artifact ID: {result.artifact_id}\n"
+                f"{csv_line}"
                 f"Rows: {len(df)}\n"
                 f"Columns: {', '.join(df.columns)}\n"
                 f"Session: {session_url}\n\n"
-                f"Pass {csv_path} as input_csv to other everyrow utilities for analysis or research."
+                f'Pass artifact_id="{result.artifact_id}" to other everyrow tools.'
             ),
         )
     ]
@@ -247,7 +274,7 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
     - "Find pricing information for this product"
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
@@ -328,7 +355,7 @@ async def everyrow_single_agent(
     - "What are the pricing tiers for this product?" (with input_data: {"product": "Snowflake"})
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
@@ -404,7 +431,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
     - "Score this candidate by fit for a senior engineering role, with 100 being the best"
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
 
@@ -412,8 +439,7 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         params: RankInput
 
     Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
+        Success message containing task_id for monitoring progress
     """
     logger.info(
         "everyrow_rank: task=%.80s rows=%s",
@@ -498,7 +524,7 @@ async def everyrow_screen(
     - "Is this lead likely to need our product based on company description?"
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
 
@@ -506,8 +532,7 @@ async def everyrow_screen(
         params: ScreenInput
 
     Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
+        Success message containing task_id for monitoring progress
     """
     logger.info(
         "everyrow_screen: task=%.80s rows=%s",
@@ -585,7 +610,7 @@ async def everyrow_dedupe(
     - Dedupe research papers: "Same work including preprints and published versions"
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
 
@@ -593,8 +618,7 @@ async def everyrow_dedupe(
         params: DedupeInput
 
     Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
+        Success message containing task_id for monitoring progress
     """
     logger.info(
         "everyrow_dedupe: equivalence=%.80s rows=%s",
@@ -665,7 +689,8 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
     - merge_on_left/merge_on_right: only set if you expect exact string matches on
       the chosen columns or want to draw agent attention to them. Fine to omit.
     - relationship_type: defaults to many_to_one, which is correct in most cases.
-      Only set one_to_one when both tables have unique entities of the same kind.
+      For one_to_many and many_to_many, multiple right-table matches are joined
+      with " | " in each added column.
 
     Examples:
     - Match software products (left, enriched) to parent companies (right, lookup):
@@ -674,9 +699,15 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
       Genentech -> Roche. relationship_type: many_to_one.
     - Join two contact lists with different name formats:
       relationship_type: one_to_one (each person appears once in each list).
+    - Match a company (left) to its products (right):
+      relationship_type: one_to_many (one company has many products;
+      matched product names joined with " | ").
+    - Match companies (left) to investors (right):
+      relationship_type: many_to_many (companies share investors and vice versa;
+      matched values joined with " | ").
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
 
@@ -684,8 +715,7 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         params: MergeInput
 
     Returns:
-        Success message containing session_url (for the user to open) and
-        task_id (for monitoring progress)
+        Success message containing task_id for monitoring progress
     """
     logger.info(
         "everyrow_merge: task=%.80s left_rows=%s right_rows=%s",
@@ -770,7 +800,7 @@ async def everyrow_forecast(
     Output columns added: ``rationale`` (str) and ``probability`` (int, 0-100).
 
     This function submits the task and returns immediately with a task_id and session_url.
-    After receiving a result from this tool, share the session_url with the user.
+
     Then immediately call everyrow_progress(task_id) to monitor.
     Once the task is completed, call everyrow_results to save the output.
     """
@@ -819,6 +849,86 @@ async def everyrow_forecast(
 
 
 @mcp.tool(
+    name="everyrow_classify",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Classify Rows",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+async def everyrow_classify(
+    params: ClassifyInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """Classify each row of a dataset into one of the provided categories.
+
+    Uses web research that scales to the difficulty of the classification.
+    Each row is assigned exactly one of the provided categories.
+
+    Examples:
+    - "Classify each company by its primary industry sector" with categories ["Technology", "Finance", "Healthcare", "Energy"]
+    - "Is this company founder-led?" with categories ["yes", "no"]
+    - "Classify by Koppen climate zone" with categories ["tropical", "arid", "temperate", "continental", "polar"]
+
+    Output columns added: the ``classification_field`` column (default: ``classification``)
+    containing the assigned category. Optionally a ``reasoning`` column if ``include_reasoning`` is true.
+
+    This function submits the task and returns immediately with a task_id and session_url.
+
+    Then immediately call everyrow_progress(task_id) to monitor.
+    Once the task is completed, call everyrow_results to save the output.
+    """
+    logger.info(
+        "everyrow_classify: task=%.80s categories=%s rows=%s",
+        params.task,
+        params.categories,
+        len(params.data) if params.data else "artifact",
+    )
+    log_client_info(ctx, "everyrow_classify")
+    client = _get_client(ctx)
+
+    _clear_task_state()
+    input_data = params._aid_or_dataframe
+
+    async with create_session(
+        client=client, session_id=params.session_id, name=params.session_name
+    ) as session:
+        session_url = session.get_url()
+        session_id_str = str(session.session_id)
+        cohort_task = await classify_async(
+            task=params.task,
+            categories=params.categories,
+            session=session,
+            input=input_data,
+            classification_field=params.classification_field,
+            include_reasoning=params.include_reasoning,
+        )
+        task_id = str(cohort_task.task_id)
+        total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
+        write_initial_task_state(
+            task_id,
+            task_type=PublicTaskType.CLASSIFY,
+            session_url=session_url,
+            total=total,
+            input_source=params._input_data_mode.value,
+        )
+
+    return await create_tool_response(
+        task_id=task_id,
+        session_url=session_url,
+        label=f"Submitted: {total} rows for classification into {len(params.categories)} categories."
+        if total
+        else f"Submitted: artifact for classification into {len(params.categories)} categories.",
+        token=client.token,
+        total=total,
+        mcp_server_url=ctx.request_context.lifespan_context.mcp_server_url,
+        session_id=session_id_str,
+    )
+
+
+@mcp.tool(
     name="everyrow_upload_data",
     structured_output=False,
     annotations=ToolAnnotations(
@@ -835,7 +945,7 @@ async def everyrow_upload_data(
     """Upload data from a URL or local file. Returns an artifact_id for use in processing tools.
 
     Use this tool to ingest data before calling everyrow_agent, everyrow_screen,
-    everyrow_rank, everyrow_dedupe, everyrow_merge, or everyrow_forecast.
+    everyrow_rank, everyrow_dedupe, everyrow_merge, everyrow_classify, or everyrow_forecast.
 
     Supported sources:
     - HTTP(S) URLs (including Google Sheets — auto-converted to CSV export)
@@ -903,6 +1013,7 @@ async def everyrow_progress(
     unless the task is completed or failed. The tool handles pacing internally.
     Do not add commentary between progress calls, just call again immediately.
     """
+    logger.debug("everyrow_progress: task_id=%s", params.task_id)
     client = _get_client(ctx)
     task_id = params.task_id
 
@@ -914,8 +1025,7 @@ async def everyrow_progress(
         logger.exception("Could not verify task ownership for %s", task_id)
         return [
             TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
+                type="text", text="Unable to verify task ownership. Please try again."
             )
         ]
 
@@ -943,6 +1053,9 @@ async def everyrow_progress(
     ts = TaskState(status_response)
     ts.write_file(task_id)
 
+    if ts.is_terminal:
+        logger.info("everyrow_progress: task_id=%s status=%s", task_id, ts.status.value)
+
     return [TextContent(type="text", text=ts.progress_message(task_id))]
 
 
@@ -954,18 +1067,19 @@ async def everyrow_results_stdio(
     Only call this after everyrow_progress reports status 'completed'.
     Pass output_path (ending in .csv) to save results as a local CSV file.
     """
+    logger.info("everyrow_results (stdio): task_id=%s", params.task_id)
     client = _get_client(ctx)
     task_id = params.task_id
 
     try:
-        df, _session_id = await _fetch_task_result(client, task_id)
+        df, _session_id, artifact_id = await _fetch_task_result(client, task_id)
     except TaskNotReady as e:
         return [
             TextContent(
                 type="text",
                 text=dedent(f"""\
-                    Task status is {e.status}. Cannot fetch results yet.
-                    Call everyrow_progress(task_id='{task_id}') to check again."""),
+            Task status is {e.status}. Cannot fetch results yet.
+            Call everyrow_progress(task_id='{task_id}') to check again."""),
             )
         ]
     except Exception:
@@ -979,11 +1093,12 @@ async def everyrow_results_stdio(
 
     output_file = Path(params.output_path)
     save_result_to_csv(df, output_file)
+    artifact_line = f"\nOutput artifact_id: {artifact_id}" if artifact_id else ""
     return [
         TextContent(
             type="text",
             text=dedent(f"""\
-                Saved {len(df)} rows to {output_file}
+                Saved {len(df)} rows to {output_file}{artifact_line}
 
                 Tip: For multi-step pipelines or custom response models, \
                 use the everyrow Python SDK directly."""),
@@ -993,14 +1108,23 @@ async def everyrow_results_stdio(
 
 async def everyrow_results_http(
     params: HttpResultsInput, ctx: EveryRowContext
-) -> list[TextContent]:
+) -> CallToolResult:
     """Retrieve results from a completed everyrow task.
 
     Only call this after everyrow_progress reports status 'completed'.
     The user always has access to all rows via the widget — page_size only
     controls how many rows _you_ can read.
     After results load, tell the user how many rows you can see vs the total.
+
+    Returns CallToolResult with structuredContent for the widget (not sent to
+    the LLM) and content with summary + data for the LLM.
     """
+    logger.info(
+        "everyrow_results (http): task_id=%s offset=%s page_size=%s",
+        params.task_id,
+        params.offset,
+        params.page_size,
+    )
     client = _get_client(ctx)
     task_id = params.task_id
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
@@ -1014,15 +1138,10 @@ async def everyrow_results_http(
     # ── Cross-user access check ──────────────────────────────────
     try:
         if denied := await _check_task_ownership(task_id):
-            return denied
+            return CallToolResult(content=denied, isError=True)  # pyright: ignore[reportArgumentType]  # list invariance
     except Exception:
         logger.exception("Could not verify task ownership for %s", task_id)
-        return [
-            TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
-            )
-        ]
+        return _error_result("Unable to verify task ownership. Please try again.")
 
     # ── Return from cache if available ───────────────────────────
     cached = await try_cached_result(
@@ -1038,25 +1157,19 @@ async def everyrow_results_http(
 
     # ── Fetch from API ────────────────────────────────────────────
     try:
-        df, session_id = await _fetch_task_result(client, task_id)
+        df, session_id, artifact_id = await _fetch_task_result(client, task_id)
         session_url = get_session_url(UUID(session_id)) if session_id else ""
     except TaskNotReady as e:
-        return [
-            TextContent(
-                type="text",
-                text=dedent(f"""\
-                    Task status is {e.status}. Cannot fetch results yet.
-                    Call everyrow_progress(task_id='{task_id}') to check again."""),
-            )
-        ]
+        return _error_result(
+            dedent(f"""\
+            Task status is {e.status}. Cannot fetch results yet.
+            Call everyrow_progress(task_id='{task_id}') to check again.""")
+        )
     except Exception:
         logger.exception("Failed to retrieve results for task %s", task_id)
-        return [
-            TextContent(
-                type="text",
-                text=f"Error retrieving results for task {task_id}. Please try again.",
-            )
-        ]
+        return _error_result(
+            f"Error retrieving results for task {task_id}. Please try again."
+        )
 
     # output_path is accepted by the schema but ignored in HTTP mode —
     # the server must not write to its own filesystem on remote request.
@@ -1069,6 +1182,7 @@ async def everyrow_results_http(
         params.page_size,
         session_url,
         mcp_server_url=mcp_server_url,
+        artifact_id=artifact_id,
         skip_widget=skip_widget,
         skip_session=skip_session,
     )
@@ -1094,6 +1208,11 @@ async def everyrow_list_sessions(
     Use this to find past sessions or check what's been run.
     Results are paginated — 25 sessions per page by default.
     """
+    logger.info(
+        "everyrow_list_sessions: offset=%s limit=%s",
+        params.offset,
+        params.limit,
+    )
     log_client_info(ctx, "everyrow_list_sessions")
     client = _get_client(ctx)
 
@@ -1159,6 +1278,7 @@ async def everyrow_balance(ctx: EveryRowContext) -> list[TextContent]:
     Returns the account balance in dollars. Use this to verify available
     credits before submitting tasks.
     """
+    logger.info("everyrow_balance: called")
     client = _get_client(ctx)
 
     try:
@@ -1174,12 +1294,78 @@ async def everyrow_balance(ctx: EveryRowContext) -> list[TextContent]:
             )
         ]
 
+    logger.info("everyrow_balance: $%.2f", response.current_balance_dollars)
     return [
         TextContent(
             type="text",
             text=f"Current balance: ${response.current_balance_dollars:.2f}",
         )
     ]
+
+
+@mcp.tool(
+    name="everyrow_list_session_tasks",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="List Tasks in a Session",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+)
+async def everyrow_list_session_tasks(
+    params: ListSessionTasksInput, ctx: EveryRowContext
+) -> list[TextContent]:
+    """List all tasks in a session with their IDs, statuses, and types.
+
+    Use this to find task IDs for a session so you can display previous results
+    with mcp__display__show_task(task_id, label).
+    """
+    logger.info("everyrow_list_session_tasks: session_id=%s", params.session_id)
+    client = _get_client(ctx)
+
+    try:
+        response = await client.get_async_httpx_client().request(
+            method="get",
+            url=f"/sessions/{params.session_id}/tasks",
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        return [TextContent(type="text", text=f"Error listing session tasks: {e!r}")]
+
+    tasks = data.get("tasks", [])
+    if not tasks:
+        return [
+            TextContent(
+                type="text", text=f"No tasks found in session {params.session_id}."
+            )
+        ]
+
+    lines = [f"Found {len(tasks)} task(s) in session {params.session_id}:\n"]
+    for t in tasks:
+        output = (
+            f" | output_artifact_id: {t['output_artifact_id']}"
+            if t.get("output_artifact_id")
+            else ""
+        )
+        inputs = (
+            f" | input_artifact_ids: {t['input_artifact_ids']}"
+            if t.get("input_artifact_ids")
+            else ""
+        )
+        context = (
+            f" | context_artifact_ids: {t['context_artifact_ids']}"
+            if t.get("context_artifact_ids")
+            else ""
+        )
+        lines.append(
+            f"- **{t['task_type']}** (task_id: {t['task_id']})\n"
+            f"  Status: {t['status']} | Created: {t['created_at']}{output}{inputs}{context}"
+        )
+
+    return [TextContent(type="text", text="\n".join(lines))]
 
 
 @mcp.tool(
@@ -1197,6 +1383,7 @@ async def everyrow_cancel(
     params: CancelInput, ctx: EveryRowContext
 ) -> list[TextContent]:
     """Cancel a running everyrow task. Use when the user wants to stop a task that is currently processing."""
+    logger.info("everyrow_cancel: task_id=%s", params.task_id)
     log_client_info(ctx, "everyrow_cancel")
     client = _get_client(ctx)
     task_id = params.task_id
@@ -1209,8 +1396,7 @@ async def everyrow_cancel(
         logger.exception("Could not verify task ownership for %s", task_id)
         return [
             TextContent(
-                type="text",
-                text="Unable to verify task ownership. Please try again.",
+                type="text", text="Unable to verify task ownership. Please try again."
             )
         ]
 

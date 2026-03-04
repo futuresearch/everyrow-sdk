@@ -18,13 +18,16 @@ import math
 import secrets
 from typing import Any
 
+import litellm
 import pandas as pd
-from mcp.types import TextContent
+from mcp.types import CallToolResult, TextContent
 
 from everyrow_mcp import redis_store
 from everyrow_mcp.config import settings
 
 logger = logging.getLogger(__name__)
+
+_TOKEN_MODEL = "claude-opus-4-6"
 
 
 def _sanitize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -50,8 +53,8 @@ def _format_columns(columns: list[str]) -> str:
 
 
 def _estimate_tokens(text: str) -> int:
-    """Estimate token count using ~4 characters per token heuristic."""
-    return len(text) // 4
+    """Estimate token count using litellm's model-aware tokenizer."""
+    return litellm.token_counter(model=_TOKEN_MODEL, text=text)
 
 
 def clamp_page_to_budget(
@@ -95,21 +98,23 @@ def _build_result_response(
     session_url: str = "",
     poll_token: str = "",
     mcp_server_url: str = "",
+    artifact_id: str = "",
     *,
     requested_page_size: int | None = None,
     skip_widget: bool = False,
     skip_session: bool = False,
-) -> list[TextContent]:
-    """Build MCP TextContent response for Redis-backed results.
+) -> CallToolResult:
+    """Build a CallToolResult with separate content and structuredContent.
+
+    *content* (for the LLM): summary text + JSON-serialized preview rows.
+    *structuredContent* (for the widget renderer): widget data dict with
+    preview_records, CSV URL, etc.  This is NOT sent to the LLM, saving
+    significant context tokens.
 
     *page_size* is the effective (possibly clamped) size used for display.
     *requested_page_size*, when provided, is the user's original page_size
     and is used in the "next page" hint so the server can re-clamp
     independently on each call.
-
-    The widget fetches full results on demand by minting a fresh download
-    token via the ``download-token`` endpoint — no pre-minted URL is baked
-    into the response, avoiding stale-token issues on re-render.
     """
     if skip_session:
         session_url = ""
@@ -121,40 +126,31 @@ def _build_result_response(
     has_more = offset + page_size < total
     next_offset = offset + page_size if has_more else None
 
-    # Only emit widget JSON on the first page — the widget already fetches
-    # the full dataset independently, so subsequent pages only need the
-    # text summary for the LLM.
-    # Alternative: track a per-task call counter in Redis and only emit on
-    # the first call. Rejected because it adds state, and re-fetching
-    # offset=0 (e.g. "show me the results again") should show the widget.
-    # Widget JSON is only useful for clients that can render iframes
-    # (Claude.ai, Claude Desktop). Clients like Claude Code don't render
-    # widgets, so the JSON just wastes context tokens.
+    # ── Widget data → structuredContent (client only, NOT the LLM) ───
     #
-    # Detection uses a two-tier whitelist (see tool_helpers.client_supports_widgets):
-    #  1. MCP Apps UI capability — clients that advertise
-    #     experimental["io.modelcontextprotocol/ui"] explicitly support widgets.
-    #  2. Name-based whitelist — Claude.ai/Desktop don't advertise the
-    #     capability yet, so we whitelist known widget-capable client names.
-    #     Unknown clients default to NO widget (saves context tokens).
-    #     This fallback should be removed once clients adopt the capability.
-    contents: list[TextContent] = []
+    # Only emit on the first page — the widget fetches the full dataset
+    # independently, so subsequent pages only need the text summary.
+    # Widget JSON is only useful for clients that can render iframes
+    # (Claude.ai, Claude Desktop).  Unknown clients get skip_widget=True.
+    structured: dict[str, Any] | None = None
     if offset == 0 and not skip_widget:
-        widget_data: dict[str, Any] = {
+        structured = {
             "csv_url": csv_url,
             "preview": preview_records,
             "total": total,
             "fetch_full_results": True,
         }
         if session_url:
-            widget_data["session_url"] = session_url
+            structured["session_url"] = session_url
+        if artifact_id:
+            structured["artifact_id"] = artifact_id
         if poll_token:
-            widget_data["poll_token"] = poll_token
-            widget_data["download_token_url"] = (
+            structured["poll_token"] = poll_token
+            structured["download_token_url"] = (
                 f"{mcp_server_url}/api/results/{task_id}/download-token"
             )
-        contents.append(TextContent(type="text", text=json.dumps(widget_data)))
 
+    # ── Summary + inline data → content (for the LLM) ───────────────
     if has_more:
         page_size_arg = f", page_size={hint_page_size}"
         summary = (
@@ -182,8 +178,25 @@ def _build_result_response(
             f"of {total} (final page)."
         )
 
-    contents.append(TextContent(type="text", text=summary))
-    return contents
+    # Inform the LLM when the page was reduced to fit the token budget.
+    if requested_page_size is not None and page_size < requested_page_size:
+        summary += (
+            f"\nNote: page was reduced from {requested_page_size} to {page_size} rows "
+            f"to fit within the context token budget."
+        )
+
+    if artifact_id:
+        summary += f"\nOutput artifact_id (use to chain into next tool): {artifact_id}"
+
+    # Append the actual data rows so the LLM can reason about them.
+    data_text = json.dumps(preview_records)
+    summary += f"\n\nData:\n{data_text}"
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=summary)],  # pyright: ignore[reportArgumentType]  # list invariance
+        structuredContent=structured,
+        isError=False,
+    )
 
 
 async def _get_csv_url(
@@ -213,7 +226,7 @@ async def try_cached_result(
     *,
     skip_widget: bool = False,
     skip_session: bool = False,
-) -> list[TextContent] | None:
+) -> CallToolResult | None:
     cached_meta_raw = await redis_store.get_result_meta(task_id)
     if not cached_meta_raw:
         return None
@@ -265,6 +278,7 @@ async def try_cached_result(
         session_url=meta.get("session_url", ""),
         poll_token=poll_token or "",
         mcp_server_url=mcp_server_url,
+        artifact_id=meta.get("artifact_id", ""),
         requested_page_size=page_size,
         skip_widget=skip_widget,
         skip_session=skip_session,
@@ -278,10 +292,11 @@ async def try_store_result(
     page_size: int,
     session_url: str = "",
     mcp_server_url: str = "",
+    artifact_id: str = "",
     *,
     skip_widget: bool = False,
     skip_session: bool = False,
-) -> list[TextContent]:
+) -> CallToolResult:
     """Store a DataFrame in Redis and return a paginated response."""
     try:
         all_records = _sanitize_records(df.to_dict(orient="records"))
@@ -294,6 +309,8 @@ async def try_store_result(
         meta: dict[str, Any] = {"total": total, "columns": columns}
         if session_url:
             meta["session_url"] = session_url
+        if artifact_id:
+            meta["artifact_id"] = artifact_id
         await redis_store.store_result_meta(task_id, json.dumps(meta))
 
         # Build and cache page preview
@@ -328,6 +345,7 @@ async def try_store_result(
             session_url=session_url,
             poll_token=poll_token or "",
             mcp_server_url=mcp_server_url,
+            artifact_id=artifact_id,
             requested_page_size=page_size,
             skip_widget=skip_widget,
             skip_session=skip_session,

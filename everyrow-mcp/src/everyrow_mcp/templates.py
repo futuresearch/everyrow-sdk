@@ -759,12 +759,9 @@ function fetchFullResults(url,opts,hasPreview,total){
     }
   });
 }
-app.ontoolresult=({content})=>{
-  const t=content?.find(c=>c.type==="text");if(!t)return;
-  let meta;try{meta=JSON.parse(t.text);}catch{
-    /* Non-JSON (e.g. summary text) — ignore if widget already active */
-    return;
-  }
+app.ontoolresult=({structuredContent})=>{
+  if(!structuredContent)return;
+  const meta=structuredContent;
   /* Only show the widget for recognized data shapes */
   const isWidget=meta.fetch_full_results||meta.preview||Array.isArray(meta);
   if(!isWidget){return;}

@@ -488,8 +488,9 @@ class TestDownloadTokenLifecycle:
         )
         assert result is not None
 
-        # 2. Parse widget JSON — the data the widget receives via ontoolresult
-        widget = json.loads(result[0].text)
+        # 2. Parse widget data — structuredContent is sent to the client, not the LLM
+        widget = result.structuredContent
+        assert widget is not None
         assert "poll_token" in widget
         assert "download_token_url" in widget
         assert widget["download_token_url"] == (
@@ -535,7 +536,8 @@ class TestDownloadTokenLifecycle:
             task_id, df, 0, 10, mcp_server_url="http://testserver"
         )
         assert result is not None
-        widget = json.loads(result[0].text)
+        widget = result.structuredContent
+        assert widget is not None
 
         # Extract and consume the baked-in download token (simulates first click)
         baked_token = widget["csv_url"].split("token=")[1]
@@ -586,7 +588,8 @@ class TestDownloadTokenLifecycle:
         )
         assert cached is not None
 
-        widget = json.loads(cached[0].text)
+        widget = cached.structuredContent
+        assert widget is not None
         assert widget["poll_token"] == poll_token
         assert f"/api/results/{task_id}/download-token" in widget["download_token_url"]
 

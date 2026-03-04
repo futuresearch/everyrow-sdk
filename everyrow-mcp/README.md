@@ -4,7 +4,7 @@
 
 MCP (Model Context Protocol) server for [everyrow](https://everyrow.io): agent ops at spreadsheet scale.
 
-This server exposes everyrow's 5 core operations as MCP tools, allowing LLM applications to screen, rank, dedupe, merge, and run agents on CSV files.
+This server exposes everyrow's core operations as MCP tools, allowing LLM applications to classify, screen, rank, dedupe, merge, forecast, and run agents on CSV files.
 
 **All tools operate on local CSV files.** Provide absolute file paths as input, and transformed results are written to new CSV files at your specified output path.
 
@@ -113,10 +113,35 @@ Parameters:
 - merge_on_left: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
 - merge_on_right: (optional) Only set if you expect exact string matches on this column or want to draw agent attention to it. Fine to omit.
 - use_web_search: (optional) "auto" (default), "yes", or "no"
-- relationship_type: (optional) "many_to_one" (default) — multiple left rows can match one right row. "one_to_one" — only when both tables have unique entities of the same kind.
+- relationship_type: (optional) "many_to_one" (default) if multiple left rows can match one right row, "one_to_one" matches must be unique, "one_to_many" one left row can match multiple right rows, "many_to_many" multiple left rows can match multiple right rows. For one_to_many and many_to_many, multiple matches are joined with " | " in each added column.
 ```
 
 Example: Match software products (left, enriched) to parent companies (right, lookup): Photoshop -> Adobe
+
+### everyrow_classify
+
+Classify each row into one of the provided categories.
+
+```
+Parameters:
+- task: Natural language classification instructions
+- categories: Allowed categories (minimum 2)
+- classification_field: (optional) Output column name (default: "classification")
+- include_reasoning: (optional) Include reasoning column (default: false)
+```
+
+Example: Classify companies by GICS sector with categories ["Energy", "Financials", "Information Technology", ...]
+
+### everyrow_forecast
+
+Forecast the probability of binary questions.
+
+```
+Parameters:
+- context: (optional) Batch-level context for all questions
+```
+
+Example: "Will the US Federal Reserve cut rates before July 2027?"
 
 ### everyrow_agent
 

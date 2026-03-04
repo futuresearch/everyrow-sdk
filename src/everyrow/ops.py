@@ -7,9 +7,10 @@ from pydantic import BaseModel
 
 from everyrow.api_utils import handle_response
 from everyrow.constants import EveryrowError
-from everyrow.generated.api.artifacts import create_artifact_artifacts_post
+from everyrow.generated.api.artifacts import upload_data_artifacts_upload_post
 from everyrow.generated.api.operations import (
     agent_map_operations_agent_map_post,
+    classify_operations_classify_post,
     dedupe_operations_dedupe_post,
     forecast_operations_forecast_post,
     merge_operations_merge_post,
@@ -21,9 +22,8 @@ from everyrow.generated.models import (
     AgentMapOperation,
     AgentMapOperationInputType1Item,
     AgentMapOperationResponseSchemaType0,
-    CreateArtifactRequest,
-    CreateArtifactRequestDataType0Item,
-    CreateArtifactRequestDataType1,
+    ClassifyOperation,
+    ClassifyOperationInputType1Item,
     DedupeOperation,
     DedupeOperationInputType1Item,
     DedupeOperationStrategy,
@@ -44,6 +44,9 @@ from everyrow.generated.models import (
     SingleAgentOperationInputType1Item,
     SingleAgentOperationInputType2,
     SingleAgentOperationResponseSchemaType0,
+    UploadDataArtifactsUploadPostJsonBody,
+    UploadDataArtifactsUploadPostJsonBodyDataType0Item,
+    UploadDataArtifactsUploadPostJsonBodyDataType1,
 )
 from everyrow.generated.types import UNSET
 from everyrow.result import MergeResult, Result, ScalarResult, TableResult
@@ -114,11 +117,13 @@ def _prepare_single_input[TItem, TObj](
 
 async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
     """Create a scalar artifact by uploading a single record."""
-    body = CreateArtifactRequest(
-        data=CreateArtifactRequestDataType1.from_dict(input.model_dump()),
+    body = UploadDataArtifactsUploadPostJsonBody(
+        data=UploadDataArtifactsUploadPostJsonBodyDataType1.from_dict(
+            input.model_dump()
+        ),
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(
+    response = await upload_data_artifacts_upload_post.asyncio(
         client=session.client, body=body
     )
     response = handle_response(response)
@@ -128,11 +133,14 @@ async def create_scalar_artifact(input: BaseModel, session: Session) -> UUID:
 async def create_table_artifact(input: DataFrame, session: Session) -> UUID:
     """Create a table artifact by uploading a list of records."""
     records = _df_to_records(input)
-    body = CreateArtifactRequest(
-        data=[CreateArtifactRequestDataType0Item.from_dict(r) for r in records],
+    body = UploadDataArtifactsUploadPostJsonBody(
+        data=[
+            UploadDataArtifactsUploadPostJsonBodyDataType0Item.from_dict(r)
+            for r in records
+        ],
         session_id=session.session_id,
     )
-    response = await create_artifact_artifacts_post.asyncio(
+    response = await upload_data_artifacts_upload_post.asyncio(
         client=session.client, body=body
     )
     response = handle_response(response)
@@ -583,7 +591,10 @@ async def merge(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
+    relationship_type: Literal[
+        "many_to_one", "one_to_one", "one_to_many", "many_to_many"
+    ]
+    | None = None,
 ) -> MergeResult:
     """Merge two tables using AI (LEFT JOIN semantics).
 
@@ -595,7 +606,7 @@ async def merge(
         merge_on_left: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
         merge_on_right: Only set if you expect exact string matches on this column or want to draw agent attention to it. Auto-detected if omitted.
         use_web_search: Control web search behavior: "auto" (default) tries LLM merge first then conditionally searches, "no" skips web search entirely, "yes" forces web search on every row.
-        relationship_type: Defaults to "many_to_one", which is correct in most cases (multiple left rows can match one right row, e.g. products → companies). Only use "one_to_one" when both tables have unique entities of the same kind.
+        relationship_type: Control merge relationship type / cardinality between the two tables: "many_to_one" (default) allows multiple left rows to match one right row (e.g. matching reviews to product), "one_to_one" enforces unique matching between left and right rows (e.g. CEO to company), "one_to_many" allows one left row to match multiple right rows (e.g. company to products), "many_to_many" allows multiple left rows to match multiple right rows (e.g. companies to investors). For one_to_many and many_to_many, multiple matches are represented by joining the right-table values with " | " in each added column.
 
     Returns:
         MergeResult containing the merged table and match breakdown by method (exact, fuzzy, llm, web)
@@ -642,7 +653,10 @@ async def merge_async(
     merge_on_left: str | None = None,
     merge_on_right: str | None = None,
     use_web_search: Literal["auto", "yes", "no"] | None = None,
-    relationship_type: Literal["many_to_one", "one_to_one"] | None = None,
+    relationship_type: Literal[
+        "many_to_one", "one_to_one", "one_to_many", "many_to_many"
+    ]
+    | None = None,
 ) -> MergeTask:
     """Submit a merge task asynchronously.
 
@@ -844,6 +858,103 @@ async def forecast_async(
     )
 
     response = await forecast_operations_forecast_post.asyncio(
+        client=session.client, body=body
+    )
+    response = handle_response(response)
+
+    cohort_task: EveryrowTask[BaseModel] = EveryrowTask(
+        response_model=BaseModel, is_map=True, is_expand=False
+    )
+    cohort_task.set_submitted(response.task_id, response.session_id, session.client)
+    return cohort_task
+
+
+# --- Classify ---
+
+
+async def classify(
+    task: str,
+    categories: list[str],
+    input: DataFrame | UUID | TableResult,
+    classification_field: str = "classification",
+    include_reasoning: bool = False,
+    session: Session | None = None,
+) -> TableResult:
+    """Classify each row of a table into one of the provided categories.
+
+    Uses a two-phase approach: Phase 1 attempts fast batch classification using
+    web research, and Phase 2 follows up with deeper research on ambiguous rows.
+    Each row is assigned exactly one of the provided categories.
+
+    Args:
+        task: Natural-language instructions describing how to classify each row.
+        categories: Allowed category values (minimum 2). Each row will be
+            assigned exactly one of these.
+        input: The input table. Each row is classified independently.
+        classification_field: Name of the output column that will contain the
+            assigned category. Default: ``"classification"``.
+        include_reasoning: If True, adds a ``reasoning`` column with the
+            agent's justification for the classification.
+        session: Optional session. If not provided, one will be created
+            automatically.
+
+    Returns:
+        TableResult with a ``classification_field`` column (and optionally
+        ``reasoning``) added to each input row.
+    """
+    if session is None:
+        async with create_session() as internal_session:
+            cohort_task = await classify_async(
+                task=task,
+                categories=categories,
+                session=internal_session,
+                input=input,
+                classification_field=classification_field,
+                include_reasoning=include_reasoning,
+            )
+            result = await cohort_task.await_result(on_progress=print_progress)
+            if isinstance(result, TableResult):
+                return result
+            raise EveryrowError("Classify task did not return a table result")
+    cohort_task = await classify_async(
+        task=task,
+        categories=categories,
+        session=session,
+        input=input,
+        classification_field=classification_field,
+        include_reasoning=include_reasoning,
+    )
+    result = await cohort_task.await_result(on_progress=print_progress)
+    if isinstance(result, TableResult):
+        return result
+    raise EveryrowError("Classify task did not return a table result")
+
+
+async def classify_async(
+    task: str,
+    categories: list[str],
+    session: Session,
+    input: DataFrame | UUID | TableResult,
+    classification_field: str = "classification",
+    include_reasoning: bool = False,
+) -> EveryrowTask[BaseModel]:
+    """Submit a classify task asynchronously.
+
+    Returns:
+        EveryrowTask that resolves to a TableResult with a classification column.
+    """
+    input_data = _prepare_table_input(input, ClassifyOperationInputType1Item)
+
+    body = ClassifyOperation(
+        input_=input_data,  # type: ignore
+        task=task,
+        categories=categories,
+        session_id=session.session_id,
+        classification_field=classification_field,
+        include_reasoning=include_reasoning,
+    )
+
+    response = await classify_operations_classify_post.asyncio(
         client=session.client, body=body
     )
     response = handle_response(response)

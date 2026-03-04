@@ -5,13 +5,12 @@ from .agent_map_operation_input_type_1_item import AgentMapOperationInputType1It
 from .agent_map_operation_input_type_2 import AgentMapOperationInputType2
 from .agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
 from .billing_response import BillingResponse
+from .built_in_list_item import BuiltInListItem
+from .built_in_lists_response import BuiltInListsResponse
 from .cancel_task_response import CancelTaskResponse
 from .classify_operation import ClassifyOperation
 from .classify_operation_input_type_1_item import ClassifyOperationInputType1Item
 from .classify_operation_input_type_2 import ClassifyOperationInputType2
-from .create_artifact_request import CreateArtifactRequest
-from .create_artifact_request_data_type_0_item import CreateArtifactRequestDataType0Item
-from .create_artifact_request_data_type_1 import CreateArtifactRequestDataType1
 from .create_artifact_response import CreateArtifactResponse
 from .create_session import CreateSession
 from .dedupe_operation import DedupeOperation
@@ -42,6 +41,8 @@ from .rank_operation import RankOperation
 from .rank_operation_input_type_1_item import RankOperationInputType1Item
 from .rank_operation_input_type_2 import RankOperationInputType2
 from .rank_operation_response_schema_type_0 import RankOperationResponseSchemaType0
+from .request_upload_request import RequestUploadRequest
+from .request_upload_response import RequestUploadResponse
 from .screen_operation import ScreenOperation
 from .screen_operation_input_type_1_item import ScreenOperationInputType1Item
 from .screen_operation_input_type_2 import ScreenOperationInputType2
@@ -49,6 +50,8 @@ from .screen_operation_response_schema_type_0 import ScreenOperationResponseSche
 from .session_list_item import SessionListItem
 from .session_list_response import SessionListResponse
 from .session_response import SessionResponse
+from .session_task_item import SessionTaskItem
+from .session_tasks_response import SessionTasksResponse
 from .single_agent_operation import SingleAgentOperation
 from .single_agent_operation_input_type_1_item import SingleAgentOperationInputType1Item
 from .single_agent_operation_input_type_2 import SingleAgentOperationInputType2
@@ -59,6 +62,15 @@ from .task_result_response_data_type_0_item import TaskResultResponseDataType0It
 from .task_result_response_data_type_1 import TaskResultResponseDataType1
 from .task_status import TaskStatus
 from .task_status_response import TaskStatusResponse
+from .upload_complete_response import UploadCompleteResponse
+from .upload_data_artifacts_upload_post_files_body import UploadDataArtifactsUploadPostFilesBody
+from .upload_data_artifacts_upload_post_json_body import UploadDataArtifactsUploadPostJsonBody
+from .upload_data_artifacts_upload_post_json_body_data_type_0_item import (
+    UploadDataArtifactsUploadPostJsonBodyDataType0Item,
+)
+from .upload_data_artifacts_upload_post_json_body_data_type_1 import UploadDataArtifactsUploadPostJsonBodyDataType1
+from .use_built_in_list_request import UseBuiltInListRequest
+from .use_built_in_list_response import UseBuiltInListResponse
 from .validation_error import ValidationError
 from .whoami_whoami_get_response_whoami_whoami_get import WhoamiWhoamiGetResponseWhoamiWhoamiGet
 
@@ -68,13 +80,12 @@ __all__ = (
     "AgentMapOperationInputType2",
     "AgentMapOperationResponseSchemaType0",
     "BillingResponse",
+    "BuiltInListItem",
+    "BuiltInListsResponse",
     "CancelTaskResponse",
     "ClassifyOperation",
     "ClassifyOperationInputType1Item",
     "ClassifyOperationInputType2",
-    "CreateArtifactRequest",
-    "CreateArtifactRequestDataType0Item",
-    "CreateArtifactRequestDataType1",
     "CreateArtifactResponse",
     "CreateSession",
     "DedupeOperation",
@@ -105,6 +116,8 @@ __all__ = (
     "RankOperationInputType1Item",
     "RankOperationInputType2",
     "RankOperationResponseSchemaType0",
+    "RequestUploadRequest",
+    "RequestUploadResponse",
     "ScreenOperation",
     "ScreenOperationInputType1Item",
     "ScreenOperationInputType2",
@@ -112,6 +125,8 @@ __all__ = (
     "SessionListItem",
     "SessionListResponse",
     "SessionResponse",
+    "SessionTaskItem",
+    "SessionTasksResponse",
     "SingleAgentOperation",
     "SingleAgentOperationInputType1Item",
     "SingleAgentOperationInputType2",
@@ -122,6 +137,13 @@ __all__ = (
     "TaskResultResponseDataType1",
     "TaskStatus",
     "TaskStatusResponse",
+    "UploadCompleteResponse",
+    "UploadDataArtifactsUploadPostFilesBody",
+    "UploadDataArtifactsUploadPostJsonBody",
+    "UploadDataArtifactsUploadPostJsonBodyDataType0Item",
+    "UploadDataArtifactsUploadPostJsonBodyDataType1",
+    "UseBuiltInListRequest",
+    "UseBuiltInListResponse",
     "ValidationError",
     "WhoamiWhoamiGetResponseWhoamiWhoamiGet",
 )

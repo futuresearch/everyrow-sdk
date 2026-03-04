@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-Deploy a team of researchers to forecast, score, classify, or gather data. Use yourself in the [app](https://everyrow.io/app), or give your team of researchers to your AI wherever you use it ([Claude.ai](https://everyrow.io/docs/claude-ai), [Claude Cowork](https://everyrow.io/docs/claude-cowork), [Claude Code](https://everyrow.io/docs/claude-code), or [Gemini/Codex/other AI surfaces](https://everyrow.io/docs/)), or point them to this [Python SDK](https://everyrow.io/docs/getting-started).
+Give yourself, or your AI, a team of researchers to gather data, forecast, score, or classify every row in a dataset. Available [standalone](https://everyrow.io/app), as a Claude Code plugin, MCP server, or Python SDK. See the [docs site](https://everyrow.io/docs) for how to install into your interface of choice.
 
 Requires Google sign in, no credit card required.
 
@@ -32,7 +32,7 @@ Spin up a team of:
 | [**Agents**](https://everyrow.io/docs/reference/RESEARCH)       | Research, then analyze     | 1–3¢/researcher    | 10k rows |
 | [**Forecasters**](https://everyrow.io/docs/reference/FORECAST)  | Predict outcomes           | 20-50¢/researcher  | 10k rows |
 | [**Scorers**](https://everyrow.io/docs/reference/RANK)          | Research, then score       | 1-5¢/researcher    | 10k rows |
-| [**Classifiers**](https://everyrow.io/docs/reference/SCREEN)    | Research, then categorize  | 0.1-0.7¢/researcher | 10k rows |
+| [**Classifiers**](https://everyrow.io/docs/reference/CLASSIFY)  | Research, then categorize  | 0.1-0.7¢/researcher | 10k rows |
 | [**Matchers**](https://everyrow.io/docs/reference/MERGE)        | Find matching rows         | 0.2-0.5¢/researcher | 20k rows |
 
 See the full [API reference](https://everyrow.io/docs/api), [guides](https://everyrow.io/docs/guides), and [case studies](https://everyrow.io/docs/case-studies), (for example, see our [case study](https://everyrow.io/docs/case-studies/llm-web-research-agents-at-scale) running a `Research` task on 10k rows, running agents that used 120k LLM calls.)
@@ -86,7 +86,7 @@ result = await agent_map(
 print(result.data.head())
 ```
 
-See the API [docs](https://everyrow.io/docs/reference/RESEARCH.md), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a case study for [researching government data](https://everyrow.io/docs/case-studies/research-and-rank-permit-times) at scale.
+See the API [docs](https://everyrow.io/docs/reference/RESEARCH), a case study of [labeling data](https://everyrow.io/docs/classify-dataframe-rows-llm) or a case study for [researching government data](https://everyrow.io/docs/case-studies/research-and-rank-permit-times) at scale.
 
 ## Sessions
 
@@ -208,23 +208,23 @@ Requires Python 3.12+. Then you can use the SDK directly:
 ```python
 import asyncio
 import pandas as pd
-from everyrow.ops import screen
-from pydantic import BaseModel, Field
+from everyrow.ops import classify
 
 companies = pd.DataFrame([
-    {"company": "Airtable",}, {"company": "Vercel",}, {"company": "Notion",}
+    {"company": "Apple"}, {"company": "JPMorgan Chase"}, {"company": "ExxonMobil"},
+    {"company": "Tesla"}, {"company": "Pfizer"}, {"company": "Duke Energy"},
 ])
 
-class JobScreenResult(BaseModel):
-    qualifies: bool = Field(description="True if company lists jobs with all criteria")
-
 async def main():
-    result = await screen(
-        task="""Qualifies if: 1. Remote-friendly, 2. Senior, and 3. Discloses salary""",
+    result = await classify(
+        task="Classify this company by its GICS industry sector",
+        categories=["Energy", "Materials", "Industrials", "Consumer Discretionary",
+                     "Consumer Staples", "Health Care", "Financials",
+                     "Information Technology", "Communication Services",
+                     "Utilities", "Real Estate"],
         input=companies,
-        response_model=JobScreenResult,
     )
-    print(result.data.head())
+    print(result.data[["company", "classification"]])
 
 asyncio.run(main())
 ```

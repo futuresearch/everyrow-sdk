@@ -1,45 +1,40 @@
 from http import HTTPStatus
 from typing import Any
+from urllib.parse import quote
+from uuid import UUID
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
-from ...models.create_artifact_request import CreateArtifactRequest
-from ...models.create_artifact_response import CreateArtifactResponse
-from ...models.error_response import ErrorResponse
+from ...models.http_validation_error import HTTPValidationError
+from ...models.upload_complete_response import UploadCompleteResponse
 from ...types import Response
 
 
 def _get_kwargs(
-    *,
-    body: CreateArtifactRequest,
+    upload_id: UUID,
 ) -> dict[str, Any]:
-    headers: dict[str, Any] = {}
-
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/artifacts",
+        "method": "put",
+        "url": "/uploads/{upload_id}".format(
+            upload_id=quote(str(upload_id), safe=""),
+        ),
     }
 
-    _kwargs["json"] = body.to_dict()
-
-    headers["Content-Type"] = "application/json"
-
-    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> CreateArtifactResponse | ErrorResponse | None:
+) -> HTTPValidationError | UploadCompleteResponse | None:
     if response.status_code == 200:
-        response_200 = CreateArtifactResponse.from_dict(response.json())
+        response_200 = UploadCompleteResponse.from_dict(response.json())
 
         return response_200
 
     if response.status_code == 422:
-        response_422 = ErrorResponse.from_dict(response.json())
+        response_422 = HTTPValidationError.from_dict(response.json())
 
         return response_422
 
@@ -51,7 +46,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[CreateArtifactResponse | ErrorResponse]:
+) -> Response[HTTPValidationError | UploadCompleteResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -61,28 +56,28 @@ def _build_response(
 
 
 def sync_detailed(
+    upload_id: UUID,
     *,
-    client: AuthenticatedClient,
-    body: CreateArtifactRequest,
-) -> Response[CreateArtifactResponse | ErrorResponse]:
-    """Create an artifact
+    client: AuthenticatedClient | Client,
+) -> Response[HTTPValidationError | UploadCompleteResponse]:
+    """Upload a CSV file via presigned URL
 
-     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
-    JSON object creates a scalar.
+     Upload a CSV file using a presigned URL obtained from POST /uploads/request. Authentication is via
+    HMAC signature in query parameters — no Bearer token required.
 
     Args:
-        body (CreateArtifactRequest):
+        upload_id (UUID):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[CreateArtifactResponse | ErrorResponse]
+        Response[HTTPValidationError | UploadCompleteResponse]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = client.get_httpx_client().request(
@@ -93,55 +88,55 @@ def sync_detailed(
 
 
 def sync(
+    upload_id: UUID,
     *,
-    client: AuthenticatedClient,
-    body: CreateArtifactRequest,
-) -> CreateArtifactResponse | ErrorResponse | None:
-    """Create an artifact
+    client: AuthenticatedClient | Client,
+) -> HTTPValidationError | UploadCompleteResponse | None:
+    """Upload a CSV file via presigned URL
 
-     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
-    JSON object creates a scalar.
+     Upload a CSV file using a presigned URL obtained from POST /uploads/request. Authentication is via
+    HMAC signature in query parameters — no Bearer token required.
 
     Args:
-        body (CreateArtifactRequest):
+        upload_id (UUID):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        CreateArtifactResponse | ErrorResponse
+        HTTPValidationError | UploadCompleteResponse
     """
 
     return sync_detailed(
+        upload_id=upload_id,
         client=client,
-        body=body,
     ).parsed
 
 
 async def asyncio_detailed(
+    upload_id: UUID,
     *,
-    client: AuthenticatedClient,
-    body: CreateArtifactRequest,
-) -> Response[CreateArtifactResponse | ErrorResponse]:
-    """Create an artifact
+    client: AuthenticatedClient | Client,
+) -> Response[HTTPValidationError | UploadCompleteResponse]:
+    """Upload a CSV file via presigned URL
 
-     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
-    JSON object creates a scalar.
+     Upload a CSV file using a presigned URL obtained from POST /uploads/request. Authentication is via
+    HMAC signature in query parameters — no Bearer token required.
 
     Args:
-        body (CreateArtifactRequest):
+        upload_id (UUID):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[CreateArtifactResponse | ErrorResponse]
+        Response[HTTPValidationError | UploadCompleteResponse]
     """
 
     kwargs = _get_kwargs(
-        body=body,
+        upload_id=upload_id,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -150,29 +145,29 @@ async def asyncio_detailed(
 
 
 async def asyncio(
+    upload_id: UUID,
     *,
-    client: AuthenticatedClient,
-    body: CreateArtifactRequest,
-) -> CreateArtifactResponse | ErrorResponse | None:
-    """Create an artifact
+    client: AuthenticatedClient | Client,
+) -> HTTPValidationError | UploadCompleteResponse | None:
+    """Upload a CSV file via presigned URL
 
-     Upload data as an artifact for use in operations. A list of JSON objects creates a table. A single
-    JSON object creates a scalar.
+     Upload a CSV file using a presigned URL obtained from POST /uploads/request. Authentication is via
+    HMAC signature in query parameters — no Bearer token required.
 
     Args:
-        body (CreateArtifactRequest):
+        upload_id (UUID):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        CreateArtifactResponse | ErrorResponse
+        HTTPValidationError | UploadCompleteResponse
     """
 
     return (
         await asyncio_detailed(
+            upload_id=upload_id,
             client=client,
-            body=body,
         )
     ).parsed

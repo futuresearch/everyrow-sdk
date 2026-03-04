@@ -1,6 +1,7 @@
 """Utility functions for the everyrow MCP server."""
 
 import asyncio
+import csv
 import ipaddress
 import json
 import logging
@@ -453,4 +454,4 @@ def save_result_to_csv(df: pd.DataFrame, path: Path) -> None:
         df: DataFrame to save
         path: Path to save to
     """
-    df.to_csv(path, index=False)
+    df.to_csv(path, index=False, quoting=csv.QUOTE_ALL)

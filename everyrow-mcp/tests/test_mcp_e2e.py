@@ -176,8 +176,10 @@ class TestMcpProtocol:
                     "everyrow_balance",
                     "everyrow_browse_lists",
                     "everyrow_cancel",
+                    "everyrow_classify",
                     "everyrow_dedupe",
                     "everyrow_forecast",
+                    "everyrow_list_session_tasks",
                     "everyrow_list_sessions",
                     "everyrow_merge",
                     "everyrow_progress",
@@ -417,7 +419,9 @@ class TestMcpProtocol:
 
             assert not result.isError
             assert len(result.content) == 1
-            assert "Error" in result.content[0].text
+            item = result.content[0]
+            assert isinstance(item, TextContent)
+            assert "Error" in item.text
 
 
 # ── TestMcpE2ERealApi — real API tests ────────────────────────
