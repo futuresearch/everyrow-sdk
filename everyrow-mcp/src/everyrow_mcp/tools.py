@@ -932,7 +932,7 @@ async def everyrow_classify(
     name="everyrow_upload_data",
     structured_output=False,
     annotations=ToolAnnotations(
-        title="Upload Data",
+        title="Process Data",
         readOnlyHint=False,
         destructiveHint=False,
         idempotentHint=True,
