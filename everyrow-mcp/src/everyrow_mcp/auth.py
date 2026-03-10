@@ -40,13 +40,11 @@ logger = logging.getLogger(__name__)
 class SupabaseTokenVerifier(TokenVerifier):
     """Verify tokens for the everyrow MCP server.
 
-    Three verification paths, tried in order:
+    Two verification paths, tried in order:
 
-    1. **API key** (``sk-cho-…``): accepted if it matches the configured
-       ``EVERYROW_API_KEY``.  Used by the everyrow-cc agent at warmup.
-    2. **JWKS** (production): verify Supabase JWTs using the project's JWKS
+    1. **JWKS** (production): verify Supabase JWTs using the project's JWKS
        endpoint.  Works with hosted Supabase (RS256 asymmetric keys).
-    3. **Supabase /auth/v1/user** (local dev fallback): when JWKS returns
+    2. **Supabase /auth/v1/user** (local dev fallback): when JWKS returns
        empty keys (local Supabase uses HS256), validate the JWT by calling
        Supabase directly — it knows its own signing secret.
     """
@@ -58,7 +56,6 @@ class SupabaseTokenVerifier(TokenVerifier):
         audience: str = "authenticated",
         redis: Redis,
         revocation_ttl: int = 3600,
-        everyrow_api_key: str | None = None,
         supabase_anon_key: str = "",
     ) -> None:
         self._supabase_base_url = supabase_url.rstrip("/")
@@ -74,7 +71,6 @@ class SupabaseTokenVerifier(TokenVerifier):
         self._redis = redis
         self._revocation_ttl = revocation_ttl
         self._jwks_lock = asyncio.Lock()
-        self._everyrow_api_key = everyrow_api_key
         self._supabase_anon_key = supabase_anon_key
         self._http_client = httpx.AsyncClient(
             timeout=httpx.Timeout(5.0),
@@ -121,10 +117,6 @@ class SupabaseTokenVerifier(TokenVerifier):
         )
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        # API key — accept the configured EVERYROW_API_KEY directly.
-        if token.startswith("sk-cho-"):
-            return self._verify_api_key(token)
-
         # JWKS verification (production path — asymmetric keys).
         result = await self._verify_jwt_via_jwks(token)
         if result is not None:
@@ -134,22 +126,6 @@ class SupabaseTokenVerifier(TokenVerifier):
         # Needed for local development where Supabase uses HS256 and the
         # JWKS endpoint returns empty keys.
         return await self._verify_jwt_via_supabase(token)
-
-    def _verify_api_key(self, token: str) -> AccessToken | None:
-        """Accept the configured EVERYROW_API_KEY as a valid bearer token."""
-        if self._everyrow_api_key and secrets.compare_digest(
-            token, self._everyrow_api_key
-        ):
-            return AccessToken(
-                token=token,
-                client_id="api-key",
-                scopes=["everyrow"],
-                expires_at=None,
-            )
-        logger.warning(
-            "API key presented but does not match configured EVERYROW_API_KEY"
-        )
-        return None
 
     async def _verify_jwt_via_jwks(self, token: str) -> AccessToken | None:
         """Verify a Supabase JWT using the project's JWKS endpoint."""

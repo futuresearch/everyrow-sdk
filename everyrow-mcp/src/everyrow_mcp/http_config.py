@@ -80,7 +80,6 @@ def configure_http_mode(
         verifier = SupabaseTokenVerifier(
             settings.supabase_url,
             redis=redis_client,
-            everyrow_api_key=settings.everyrow_api_key,
             supabase_anon_key=settings.supabase_anon_key,
         )
         auth_provider = EveryRowAuthProvider(
