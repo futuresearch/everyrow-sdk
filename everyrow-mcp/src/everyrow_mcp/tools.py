@@ -1012,11 +1012,13 @@ async def everyrow_progress(
 ) -> list[TextContent]:
     """Check progress of a running task. Blocks briefly to limit the polling rate.
 
-    After receiving a status update, immediately call everyrow_progress again
-    unless the task is completed or failed. The tool handles pacing internally.
-    Do not add commentary between progress calls, just call again immediately.
+    After receiving a status update with partial results, briefly comment on
+    the new rows for the user, then immediately call everyrow_progress again
+    (passing the cursor from this response) unless the task is completed or failed.
     """
-    logger.debug("everyrow_progress: task_id=%s", params.task_id)
+    logger.debug(
+        "everyrow_progress: task_id=%s cursor=%s", params.task_id, params.cursor
+    )
     client = _get_client(ctx)
     task_id = params.task_id
 
@@ -1059,7 +1061,37 @@ async def everyrow_progress(
     if ts.is_terminal:
         logger.info("everyrow_progress: task_id=%s status=%s", task_id, ts.status.value)
 
-    return [TextContent(type="text", text=ts.progress_message(task_id))]
+    # ── Fetch partial results for non-terminal, non-screen tasks ──
+    partial_rows: list[dict[str, Any]] | None = None
+    cursor: str | None = params.cursor
+    if not ts.is_terminal and not ts.is_screen and ts.completed > 0:
+        try:
+            httpx_client = client.get_async_httpx_client()
+            query: dict[str, Any] = {"limit": 5}
+            if params.cursor:
+                query["completed_after"] = params.cursor
+            resp = await httpx_client.request(
+                method="get",
+                url=f"/tasks/{task_id}/partial_rows",
+                params=query,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                partial_rows = data.get("rows") or None
+                cursor = data.get("cursor") or params.cursor
+            else:
+                logger.warning(
+                    "partial_rows returned %s for task %s", resp.status_code, task_id
+                )
+        except Exception:
+            logger.exception("Failed to fetch partial rows for task %s", task_id)
+
+    return [
+        TextContent(
+            type="text",
+            text=ts.progress_message(task_id, partial_rows=partial_rows, cursor=cursor),
+        )
+    ]
 
 
 async def everyrow_results_stdio(

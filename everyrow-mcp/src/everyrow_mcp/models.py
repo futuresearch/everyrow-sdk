@@ -626,6 +626,12 @@ class ProgressInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     task_id: str = Field(..., description="The task ID returned by the operation tool.")
+    cursor: str | None = Field(
+        default=None,
+        description="Cursor from the previous progress call. "
+        "Pass this to only receive rows completed since the last check. "
+        "Omit on the first call to see all completed rows so far.",
+    )
 
     @field_validator("task_id")
     @classmethod

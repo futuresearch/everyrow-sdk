@@ -430,7 +430,13 @@ class TaskState(BaseModel):
             started_at=self.started_at,
         )
 
-    def progress_message(self, task_id: str) -> str:
+    def progress_message(  # noqa: PLR0912
+        self,
+        task_id: str,
+        *,
+        partial_rows: list[dict[str, Any]] | None = None,
+        cursor: str | None = None,
+    ) -> str:
         if self.is_terminal:
             if self.error:
                 return f"Task {self.status.value}: {self.error}"
@@ -462,9 +468,20 @@ class TaskState(BaseModel):
                 Immediately call everyrow_progress(task_id='{task_id}').""")
 
         fail_part = f", {self.failed} failed" if self.failed else ""
-        return dedent(f"""\
-            Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed)
-            Immediately call everyrow_progress(task_id='{task_id}').""")
+        cursor_arg = f", cursor='{cursor}'" if cursor else ""
+        msg = dedent(f"""\
+            Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed)""")
+
+        if partial_rows:
+            msg += "\n\nNewly completed rows:"
+            for row in partial_rows:
+                msg += f"\n- {json.dumps(row, default=str)}"
+            msg += "\n\nBriefly comment on these partial results for the user, then immediately call "
+        else:
+            msg += "\nImmediately call "
+
+        msg += f"everyrow_progress(task_id='{task_id}'{cursor_arg})."
+        return msg
 
 
 def write_initial_task_state(
