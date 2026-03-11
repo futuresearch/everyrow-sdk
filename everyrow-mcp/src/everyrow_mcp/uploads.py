@@ -34,6 +34,11 @@ class RequestUploadUrlInput(BaseModel):
         description="Name of the file to upload (must end in .csv).",
         min_length=1,
     )
+    session_id: str | None = Field(
+        default=None,
+        description="Session ID (UUID) to add the upload to an existing session. "
+        "If omitted, a new session is auto-created on upload.",
+    )
 
 
 # ── MCP tool ──────────────────────────────────────────────────
@@ -62,9 +67,9 @@ def register_upload_tool(mcp: FastMCP, mcp_server_url: str) -> None:
         This is the recommended way to ingest local files in HTTP mode.
 
         Steps:
-        1. Call this tool with the filename
+        1. Call this tool with the filename (and optionally session_id to add to an existing session)
         2. Execute the returned curl command to upload the file
-        3. Parse the JSON response to get the artifact_id
+        3. Parse the JSON response to get the artifact_id and session_id
         4. Pass the artifact_id to any processing tool (everyrow_agent, etc.)
         """
         if not params.filename.lower().endswith(".csv"):
@@ -88,12 +93,15 @@ def register_upload_tool(mcp: FastMCP, mcp_server_url: str) -> None:
 
         # Delegate to the Cohort Engine API
         engine_url = f"{settings.everyrow_api_url}/uploads/request"
+        request_body: dict = {"filename": params.filename}
+        if params.session_id is not None:
+            request_body["session_id"] = params.session_id
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 resp = await http.post(
                     engine_url,
                     headers={"Authorization": f"Bearer {api_token}"},
-                    json={"filename": params.filename},
+                    json=request_body,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -123,13 +131,15 @@ def register_upload_tool(mcp: FastMCP, mcp_server_url: str) -> None:
             # Rewrite the URL to point at the MCP server instead of the Engine.
             # The Claude.ai sandbox can reach the MCP server but not api.everyrow.ai.
             upload_url = _rewrite_upload_url(engine_upload_url, mcp_server_url)
-            result = {
+            result: dict = {
                 "upload_url": upload_url,
                 "upload_id": upload_id,
                 "expires_in": data["expires_in"],
                 "max_size_bytes": data["max_size_bytes"],
                 "curl_command": f'curl -X PUT -H "Content-Type: text/csv" -T {shlex.quote(params.filename)} {shlex.quote(upload_url)}',
             }
+            if params.session_id is not None:
+                result["session_id"] = params.session_id
         except KeyError as exc:
             logger.error("Unexpected Engine response shape: missing key %s", exc)
             return [

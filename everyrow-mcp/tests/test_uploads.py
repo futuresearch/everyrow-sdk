@@ -32,6 +32,12 @@ class TestRequestUploadUrlInput:
         with pytest.raises(ValidationError):
             RequestUploadUrlInput(filename="")
 
+    def test_accepts_session_id(self):
+        params = RequestUploadUrlInput(
+            filename="data.csv", session_id="550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert params.session_id == "550e8400-e29b-41d4-a716-446655440000"
+
     def test_extra_fields_rejected(self):
         with pytest.raises(ValidationError):
             RequestUploadUrlInput(filename="data.csv", extra="x")  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
@@ -107,6 +113,41 @@ class TestRequestUploadUrlTool:
         call_kwargs = mock_http.post.call_args
         assert call_kwargs[1]["headers"]["Authorization"] == "Bearer fake-token"
         assert call_kwargs[1]["json"] == {"filename": "data.csv"}
+
+    @pytest.mark.asyncio
+    async def test_passes_session_id_to_engine(self):
+        """Tool passes session_id to the Engine request."""
+        mock_mcp = MagicMock()
+        tool_fn = _capture_tool_fn(mock_mcp)
+
+        mock_client = MagicMock(token="fake-token")
+        ctx = make_test_context(mock_client)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ENGINE_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("everyrow_mcp.uploads.httpx.AsyncClient") as mock_httpx:
+            mock_http = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_http.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.return_value = mock_http
+
+            session_id = "550e8400-e29b-41d4-a716-446655440000"
+            params = RequestUploadUrlInput(filename="data.csv", session_id=session_id)
+            result = await tool_fn(params, ctx)
+
+        # Verify Engine was called with session_id
+        call_kwargs = mock_http.post.call_args
+        assert call_kwargs[1]["json"] == {
+            "filename": "data.csv",
+            "session_id": session_id,
+        }
+
+        # Verify session_id is included in the response
+        data = json.loads(result[0].text)
+        assert data["session_id"] == session_id
 
     @pytest.mark.asyncio
     async def test_rejects_non_csv(self):
