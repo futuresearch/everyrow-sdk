@@ -150,8 +150,8 @@ class SupabaseTokenVerifier(TokenVerifier):
         except TimeoutError:
             logger.warning("JWKS fetch timed out (10s)")
             return None
-        except pyjwt.PyJWTError:
-            logger.warning("JWT verification failed")
+        except pyjwt.PyJWTError as exc:
+            logger.warning("JWT verification failed: %s: %s", type(exc).__name__, exc)
             return None
 
     async def _verify_jwt_via_supabase(self, token: str) -> AccessToken | None:
