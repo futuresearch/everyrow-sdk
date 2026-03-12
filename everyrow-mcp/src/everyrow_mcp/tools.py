@@ -317,9 +317,18 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
             "task": params.task,
             "session": session,
             "input": input_data,
+            "enforce_row_independence": params.enforce_row_independence,
         }
         if response_model:
             kwargs["response_model"] = response_model
+        kwargs["effort_level"] = params.effort_level
+        if params.effort_level is None:
+            if params.llm is not None:
+                kwargs["llm"] = params.llm
+            if params.iteration_budget is not None:
+                kwargs["iteration_budget"] = params.iteration_budget
+            if params.include_reasoning is not None:
+                kwargs["include_reasoning"] = params.include_reasoning
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
@@ -401,6 +410,14 @@ async def everyrow_single_agent(
             kwargs["input"] = input_model
         if response_model is not None:
             kwargs["response_model"] = response_model
+        kwargs["effort_level"] = params.effort_level
+        if params.effort_level is None:
+            if params.llm is not None:
+                kwargs["llm"] = params.llm
+            if params.iteration_budget is not None:
+                kwargs["iteration_budget"] = params.iteration_budget
+            if params.include_reasoning is not None:
+                kwargs["include_reasoning"] = params.include_reasoning
         cohort_task = await single_agent_async(**kwargs)
         task_id = str(cohort_task.task_id)
         write_initial_task_state(
@@ -655,6 +672,8 @@ async def everyrow_dedupe(
             equivalence_relation=params.equivalence_relation,
             session=session,
             input=input_data,
+            strategy=params.strategy.value if params.strategy is not None else None,  # type: ignore[arg-type]
+            strategy_prompt=params.strategy_prompt,
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0

@@ -17,6 +17,8 @@ import pytest
 from everyrow.constants import EveryrowError
 from everyrow.generated.client import AuthenticatedClient
 from everyrow.generated.models.create_artifact_response import CreateArtifactResponse
+from everyrow.generated.models.dedupe_operation_strategy import DedupeOperationStrategy
+from everyrow.generated.models.llm_enum_public import LLMEnumPublic
 from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.generated.models.task_progress_info import TaskProgressInfo
 from everyrow.generated.models.task_result_response import TaskResultResponse
@@ -28,6 +30,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 )
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
+from everyrow.task import EffortLevel
 from mcp.types import CallToolResult, TextContent
 from pydantic import ValidationError
 
@@ -1216,6 +1219,62 @@ class TestAgentInputValidation:
         assert params.data == records
         assert params.artifact_id is None
 
+    def test_effort_level_defaults_to_medium(self):
+        """AgentInput defaults effort_level to medium."""
+        params = AgentInput(task="test", data=[{"a": "b"}])
+        assert params.effort_level == "medium"
+
+    def test_accepts_effort_level_high(self):
+        params = AgentInput(
+            task="test", data=[{"a": "b"}], effort_level=EffortLevel.HIGH
+        )
+        assert params.effort_level == EffortLevel.HIGH
+
+    def test_accepts_null_effort_level_with_custom_params(self):
+        params = AgentInput(
+            task="test",
+            data=[{"a": "b"}],
+            effort_level=None,
+            llm=LLMEnumPublic.CLAUDE_4_6_SONNET_MEDIUM,
+            iteration_budget=10,
+            include_reasoning=True,
+        )
+        assert params.effort_level is None
+        assert params.llm == LLMEnumPublic.CLAUDE_4_6_SONNET_MEDIUM
+        assert params.iteration_budget == 10
+        assert params.include_reasoning is True
+
+    def test_enforce_row_independence_defaults_false(self):
+        params = AgentInput(task="test", data=[{"a": "b"}])
+        assert params.enforce_row_independence is False
+
+    def test_rejects_invalid_iteration_budget(self):
+        with pytest.raises(ValidationError):
+            AgentInput(
+                task="test",
+                data=[{"a": "b"}],
+                effort_level=None,
+                iteration_budget=25,
+            )
+
+    def test_rejects_invalid_llm_value(self):
+        with pytest.raises(ValidationError, match="type=enum"):
+            AgentInput(
+                task="test",
+                data=[{"a": "b"}],
+                effort_level=None,
+                llm="not_a_real_model",  # type: ignore[arg-type]
+            )
+
+    def test_accepts_valid_llm_value(self):
+        params = AgentInput(
+            task="test",
+            data=[{"a": "b"}],
+            effort_level=None,
+            llm=LLMEnumPublic.CLAUDE_4_6_SONNET_MEDIUM,
+        )
+        assert params.llm == LLMEnumPublic.CLAUDE_4_6_SONNET_MEDIUM
+
 
 class TestUploadData:
     """Tests for everyrow_upload_data."""
@@ -1460,6 +1519,24 @@ class TestInputModelsUnchanged:
         """DedupeInput requires either artifact_id or data."""
         with pytest.raises(ValidationError):
             DedupeInput(equivalence_relation="same entity")
+
+    def test_dedupe_accepts_strategy(self):
+        params = DedupeInput(
+            equivalence_relation="same entity",
+            data=[{"a": "b"}],
+            strategy=DedupeOperationStrategy.COMBINE,
+            strategy_prompt="Keep the most complete record",
+        )
+        assert params.strategy == DedupeOperationStrategy.COMBINE
+        assert params.strategy_prompt == "Keep the most complete record"
+
+    def test_dedupe_strategy_defaults_to_none(self):
+        params = DedupeInput(
+            equivalence_relation="same entity",
+            data=[{"a": "b"}],
+        )
+        assert params.strategy is None
+        assert params.strategy_prompt is None
 
     def test_merge_requires_input_sources(self):
         """MergeInput requires left and right input sources."""
@@ -1800,6 +1877,23 @@ class TestSessionParams:
     def test_single_agent_accepts_session_id(self):
         params = SingleAgentInput(task="test", session_id=str(uuid4()))
         assert params.session_id is not None
+
+    def test_single_agent_effort_level_defaults_to_medium(self):
+        params = SingleAgentInput(task="test")
+        assert params.effort_level == "medium"
+
+    def test_single_agent_accepts_custom_params(self):
+        params = SingleAgentInput(
+            task="test",
+            effort_level=None,
+            llm=LLMEnumPublic.GPT_5_HIGH,
+            iteration_budget=5,
+            include_reasoning=True,
+        )
+        assert params.effort_level is None
+        assert params.llm == LLMEnumPublic.GPT_5_HIGH
+        assert params.iteration_budget == 5
+        assert params.include_reasoning is True
 
     def test_single_agent_rejects_both_session_params(self):
         with pytest.raises(ValidationError, match="mutually exclusive"):

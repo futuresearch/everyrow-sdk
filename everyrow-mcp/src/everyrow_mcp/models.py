@@ -6,6 +6,9 @@ from typing import Any, Literal
 from uuid import UUID
 
 import pandas as pd
+from everyrow.generated.models.dedupe_operation_strategy import DedupeOperationStrategy
+from everyrow.generated.models.llm_enum_public import LLMEnumPublic
+from everyrow.task import EffortLevel
 from jsonschema import SchemaError
 from jsonschema.validators import validator_for
 from pydantic import (
@@ -246,6 +249,31 @@ class AgentInput(_SingleSourceInput):
         default=None,
         description="Optional JSON schema for the agent's response per row.",
     )
+    effort_level: EffortLevel | None = Field(
+        default=EffortLevel.MEDIUM,
+        description='Effort preset controlling cost/quality tradeoff: "low" (fast, cheap), '
+        '"medium" (default), "high" (thorough, expensive). '
+        "Set to null to use custom llm/iteration_budget/include_reasoning instead.",
+    )
+    llm: LLMEnumPublic | None = Field(
+        default=None,
+        description="Specific LLM to use (e.g. CLAUDE_4_6_SONNET_MEDIUM). "
+        "Only used when effort_level is null.",
+    )
+    iteration_budget: int | None = Field(
+        default=None,
+        description="Max agent iterations per row (0-20). Only used when effort_level is null.",
+        ge=0,
+        le=20,
+    )
+    include_reasoning: bool | None = Field(
+        default=None,
+        description="Include reasoning notes in output. Only used when effort_level is null.",
+    )
+    enforce_row_independence: bool = Field(
+        default=False,
+        description="If true, run each row's agent independently without sharing context across rows.",
+    )
 
     @field_validator("response_schema")
     @classmethod
@@ -318,6 +346,20 @@ class DedupeInput(_SingleSourceInput):
         description="Natural language description of what makes two rows equivalent/duplicates. "
         "The LLM will use this to identify which rows represent the same entity.",
         min_length=1,
+    )
+    strategy: DedupeOperationStrategy | None = Field(
+        default=None,
+        description="Controls what happens after duplicate clusters are identified. "
+        '"identify": cluster only, adds metadata columns but keeps all rows. '
+        '"select" (default): picks the best representative row per cluster. '
+        '"combine": synthesizes a single combined row per cluster by merging the best information from all duplicates.',
+    )
+    strategy_prompt: str | None = Field(
+        default=None,
+        description="Natural-language instructions guiding how the LLM selects or combines rows. "
+        'Only used with "select" and "combine" strategies. '
+        'Examples: "Prefer the record with the most complete contact information", '
+        '"For each field, keep the most recent and complete value".',
     )
 
 
@@ -557,6 +599,27 @@ class SingleAgentInput(BaseModel):
     response_schema: dict[str, Any] | None = Field(
         default=None,
         description="Optional JSON schema for the agent response.",
+    )
+    effort_level: EffortLevel | None = Field(
+        default=EffortLevel.MEDIUM,
+        description='Effort preset controlling cost/quality tradeoff: "low" (fast, cheap), '
+        '"medium" (default), "high" (thorough, expensive). '
+        "Set to null to use custom llm/iteration_budget/include_reasoning instead.",
+    )
+    llm: LLMEnumPublic | None = Field(
+        default=None,
+        description="Specific LLM to use (e.g. CLAUDE_4_6_SONNET_MEDIUM). "
+        "Only used when effort_level is null.",
+    )
+    iteration_budget: int | None = Field(
+        default=None,
+        description="Max agent iterations (0-20). Only used when effort_level is null.",
+        ge=0,
+        le=20,
+    )
+    include_reasoning: bool | None = Field(
+        default=None,
+        description="Include reasoning notes in output. Only used when effort_level is null.",
     )
     session_id: str | None = Field(
         default=None,
