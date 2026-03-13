@@ -66,6 +66,7 @@ from everyrow_mcp.tool_helpers import (
     TaskState,
     _fetch_task_result,
     _get_client,
+    _record_task_ownership,
     client_supports_widgets,
     create_tool_response,
     is_internal_client,
@@ -233,6 +234,12 @@ async def everyrow_use_list(
 
             # Fetch the copied data for summary info
             df, _, _ = await _fetch_task_result(client, str(result.task_id))
+
+            # Register a poll token so everyrow_results can build download URLs.
+            # Without this, the instant-completion path skips create_tool_response()
+            # and leaves no poll token in Redis.
+            if settings.is_http:
+                await _record_task_ownership(str(result.task_id), client.token)
 
             # Stdio mode: also save CSV locally for inspection
             csv_line = ""
@@ -1010,6 +1017,10 @@ async def everyrow_upload_data(
     ) as session:
         session_id_str = str(session.session_id)
         upload_response = await create_table_artifact(df, session)
+
+    # Register a poll token so everyrow_results can build download URLs.
+    if settings.is_http and isinstance(upload_response.task_id, UUID):
+        await _record_task_ownership(str(upload_response.task_id), client.token)
 
     result: dict[str, Any] = {
         "artifact_id": str(upload_response.artifact_id),

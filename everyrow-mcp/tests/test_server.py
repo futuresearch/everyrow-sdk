@@ -1377,6 +1377,49 @@ class TestUploadData:
             params = UploadDataInput(source="https://example.com/data.csv")
             assert params.source == "https://example.com/data.csv"
 
+    @pytest.mark.asyncio
+    async def test_upload_from_url_http_mode_registers_poll_token(self):
+        """In HTTP mode, poll token is registered for results lookup."""
+        mock_client = _make_mock_client()
+        mock_session = _make_mock_session()
+        ctx = make_test_context(mock_client)
+        artifact_uuid = uuid4()
+        task_uuid = uuid4()
+
+        mock_df = pd.DataFrame([{"a": 1}])
+        upload_response = CreateArtifactResponse(
+            artifact_id=artifact_uuid,
+            session_id=mock_session.session_id,
+            task_id=task_uuid,
+        )
+
+        with (
+            override_settings(transport="streamable-http"),
+            patch(
+                "everyrow_mcp.tools.fetch_csv_from_url",
+                new_callable=AsyncMock,
+                return_value=mock_df,
+            ),
+            patch(
+                "everyrow_mcp.tools.create_session",
+                return_value=_make_async_context_manager(mock_session),
+            ),
+            patch(
+                "everyrow_mcp.tools.create_table_artifact",
+                new_callable=AsyncMock,
+                return_value=upload_response,
+            ),
+            patch(
+                "everyrow_mcp.tools._record_task_ownership",
+                new_callable=AsyncMock,
+                return_value="fake-poll-token",
+            ) as mock_record,
+        ):
+            params = UploadDataInput(source="https://example.com/data.csv")
+            await everyrow_upload_data(params, ctx)
+
+        mock_record.assert_called_once_with(str(task_uuid), mock_client.token)
+
     def test_upload_google_sheets_url(self):
         """Test that Google Sheets URLs are accepted."""
         url = "https://docs.google.com/spreadsheets/d/1abc/edit#gid=0"
@@ -2134,9 +2177,17 @@ class TestUseList:
                 new_callable=AsyncMock,
                 return_value=(mock_df, None, None),
             ),
+            patch(
+                "everyrow_mcp.tools._record_task_ownership",
+                new_callable=AsyncMock,
+                return_value="fake-poll-token",
+            ) as mock_record,
         ):
             params = UseListInput(artifact_id=str(uuid4()))
             result = await everyrow_use_list(params, ctx)
+
+        # Poll token is registered for the task
+        mock_record.assert_called_once_with(str(task_id), mock_client.token)
 
         text = result[0].text
         assert f"Artifact ID: {artifact_id}" in text
