@@ -499,11 +499,14 @@ class TaskState(BaseModel):
             msg += "\n\nNewly completed rows:"
             for row in partial_rows:
                 msg += f"\n- {json.dumps(row, default=str)}"
-            msg += "\n\nBriefly comment on these partial results for the user, then immediately call "
-        else:
-            msg += "\nImmediately call "
 
-        msg += f"everyrow_progress(task_id='{task_id}'{cursor_arg})."
+        progress_call = f"everyrow_progress(task_id='{task_id}'{cursor_arg})"
+
+        if not is_internal_client() and (partial_rows or summaries):
+            msg += f"\n\nBriefly comment on these updates for the user, then immediately call {progress_call}."
+        else:
+            msg += f"\nImmediately call {progress_call}."
+
         return msg
 
 
