@@ -429,22 +429,6 @@ class TaskState(BaseModel):
             return round((end - created).total_seconds())
         return round((datetime.now(UTC) - created).total_seconds())
 
-    def write_file(self, task_id: str) -> None:
-        """Write task tracking state for hooks/status line to read."""
-        if settings.is_http:
-            return
-        _write_task_state_file(
-            task_id=task_id,
-            task_type=self.task_type,
-            session_url=self.session_url,
-            total=self.total,
-            completed=self.completed,
-            failed=self.failed,
-            running=self.running,
-            status=self.status,
-            started_at=self.started_at,
-        )
-
     def progress_message(  # noqa: PLR0912
         self,
         task_id: str,
@@ -513,76 +497,6 @@ class TaskState(BaseModel):
             msg += f"\nImmediately call {progress_call}."
 
         return msg
-
-
-def write_initial_task_state(
-    task_id: str,
-    *,
-    task_type: PublicTaskType,
-    session_url: str,
-    total: int,
-    input_source: str = "unknown",
-) -> None:
-    """Write initial task state file when a task is first submitted."""
-    # Extract user_id for tracing (HTTP mode only).
-    try:
-        access_token = get_access_token()
-        user_id = access_token.client_id if access_token else None
-    except Exception:
-        user_id = None
-    logger.info(
-        "Task submitted task_id=%s type=%s source=%s rows=%d user=%s",
-        task_id,
-        task_type.value,
-        input_source,
-        total,
-        user_id or "local",
-    )
-    if settings.is_http:
-        return
-    _write_task_state_file(
-        task_id=task_id,
-        task_type=task_type,
-        session_url=session_url,
-        total=total,
-        completed=0,
-        failed=0,
-        running=0,
-        status=TaskStatus.RUNNING,
-        started_at=datetime.now(UTC),
-    )
-
-
-def _write_task_state_file(
-    *,
-    task_id: str,
-    task_type: PublicTaskType,
-    session_url: str,
-    total: int,
-    completed: int,
-    failed: int,
-    running: int,
-    status: TaskStatus,
-    started_at: datetime,
-) -> None:
-    """Low-level helper: serialise task state to the status-line JSON file."""
-    try:
-        redis_store.TASK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "task_id": task_id,
-            "task_type": task_type.value,
-            "session_url": session_url,
-            "total": total,
-            "completed": completed,
-            "failed": failed,
-            "running": running,
-            "status": status.value,
-            "started_at": started_at.timestamp(),
-        }
-        with open(redis_store.TASK_STATE_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception as e:
-        logger.debug(f"Failed to write task state: {e!r}")
 
 
 class TaskNotReady(Exception):

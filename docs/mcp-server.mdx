@@ -359,15 +359,12 @@ The valid field types are: `string`, `integer`, `number`, `boolean`, `array`, `o
 The Claude Code plugin (`.claude-plugin/plugin.json`) bundles:
 
 1. MCP server, with all tools above
-2. Hooks, such as stop guard (prevents ending turn during operations), results notification (macOS), session cleanup
-3. Skill, to guide agents with quick SDK code generation for the Python SDK path
+2. Skill, to guide agents with quick SDK code generation for the Python SDK path
 
 Install with:
 ```bash
 claude mcp add everyrow --scope project --transport http https://mcp.everyrow.io/mcp
 ```
-
-See [Progress Monitoring](/docs/progress-monitoring) for status line setup and hook details.
 
 ## Troubleshooting
 

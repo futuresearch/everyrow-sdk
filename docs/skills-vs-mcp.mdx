@@ -18,9 +18,9 @@ claude plugin marketplace add futuresearch/everyrow-sdk
 claude plugin install everyrow@futuresearch
 ```
 
-The plugin bundles the skill, MCP server, and hooks (stop guard, results notification, session cleanup) into a single install.
+The plugin bundles the skill and MCP server into a single install.
 
-If you already have the [remote MCP server](/docs/claude-code) set up, the plugin adds the skill file and hooks on top.
+If you already have the [remote MCP server](/docs/claude-code) set up, the plugin adds the skill file on top.
 
 If you do not have the remote MCP server, the plugin sets up a local MCP server instead. This requires an [API key](https://everyrow.io/api-key):
 
@@ -30,8 +30,7 @@ export EVERYROW_API_KEY=sk-cho-...
 
 ## What the skill provides
 
-1. **Skill file** guides the agent to write Python SDK code when you need full control (custom Pydantic models, `preview=True`, effort levels, multi-step pipelines chained in memory).
-2. **Hooks** a stop guard that prevents the agent from ending its turn while an operation is running, a results notification (macOS), and session cleanup on exit.
+Guides the agent to write Python SDK code when you need full control (custom Pydantic models, `preview=True`, effort levels, multi-step pipelines chained in memory).
 
 ## Related
 
@@ -40,5 +39,3 @@ export EVERYROW_API_KEY=sk-cho-...
 [Python SDK](/docs/getting-started) full SDK documentation for developers
 
 [MCP Server Reference](/docs/mcp-server) all MCP tool parameters
-
-[Progress Monitoring](/docs/progress-monitoring) status bar, stop guard, and hooks

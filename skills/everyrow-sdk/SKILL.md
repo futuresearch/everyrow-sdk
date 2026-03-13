@@ -615,10 +615,6 @@ All MCP tools use an async pattern:
 4. After each status update, immediately call everyrow_progress again
 5. When status is "completed" or "failed", call everyrow_results(task_id)
 
-Note: If you see "Stop hook error:" messages during everyrow operations,
-this is expected behavior — it means the polling guardrail is working correctly.
-(Known cosmetic issue: anthropics/claude-code#12667)
-
 ## Chaining Operations
 
 Operations can be chained to build complete workflows. Each step's output feeds the next:
@@ -660,31 +656,3 @@ Everyrow operations have associated costs. To avoid re-running them unnecessaril
 - **Use intermediate checkpoints**: For multi-step pipelines, consider saving results after each everyrow operation.
     - You are able to chain multiple operations together without needing to download and re-upload intermediate results via the SDK. However for most control, implement each step as a dedicated job, possibly orchestrated by tools such as Apache Airflow or Prefect.
 - **Test with `preview=True`**: Operations like `rank`, `screen`, and `merge` support `preview=True` to process only a few rows first.
-
-## Status Line Setup
-
-If the user asks about progress bar setup, status line configuration, or how to see a progress bar during operations, add the following to their `.claude/settings.json` (project-level) or `~/.claude/settings.json` (user-level):
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "<path-to-plugin>/everyrow-mcp/scripts/everyrow-statusline.sh",
-    "padding": 1
-  }
-}
-```
-
-Replace `<path-to-plugin>` with the absolute path to the installed plugin directory.
-
-The status line requires `jq` to be installed:
-
-```bash
-# macOS
-brew install jq
-
-# Linux
-apt install jq
-```
-
-After adding the config, the user must restart Claude Code for it to take effect.

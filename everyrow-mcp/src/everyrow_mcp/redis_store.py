@@ -5,7 +5,6 @@ import logging
 import re
 from enum import StrEnum
 from functools import lru_cache
-from pathlib import Path
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -23,7 +22,6 @@ logger = logging.getLogger(__name__)
 HEALTH_CHECK_INTERVAL = 30
 
 PROGRESS_POLL_DELAY = 12
-TASK_STATE_FILE = Path.home() / ".everyrow" / "task.json"
 RESULT_CACHE_TTL = 600
 RESULT_DATA_TTL = 3600  # 1 hour — full result data stored in Redis for download
 TOKEN_TTL = 86400  # 24 hours — must outlive the longest possible task

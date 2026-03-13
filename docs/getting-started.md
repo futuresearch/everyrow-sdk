@@ -54,8 +54,6 @@ asyncio.run(main())
 
 The MCP server requires [**uv**](https://docs.astral.sh/uv/) (if using `uvx`) or [**pip**](https://pip.pypa.io/en/stable/) (if installed directly). The Python SDK requires **Python 3.12+**.
 
-For the optional terminal progress bar, see the [jq dependency](/docs/progress-monitoring#status-line-progress-bar) in the progress monitoring guide.
-
 ## Sessions
 
 Every operation runs within a **session**. Sessions group related operations together and appear in your [everyrow.io](https://everyrow.io) session list.

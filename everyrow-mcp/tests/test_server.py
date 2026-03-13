@@ -541,7 +541,6 @@ class TestProgress:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params, ctx)
@@ -576,7 +575,6 @@ class TestProgress:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             params = ProgressInput(task_id=task_id)
             result = await everyrow_progress(params, ctx)
@@ -1013,7 +1011,6 @@ class TestCancel:
         task_id = str(uuid4())
 
         with (
-            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
             patch(
                 "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
             ) as mock_cancel,
@@ -1026,17 +1023,15 @@ class TestCancel:
         text = result[0].text
         assert task_id in text
         assert "cancelled" in text.lower()
-        mock_clear.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cancel_already_terminated_task(self):
-        """Test cancelling an already terminated task returns error without clearing state."""
+        """Test cancelling an already terminated task returns error."""
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
         task_id = str(uuid4())
 
         with (
-            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
             patch(
                 "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
             ) as mock_cancel,
@@ -1051,18 +1046,15 @@ class TestCancel:
         text = result[0].text
         assert task_id in text
         assert "Failed" in text
-        # State should NOT be cleared when cancellation fails
-        mock_clear.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_cancel_task_not_found(self):
-        """Test cancelling a nonexistent task returns error without clearing state."""
+        """Test cancelling a nonexistent task returns error."""
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
         task_id = str(uuid4())
 
         with (
-            patch("everyrow_mcp.tools._clear_task_state") as mock_clear,
             patch(
                 "everyrow_mcp.tools.cancel_task", new_callable=AsyncMock
             ) as mock_cancel,
@@ -1074,8 +1066,6 @@ class TestCancel:
 
         text = result[0].text
         assert "Failed" in text
-        # State should NOT be cleared when cancellation fails
-        mock_clear.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_cancel_api_error(self):
@@ -1673,7 +1663,6 @@ class TestStdioVsHttpGating:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools.write_initial_task_state"),
         ):
             result = await everyrow_progress(ProgressInput(task_id=task_id), ctx)
 
@@ -1698,7 +1687,6 @@ class TestStdioVsHttpGating:
                 return_value=status_response,
             ),
             patch("everyrow_mcp.tools.asyncio.sleep", new_callable=AsyncMock),
-            patch("everyrow_mcp.tools.write_initial_task_state"),
             patch(
                 "everyrow_mcp.tools._check_task_ownership",
                 new_callable=AsyncMock,

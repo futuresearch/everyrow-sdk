@@ -15,7 +15,6 @@ from everyrow.built_in_lists import list_built_in_datasets, use_built_in_list
 from everyrow.constants import EveryrowError
 from everyrow.generated.api.billing import get_billing_balance_billing_get
 from everyrow.generated.api.tasks import get_task_status_tasks_task_id_status_get
-from everyrow.generated.models.public_task_type import PublicTaskType
 from everyrow.ops import (
     agent_map_async,
     classify_async,
@@ -34,7 +33,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, create_model
 
 from everyrow_mcp import redis_store
-from everyrow_mcp.app import _clear_task_state, mcp
+from everyrow_mcp.app import mcp
 from everyrow_mcp.config import settings
 from everyrow_mcp.models import (
     AgentInput,
@@ -71,7 +70,6 @@ from everyrow_mcp.tool_helpers import (
     create_tool_response,
     is_internal_client,
     log_client_info,
-    write_initial_task_state,
 )
 from everyrow_mcp.utils import fetch_csv_from_url, is_url, save_result_to_csv
 
@@ -308,7 +306,6 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
     log_client_info(ctx, "everyrow_agent")
     client = _get_client(ctx)
 
-    _clear_task_state()
     input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
@@ -339,13 +336,6 @@ async def everyrow_agent(params: AgentInput, ctx: EveryRowContext) -> list[TextC
         cohort_task = await agent_map_async(**kwargs)
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.AGENT,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -394,8 +384,6 @@ async def everyrow_single_agent(
     log_client_info(ctx, "everyrow_single_agent")
     client = _get_client(ctx)
 
-    _clear_task_state()
-
     response_model: type[BaseModel] | None = None
     if params.response_schema:
         response_model = _schema_to_model("SingleAgentResult", params.response_schema)
@@ -427,13 +415,6 @@ async def everyrow_single_agent(
                 kwargs["include_reasoning"] = params.include_reasoning
         cohort_task = await single_agent_async(**kwargs)
         task_id = str(cohort_task.task_id)
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.AGENT,
-            session_url=session_url,
-            total=1,
-            input_source="single_agent",
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -488,7 +469,6 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
     log_client_info(ctx, "everyrow_rank")
     client = _get_client(ctx)
 
-    _clear_task_state()
     input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
@@ -511,13 +491,6 @@ async def everyrow_rank(params: RankInput, ctx: EveryRowContext) -> list[TextCon
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.RANK,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -581,7 +554,6 @@ async def everyrow_screen(
     log_client_info(ctx, "everyrow_screen")
     client = _get_client(ctx)
 
-    _clear_task_state()
     input_data = params._aid_or_dataframe
 
     response_model: type[BaseModel] | None = None
@@ -601,13 +573,6 @@ async def everyrow_screen(
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.SCREEN,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -666,7 +631,6 @@ async def everyrow_dedupe(
     )
     log_client_info(ctx, "everyrow_dedupe")
     client = _get_client(ctx)
-    _clear_task_state()
 
     input_data = params._aid_or_dataframe
 
@@ -684,13 +648,6 @@ async def everyrow_dedupe(
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.DEDUPE,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -766,7 +723,6 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
     )
     log_client_info(ctx, "everyrow_merge")
     client = _get_client(ctx)
-    _clear_task_state()
 
     left_input = params._left_aid_or_dataframe
     right_input = params._right_aid_or_dataframe
@@ -788,13 +744,6 @@ async def everyrow_merge(params: MergeInput, ctx: EveryRowContext) -> list[TextC
         )
         task_id = str(cohort_task.task_id)
         total = len(left_input) if isinstance(left_input, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.MERGE,
-            session_url=session_url,
-            total=total,
-            input_source=f"left={params._left_input_data_mode.value}, right={params._right_input_data_mode.value}",
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -853,7 +802,6 @@ async def everyrow_forecast(
     log_client_info(ctx, "everyrow_forecast")
     client = _get_client(ctx)
 
-    _clear_task_state()
     input_data = params._aid_or_dataframe
 
     async with create_session(
@@ -868,13 +816,6 @@ async def everyrow_forecast(
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.FORECAST,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -930,7 +871,6 @@ async def everyrow_classify(
     log_client_info(ctx, "everyrow_classify")
     client = _get_client(ctx)
 
-    _clear_task_state()
     input_data = params._aid_or_dataframe
 
     async with create_session(
@@ -948,13 +888,6 @@ async def everyrow_classify(
         )
         task_id = str(cohort_task.task_id)
         total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
-        write_initial_task_state(
-            task_id,
-            task_type=PublicTaskType.CLASSIFY,
-            session_url=session_url,
-            total=total,
-            input_source=params._input_data_mode.value,
-        )
 
     return await create_tool_response(
         task_id=task_id,
@@ -1144,7 +1077,6 @@ async def everyrow_progress(
         ]
 
     ts = TaskState(status_response)
-    ts.write_file(task_id)
 
     if ts.is_terminal:
         logger.info("everyrow_progress: task_id=%s status=%s", task_id, ts.status.value)
@@ -1527,7 +1459,6 @@ async def everyrow_cancel(
 
     try:
         await cancel_task(task_id=UUID(task_id), client=client)
-        _clear_task_state()
         return [
             TextContent(
                 type="text",

@@ -73,54 +73,6 @@ Completed: 50/50 (0 failed) in 100s
 Saved 50 rows to /path/to/output.csv
 ```
 
-## Claude Code Integration
-
-<a id="progress-bar"></a>
-
-### Progress Bar
-
-For a persistent progress bar in the Claude Code terminal footer, add this to either your global settings (`.claude/settings.json`) or project settings (`.claude/project-settings.json`), depending on where you have the MCP server configured:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "<path-to-plugin>/everyrow-mcp/scripts/everyrow-statusline.sh",
-    "padding": 1
-  }
-}
-```
-
-This shows a live progress bar:
-
-```
-everyrow ████████░░░░░░░ 42/100 23s   view
-```
-
-The "view" link is clickable in terminals that support hyperlinks (iTerm2, kitty, WezTerm, Windows Terminal) and opens the session dashboard in your browser.
-
-The status line and hook scripts require [**jq**](https://jqlang.org/) for JSON parsing:
-
-```bash
-# macOS
-brew install jq
-
-# Linux
-apt install jq
-```
-
-Note: After adding the config, restart Claude Code. Status line settings are loaded at startup only.
-
-### Stop Guard
-
-The plugin includes a stop guard hook that prevents Claude from ending its turn while an operation is running. If you see:
-
-```
-Stop hook error: [everyrow] Task abc123 still running. Call everyrow_progress(task_id="abc123") to check status.
-```
-
-This is expected behavior, not an error. The "error:" prefix is a [known cosmetic issue](https://github.com/anthropics/claude-code/issues/12667) in Claude Code. The hook is working correctly — it's keeping the agent focused on your running operation.
-
 ## Python SDK Progress
 
 For printing progress updates as a task runs, use the provided `print_progress` callback:

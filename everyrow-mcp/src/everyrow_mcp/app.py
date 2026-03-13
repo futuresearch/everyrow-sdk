@@ -12,22 +12,13 @@ from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import FastMCP
 
 from everyrow_mcp.config import settings
-from everyrow_mcp.redis_store import TASK_STATE_FILE, get_redis_client
+from everyrow_mcp.redis_store import get_redis_client
 from everyrow_mcp.tool_helpers import SessionContext
-
-
-def _clear_task_state() -> None:
-    if settings.is_http:
-        return
-    if TASK_STATE_FILE.exists():
-        TASK_STATE_FILE.unlink()
 
 
 @asynccontextmanager
 async def stdio_lifespan(_server: FastMCP):
     """Initialize singleton client and validate credentials on startup (stdio mode)."""
-    _clear_task_state()
-
     try:
         with _create_sdk_client() as client:
             response = await get_billing(client=client)
@@ -37,8 +28,6 @@ async def stdio_lifespan(_server: FastMCP):
     except Exception as e:
         logging.getLogger(__name__).error("everyrow-mcp startup failed: %r", e)
         raise
-    finally:
-        _clear_task_state()
 
 
 @asynccontextmanager
