@@ -284,17 +284,17 @@ class TestTokenDenyList:
         assert result.client_id == "user-123"
 
     @pytest.mark.asyncio
-    async def test_denylist_check_propagates_redis_error(
+    async def test_denylist_check_redis_error_returns_none(
         self, verifier, rsa_keypair, mock_redis
     ):
-        """If Redis raises during deny-list check, the error propagates."""
+        """If Redis raises during deny-list check, verify_token returns None."""
         private_key, _ = rsa_keypair
         token = _make_jwt(private_key)
 
         mock_redis.exists = AsyncMock(side_effect=ConnectionError("Redis down"))
 
-        with pytest.raises(ConnectionError):
-            await verifier.verify_token(token)
+        result = await verifier.verify_token(token)
+        assert result is None
 
 
 # ── Required claims tests ───────────────────────────────────────────

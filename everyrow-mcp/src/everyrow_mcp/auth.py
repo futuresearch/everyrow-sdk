@@ -158,6 +158,9 @@ class SupabaseTokenVerifier(TokenVerifier):
         except pyjwt.PyJWTError as exc:
             logger.warning("JWT verification failed: %s: %s", type(exc).__name__, exc)
             return None
+        except Exception:
+            logger.exception("Unexpected error during JWKS token verification")
+            return None
 
     async def _verify_jwt_via_supabase(self, token: str) -> AccessToken | None:
         """Verify a JWT by calling Supabase's /auth/v1/user endpoint.
