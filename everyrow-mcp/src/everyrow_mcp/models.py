@@ -692,7 +692,7 @@ class ProgressInput(BaseModel):
     cursor: str | None = Field(
         default=None,
         description="Cursor from the previous progress call. "
-        "Pass this to only receive rows completed since the last check. "
+        "Pass this to only receive new rows and summaries since the last check. "
         "Omit on the first call to see all completed rows so far.",
     )
 

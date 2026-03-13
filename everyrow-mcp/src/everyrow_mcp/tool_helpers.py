@@ -10,6 +10,7 @@ from textwrap import dedent
 from typing import Any
 from uuid import UUID
 
+import httpx
 import pandas as pd
 from everyrow.api_utils import handle_response
 from everyrow.generated.api.tasks import (
@@ -24,6 +25,7 @@ from everyrow.generated.models.task_result_response_data_type_1 import (
 from everyrow.generated.models.task_status import TaskStatus
 from everyrow.generated.models.task_status_response import TaskStatusResponse
 from everyrow.generated.types import Unset
+from everyrow.session import get_session_url
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
@@ -272,6 +274,18 @@ async def _submission_ui_json(
     return json.dumps(data)
 
 
+async def _start_headless_summarizer(task_id: str, token: str) -> None:
+    """Fire-and-forget request to start headless summarizer for a task."""
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.everyrow_api_url,
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            await client.post(f"/tasks/{task_id}/summaries/start")
+    except Exception:
+        logger.debug("Failed to start headless summarizer for %s", task_id)
+
+
 async def create_tool_response(
     *,
     task_id: str,
@@ -292,6 +306,9 @@ async def create_tool_response(
     if settings.is_http:
         poll_token = await _record_task_ownership(task_id, token)
         if not is_internal_client():
+            # Start headless summarizer so external clients get progress
+            # summaries without needing a frontend SSE connection.
+            await _start_headless_summarizer(task_id, token)
             ui_json = await _submission_ui_json(
                 session_url=session_url,
                 task_id=task_id,
@@ -345,8 +362,6 @@ class TaskState(BaseModel):
     @computed_field
     @property
     def session_url(self) -> str:
-        from everyrow.session import get_session_url  # noqa: PLC0415
-
         return get_session_url(self._response.session_id)
 
     @computed_field
@@ -436,6 +451,7 @@ class TaskState(BaseModel):
         *,
         partial_rows: list[dict[str, Any]] | None = None,
         cursor: str | None = None,
+        summaries: list[dict[str, Any]] | None = None,
     ) -> str:
         if self.is_terminal:
             if self.error:
@@ -471,6 +487,13 @@ class TaskState(BaseModel):
         cursor_arg = f", cursor='{cursor}'" if cursor else ""
         msg = dedent(f"""\
             Running: {self.completed}/{self.total} complete, {self.running} running{fail_part} ({self.elapsed_s}s elapsed)""")
+
+        if summaries:
+            msg += "\n\nAgent activity:"
+            for s in summaries:
+                row_idx = s.get("row_index")
+                prefix = f"[Row {row_idx}] " if row_idx is not None else ""
+                msg += f"\n- {prefix}{s['summary']}"
 
         if partial_rows:
             msg += "\n\nNewly completed rows:"

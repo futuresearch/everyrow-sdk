@@ -1028,6 +1028,52 @@ async def everyrow_upload_data(
     ]
 
 
+async def _fetch_partial_rows(
+    httpx_client: Any, task_id: str, cursor: str | None
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Fetch recently completed rows. Returns (rows, updated_cursor)."""
+    try:
+        query: dict[str, Any] = {"limit": 5}
+        if cursor:
+            query["completed_after"] = cursor
+        resp = await httpx_client.request(
+            method="get",
+            url=f"/tasks/{task_id}/partial_rows",
+            params=query,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("rows") or None, data.get("cursor") or cursor
+        logger.warning(
+            "partial_rows returned %s for task %s", resp.status_code, task_id
+        )
+    except Exception:
+        logger.exception("Failed to fetch partial rows for task %s", task_id)
+    return None, cursor
+
+
+async def _fetch_summaries(
+    httpx_client: Any, task_id: str, cursor: str | None
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """Fetch progress summaries. Returns (summaries, updated_cursor)."""
+    try:
+        query: dict[str, Any] = {}
+        if cursor:
+            query["cursor"] = cursor
+        resp = await httpx_client.request(
+            method="get",
+            url=f"/tasks/{task_id}/summaries",
+            params=query,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("summaries") or None, data.get("cursor") or cursor
+        logger.warning("summaries returned %s for task %s", resp.status_code, task_id)
+    except Exception:
+        logger.debug("Failed to fetch summaries for task %s", task_id)
+    return None, cursor
+
+
 @mcp.tool(
     name="everyrow_progress",
     structured_output=False,
@@ -1049,9 +1095,7 @@ async def everyrow_progress(
     the new rows for the user, then immediately call everyrow_progress again
     (passing the cursor from this response) unless the task is completed or failed.
     """
-    logger.debug(
-        "everyrow_progress: task_id=%s cursor=%s", params.task_id, params.cursor
-    )
+    logger.debug(f"everyrow_progress: task_id={params.task_id}, cursor={params.cursor}")
     client = _get_client(ctx)
     task_id = params.task_id
 
@@ -1094,35 +1138,37 @@ async def everyrow_progress(
     if ts.is_terminal:
         logger.info("everyrow_progress: task_id=%s status=%s", task_id, ts.status.value)
 
-    # ── Fetch partial results for non-terminal, non-screen tasks ──
+    httpx_client = client.get_async_httpx_client()
     partial_rows: list[dict[str, Any]] | None = None
+    summaries: list[dict[str, Any]] | None = None
     cursor: str | None = params.cursor
-    if not ts.is_terminal and not ts.is_screen and ts.completed > 0:
-        try:
-            httpx_client = client.get_async_httpx_client()
-            query: dict[str, Any] = {"limit": 5}
-            if params.cursor:
-                query["completed_after"] = params.cursor
-            resp = await httpx_client.request(
-                method="get",
-                url=f"/tasks/{task_id}/partial_rows",
-                params=query,
+
+    if not ts.is_terminal and not ts.is_screen:
+        if ts.completed > 0:
+            (
+                (partial_rows, rows_cursor),
+                (summaries, summary_cursor),
+            ) = await asyncio.gather(
+                _fetch_partial_rows(httpx_client, task_id, params.cursor),
+                _fetch_summaries(httpx_client, task_id, params.cursor),
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                partial_rows = data.get("rows") or None
-                cursor = data.get("cursor") or params.cursor
-            else:
-                logger.warning(
-                    "partial_rows returned %s for task %s", resp.status_code, task_id
-                )
-        except Exception:
-            logger.exception("Failed to fetch partial rows for task %s", task_id)
+        else:
+            rows_cursor = params.cursor
+            summaries, summary_cursor = await _fetch_summaries(
+                httpx_client, task_id, params.cursor
+            )
+        # Advance cursor to the later of the two sources
+        cursor = max(filter(None, [rows_cursor, summary_cursor]), default=cursor)
 
     return [
         TextContent(
             type="text",
-            text=ts.progress_message(task_id, partial_rows=partial_rows, cursor=cursor),
+            text=ts.progress_message(
+                task_id,
+                partial_rows=partial_rows,
+                cursor=cursor,
+                summaries=summaries,
+            ),
         )
     ]
 
