@@ -9,6 +9,7 @@ import os
 import sys
 from textwrap import dedent
 
+import httpx
 import sentry_sdk
 from pydantic import BaseModel
 
@@ -77,6 +78,42 @@ def parse_args() -> InputArgs:
     return input_args
 
 
+def _sentry_before_send(event, hint):
+    """Classify the expected Supabase refresh-token 400 so the alert can rate-gate.
+
+    A 400 from Supabase ``/auth/v1/token?grant_type=refresh_token`` means the
+    user's stored refresh token is expired or has been rotated — they simply
+    need to re-authenticate. It is not a server bug, but ``raise_for_status``
+    (auth.py ``_supabase_token_request``) turns it into an ``HTTPStatusError``
+    that pages Sentry on every occurrence (FS-MCP-1, thousands/day).
+
+    Default-to-page: we NEVER drop an event and touch only this one explicitly
+    recognised expected case — downgrade it to ``warning`` and tag
+    ``error_category=user_input`` so the Sentry alert rule can rate-gate on the
+    tag instead of paging each time. Everything else passes through untouched
+    and keeps paging. The actual page-vs-rate routing is a Sentry UI alert-rule
+    change keyed on the level/tag, NOT here.
+    """
+    exc_info = hint.get("exc_info")
+    if not exc_info:
+        return event
+    exc = exc_info[1]
+    # Wrapped defensively: a before_send that raises drops the event entirely,
+    # so any unexpected shape must fall through and page as before.
+    try:
+        if (
+            isinstance(exc, httpx.HTTPStatusError)
+            and exc.response.status_code == 400
+            and "/auth/v1/token" in str(exc.request.url)
+            and "grant_type=refresh_token" in str(exc.request.url)
+        ):
+            event["level"] = "warning"
+            event.setdefault("tags", {})["error_category"] = "user_input"
+    except Exception:
+        pass
+    return event
+
+
 def main():
     """Run the MCP server."""
     input_args = parse_args()
@@ -89,6 +126,7 @@ def main():
             traces_sample_rate=0.1,
             environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
             release=os.environ.get("SENTRY_RELEASE"),
+            before_send=_sentry_before_send,
         )
 
     # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
