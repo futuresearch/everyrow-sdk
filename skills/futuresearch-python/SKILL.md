@@ -568,7 +568,7 @@ from futuresearch import fetch_task_data
 df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 ```
 
-## Everyrow Long-Running Operations (MCP)
+## Long-Running Operations (MCP)
 
 FutureSearch operations (classify, rank, dedupe, merge, forecast, agent) take 1-10+ minutes.
 All MCP tools use an async pattern:

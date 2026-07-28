@@ -38,8 +38,6 @@ env:
 
 httproute:
   host: mcp.futuresearch.ai
-  extraHosts:
-    - mcp.everyrow.io
 
 # Session affinity — defense-in-depth for multi-replica deployments.
 # The server runs in stateless HTTP mode so affinity is NOT required,

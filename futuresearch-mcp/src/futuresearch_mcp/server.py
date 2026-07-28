@@ -129,8 +129,6 @@ def main():
             before_send=_sentry_before_send,
         )
 
-    # Signal to the SDK that we're inside the MCP server (suppresses plugin hints)
-    os.environ["EVERYROW_MCP_SERVER"] = "1"
     transport = Transport.HTTP if input_args.http else Transport.STDIO
     settings.transport = transport.value
     mcp._mcp_server.instructions = get_instructions(is_http=input_args.http)
@@ -189,10 +187,8 @@ def main():
             force=True,
         )
 
-        # Validate FUTURESEARCH_API_KEY (or legacy EVERYROW_API_KEY) is set
-        if not os.environ.get("FUTURESEARCH_API_KEY") and not os.environ.get(
-            "EVERYROW_API_KEY"
-        ):
+        # Validate FUTURESEARCH_API_KEY is set
+        if not os.environ.get("FUTURESEARCH_API_KEY"):
             logging.error("Configuration error: FUTURESEARCH_API_KEY is required")
             logging.error("Get an API key at https://futuresearch.ai/app/api-key")
             sys.exit(1)

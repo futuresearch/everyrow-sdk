@@ -10,7 +10,7 @@ COPY --link src/ ./src/
 COPY --link futuresearch-mcp/pyproject.toml futuresearch-mcp/README.md ./futuresearch-mcp/
 COPY --link futuresearch-mcp/src/ ./futuresearch-mcp/src/
 
-# Install futuresearch-mcp and its dependencies (includes workspace everyrow package)
+# Install futuresearch-mcp and its dependencies (includes the workspace futuresearch package)
 RUN uv sync --package futuresearch-mcp --no-dev --no-sources --no-editable
 
 # Stage 2: Slim runtime

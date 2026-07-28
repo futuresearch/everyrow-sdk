@@ -59,7 +59,13 @@ from futuresearch.generated.models import (
 from futuresearch.generated.types import UNSET
 from futuresearch.result import MergeResult, Result, ScalarResult, TableResult
 from futuresearch.session import Session, create_session
-from futuresearch.task import LLM, EffortLevel, EveryrowTask, MergeTask, print_progress
+from futuresearch.task import (
+    LLM,
+    EffortLevel,
+    FuturesearchTask,
+    MergeTask,
+    print_progress,
+)
 
 T = TypeVar("T", bound=BaseModel)
 InputData = UUID | list[dict[str, Any]] | dict[str, Any]
@@ -329,7 +335,7 @@ async def single_agent_async[T: BaseModel](
     response_model: type[T] = DefaultAgentResponse,
     return_table: bool = False,
     extra_notification_text: str | None = None,
-) -> EveryrowTask[T]:
+) -> FuturesearchTask[T]:
     """Submit a single_agent task asynchronously.
 
     .. deprecated::
@@ -349,7 +355,7 @@ async def single_agent_async[T: BaseModel](
         extra_notification_text=extra_notification_text,
     )
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(
+    cohort_task: FuturesearchTask[T] = FuturesearchTask(
         response_model=response_model, is_map=False, is_expand=return_table
     )
     cohort_task.set_submitted(submitted.task_id, submitted.session_id, session.client)
@@ -529,7 +535,7 @@ async def agent_map_async(
     return_table: bool = False,
     extra_notification_text: str | None = None,
     agent_harness: AgentHarness | None = None,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit an agent_map task asynchronously."""
     submitted = await _submit_agent_map(
         task=task,
@@ -547,7 +553,7 @@ async def agent_map_async(
         agent_harness=agent_harness,
     )
 
-    cohort_task = EveryrowTask(
+    cohort_task = FuturesearchTask(
         response_model=response_model, is_map=True, is_expand=return_table
     )
     cohort_task.set_submitted(submitted.task_id, submitted.session_id, session.client)
@@ -675,7 +681,7 @@ async def rank_async[T: BaseModel](
     field_type: Literal["float", "int", "str", "bool"] = "float",
     response_model: type[T] | None = None,
     ascending_order: bool = True,
-) -> EveryrowTask[T]:
+) -> FuturesearchTask[T]:
     """Submit a rank task asynchronously."""
     response_schema: dict | None = None
     if response_model is not None:
@@ -691,7 +697,7 @@ async def rank_async[T: BaseModel](
         ascending_order=ascending_order,
     )
 
-    cohort_task: EveryrowTask[T] = EveryrowTask(
+    cohort_task: FuturesearchTask[T] = FuturesearchTask(
         response_model=response_model or BaseModel,  # type: ignore[arg-type]
         is_map=True,
         is_expand=False,
@@ -900,7 +906,7 @@ async def dedupe_async(
     strategy: Literal["identify", "select", "combine"] | None = None,
     strategy_prompt: str | None = None,
     llm: LLM | None = None,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit a dedupe task asynchronously."""
     input_data = _prepare_table_input(input, DedupeOperationInputType1Item)
 
@@ -917,7 +923,9 @@ async def dedupe_async(
         dedupe_operations_dedupe_post.asyncio_detailed(client=session.client, body=body)
     )
 
-    cohort_task = EveryrowTask(response_model=BaseModel, is_map=True, is_expand=False)
+    cohort_task = FuturesearchTask(
+        response_model=BaseModel, is_map=True, is_expand=False
+    )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
     return cohort_task
 
@@ -1113,7 +1121,7 @@ async def forecast_async(
     condition_field: str | None = None,
     condition: str | None = None,
     config: dict[str, Any] | None = None,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit a forecast task asynchronously.
 
     Args:
@@ -1145,7 +1153,7 @@ async def forecast_async(
             validated server-side. See :func:`forecast`.
 
     Returns:
-        EveryrowTask that resolves to a TableResult with forecast columns.
+        FuturesearchTask that resolves to a TableResult with forecast columns.
     """
     input_data = _prepare_table_input(input, ForecastOperationInputType1Item)
 
@@ -1173,7 +1181,7 @@ async def forecast_async(
         )
     )
 
-    cohort_task: EveryrowTask[BaseModel] = EveryrowTask(
+    cohort_task: FuturesearchTask[BaseModel] = FuturesearchTask(
         response_model=BaseModel, is_map=True, is_expand=False
     )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
@@ -1287,7 +1295,7 @@ async def decision_async(
     alternatives_field: str,
     intervention: str | None = None,
     config: dict[str, Any] | None = None,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit a decision task asynchronously.
 
     Args:
@@ -1303,7 +1311,7 @@ async def decision_async(
             validated server-side. See :func:`forecast`.
 
     Returns:
-        EveryrowTask that resolves to a TableResult with decision columns.
+        FuturesearchTask that resolves to a TableResult with decision columns.
     """
     input_data = _prepare_table_input(input, ForecastOperationInputType1Item)
 
@@ -1328,7 +1336,7 @@ async def decision_async(
         )
     )
 
-    cohort_task: EveryrowTask[BaseModel] = EveryrowTask(
+    cohort_task: FuturesearchTask[BaseModel] = FuturesearchTask(
         response_model=BaseModel, is_map=True, is_expand=False
     )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
@@ -1402,11 +1410,11 @@ async def classify_async(
     input: DataFrame | UUID | TableResult,
     classification_field: str = "classification",
     include_reasoning: bool = False,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit a classify task asynchronously.
 
     Returns:
-        EveryrowTask that resolves to a TableResult with a classification column.
+        FuturesearchTask that resolves to a TableResult with a classification column.
     """
     input_data = _prepare_table_input(input, ClassifyOperationInputType1Item)
 
@@ -1425,7 +1433,7 @@ async def classify_async(
         )
     )
 
-    cohort_task: EveryrowTask[BaseModel] = EveryrowTask(
+    cohort_task: FuturesearchTask[BaseModel] = FuturesearchTask(
         response_model=BaseModel, is_map=True, is_expand=False
     )
     cohort_task.set_submitted(response.task_id, response.session_id, session.client)
@@ -1548,7 +1556,7 @@ async def multi_agent_async(
     response_schema: dict[str, Any] | None = None,
     join_with_input: bool = True,
     return_list: bool = False,
-) -> EveryrowTask[BaseModel]:
+) -> FuturesearchTask[BaseModel]:
     """Submit a multi-agent task asynchronously.
 
     Args:
@@ -1562,7 +1570,7 @@ async def multi_agent_async(
         return_list: If True, emit one output row per synthesized item.
 
     Returns:
-        EveryrowTask that resolves to a TableResult.
+        FuturesearchTask that resolves to a TableResult.
     """
     submitted = await _submit_multi_agent(
         task=task,
@@ -1575,7 +1583,7 @@ async def multi_agent_async(
         return_list=return_list,
     )
 
-    cohort_task: EveryrowTask[BaseModel] = EveryrowTask(
+    cohort_task: FuturesearchTask[BaseModel] = FuturesearchTask(
         response_model=BaseModel, is_map=True, is_expand=return_list
     )
     cohort_task.set_submitted(submitted.task_id, submitted.session_id, session.client)

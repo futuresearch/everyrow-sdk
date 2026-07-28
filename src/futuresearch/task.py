@@ -53,7 +53,7 @@ def print_progress(progress: TaskProgressInfo) -> None:
 T = TypeVar("T", bound=BaseModel)
 
 
-class EveryrowTask[T: BaseModel]:
+class FuturesearchTask[T: BaseModel]:
     def __init__(self, response_model: type[T], is_map: bool, is_expand: bool):
         self.task_id: UUID | None = None
         self.session_id: UUID | None = None

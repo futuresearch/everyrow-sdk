@@ -20,7 +20,7 @@ from futuresearch.generated.models import (
 from futuresearch.generated.types import Response
 from futuresearch.result import TableResult
 from futuresearch.task import (
-    EveryrowTask,
+    FuturesearchTask,
     await_task_completion,
     fetch_task_data,
     print_progress,
@@ -369,7 +369,7 @@ async def test_await_result_partial_failure_returns_data(mocker, mock_client):
         ),
     )
 
-    task = EveryrowTask(response_model=DummyModel, is_map=True, is_expand=False)
+    task = FuturesearchTask(response_model=DummyModel, is_map=True, is_expand=False)
     task.set_submitted(task_id, uuid.uuid4(), mock_client)
 
     result = await task.await_result()
@@ -399,7 +399,7 @@ async def test_await_result_total_failure_no_artifact_raises(mocker, mock_client
         ),
     )
 
-    task = EveryrowTask(response_model=DummyModel, is_map=True, is_expand=False)
+    task = FuturesearchTask(response_model=DummyModel, is_map=True, is_expand=False)
     task.set_submitted(task_id, uuid.uuid4(), mock_client)
 
     with pytest.raises(FuturesearchError, match="Task failed with no results"):

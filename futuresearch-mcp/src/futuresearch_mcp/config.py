@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     futuresearch_api_url: str = Field(
         default="https://futuresearch.ai/api/v0",
-        validation_alias=AliasChoices("FUTURESEARCH_API_URL", "EVERYROW_API_URL"),
+        validation_alias=AliasChoices("FUTURESEARCH_API_URL"),
     )
     preview_size: int = Field(default=1000)
     max_schema_properties: int = Field(
@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     futuresearch_api_key: str | None = Field(
         default=None,
         repr=False,
-        validation_alias=AliasChoices("FUTURESEARCH_API_KEY", "EVERYROW_API_KEY"),
+        validation_alias=AliasChoices("FUTURESEARCH_API_KEY"),
     )
 
     # Discoverability: Glama.ai indexes MCP servers and powers part of the

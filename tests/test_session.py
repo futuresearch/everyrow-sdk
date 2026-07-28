@@ -31,7 +31,7 @@ def _wrap(parsed: Any, status_code: HTTPStatus = HTTPStatus.OK) -> Response[Any]
 @pytest.fixture(autouse=True)
 def mock_env(monkeypatch):
     monkeypatch.setenv("FUTURESEARCH_API_KEY", "test-key")
-    monkeypatch.setenv("EVERYROW_APP_URL", "https://futuresearch.ai")
+    monkeypatch.setenv("FUTURESEARCH_APP_URL", "https://futuresearch.ai")
 
 
 # --- SessionInfo ---
@@ -53,6 +53,24 @@ class TestSessionInfo:
         info = SessionInfo(session_id=sid, name="Test", created_at=now, updated_at=now)
         assert info.get_url() == get_session_url(sid)
         assert str(sid) in info.get_url()
+
+
+class TestGetSessionUrl:
+    def test_honours_futuresearch_app_url(self, monkeypatch):
+        monkeypatch.setenv("FUTURESEARCH_APP_URL", "https://new.example.com")
+        sid = uuid.uuid4()
+        assert get_session_url(sid) == f"https://new.example.com/sessions/{sid}"
+
+    def test_ignores_removed_legacy_app_url(self, monkeypatch):
+        monkeypatch.delenv("FUTURESEARCH_APP_URL", raising=False)
+        monkeypatch.setenv("EVERYROW_APP_URL", "https://legacy.example.com")
+        sid = uuid.uuid4()
+        assert get_session_url(sid) == f"https://futuresearch.ai/sessions/{sid}"
+
+    def test_falls_back_to_default(self, monkeypatch):
+        monkeypatch.delenv("FUTURESEARCH_APP_URL", raising=False)
+        sid = uuid.uuid4()
+        assert get_session_url(sid) == f"https://futuresearch.ai/sessions/{sid}"
 
 
 # --- Generated models ---

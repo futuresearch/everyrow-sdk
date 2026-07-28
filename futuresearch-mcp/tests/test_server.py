@@ -153,7 +153,7 @@ class TestInputValidation:
 
 
 def _make_mock_task(task_id=None):
-    """Create a mock EveryrowTask with a task_id."""
+    """Create a mock FuturesearchTask with a task_id."""
     task = MagicMock()
     task.task_id = task_id or uuid4()
     return task

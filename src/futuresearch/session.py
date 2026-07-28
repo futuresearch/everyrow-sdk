@@ -6,7 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from futuresearch.api_utils import create_client
-from futuresearch.constants import DEFAULT_EVERYROW_APP_URL
+from futuresearch.constants import DEFAULT_FUTURESEARCH_APP_URL
 from futuresearch.errors import _call_and_check
 from futuresearch.generated.api.sessions import (
     create_session_endpoint_sessions_post,
@@ -19,7 +19,9 @@ from futuresearch.generated.models.update_session import UpdateSession
 
 
 def get_session_url(session_id: UUID) -> str:
-    base_url = os.environ.get("EVERYROW_APP_URL", DEFAULT_EVERYROW_APP_URL).rstrip("/")
+    base_url = (
+        os.environ.get("FUTURESEARCH_APP_URL") or DEFAULT_FUTURESEARCH_APP_URL
+    ).rstrip("/")
     return f"{base_url}/sessions/{session_id}"
 
 
