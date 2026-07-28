@@ -27,6 +27,7 @@ from futuresearch.generated.models.task_status import TaskStatus
 from futuresearch.generated.models.task_status_response import TaskStatusResponse
 from futuresearch.generated.types import Unset
 from futuresearch.session import create_session
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
 from mcp.types import CallToolResult, TextContent
@@ -106,20 +107,46 @@ def format_sdk_error(exc: FuturesearchError, *, doing: str) -> str:
     return f"Error while {doing}: {exc.message}{suffix}.{hint}"
 
 
-def _get_client(ctx: FuturesearchContext) -> AuthenticatedClient:
+async def _get_client(ctx: FuturesearchContext) -> AuthenticatedClient:
     """Get a FutureSearch API client with MCP client identity headers."""
     client = ctx.request_context.lifespan_context.client_factory()
     extra_headers = _extract_client_headers(ctx)
     conv_id = _get_conversation_id()
     if conv_id:
         extra_headers["x-conversation-id"] = conv_id
-    account_id = get_cohort_account_id()
+    # An explicit inbound header (sent by the everyrow-cc app) always wins.
+    # Only when it is absent (raw MCP clients) do we fall back to the account
+    # the user chose on the login-page selector.
+    account_id = get_cohort_account_id() or await _resolve_stored_account_id()
     if account_id:
         extra_headers["x-cohort-account-id"] = account_id
     logger.debug(f"Setting extra headers to {extra_headers}")
     if extra_headers:
         client = client.with_headers(extra_headers)
     return client
+
+
+async def _resolve_stored_account_id() -> str:
+    """Resolve the login-time account selection for the current connection.
+
+    Keyed on the current access token, so it is scoped to this OAuth
+    connection. Returns "" in stdio/no-auth mode, when unauthenticated, or
+    when no selection was stored (the API then defaults to personal).
+    """
+    if not settings.is_http:
+        return ""
+    try:
+        access_token = get_access_token()
+    except Exception:
+        logger.warning("Failed to get access token", exc_info=True)
+        return ""
+    if access_token is None:
+        return ""
+    try:
+        return await redis_store.get_account_selection(access_token.token) or ""
+    except Exception:
+        logger.warning("Account selection lookup failed", exc_info=True)
+        return ""
 
 
 def _extract_client_headers(ctx: FuturesearchContext) -> dict[str, str]:

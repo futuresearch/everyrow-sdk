@@ -174,7 +174,7 @@ async def futuresearch_forecast(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_forecast")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -306,7 +306,7 @@ async def futuresearch_decision(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_decision")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -390,7 +390,7 @@ async def futuresearch_browse_lists(
         params.search,
         params.category,
     )
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         results = await list_built_in_datasets(
@@ -460,7 +460,7 @@ async def futuresearch_use_list(
     The copy is a fast database operation (<1s) — no polling needed.
     """
     logger.info("futuresearch_use_list: artifact_id=%s", params.artifact_id)
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         async with create_linked_session(client=client) as session:
@@ -562,7 +562,7 @@ async def futuresearch_agent(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_agent")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -669,7 +669,7 @@ async def futuresearch_multi_agent(
         len(params.directions) if params.directions else "auto",
     )
     log_client_info(ctx, "futuresearch_multi_agent")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -762,7 +762,7 @@ async def futuresearch_rank(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_rank")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -848,7 +848,7 @@ async def futuresearch_dedupe(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_dedupe")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -953,7 +953,7 @@ async def futuresearch_merge(
         len(params.right_data) if params.right_data else "artifact",
     )
     log_client_info(ctx, "futuresearch_merge")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     left_input = params._left_aid_or_dataframe
     right_input = params._right_aid_or_dataframe
@@ -1039,7 +1039,7 @@ async def futuresearch_classify(
         len(params.data) if params.data else "artifact",
     )
     log_client_info(ctx, "futuresearch_classify")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     input_data = params._aid_or_dataframe
 
@@ -1118,7 +1118,7 @@ async def futuresearch_upload_data(
     """
     logger.info("futuresearch_upload_data: source=%.80s", params.source)
     log_client_info(ctx, "futuresearch_upload_data")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         if is_url(params.source):
@@ -1269,7 +1269,7 @@ async def futuresearch_progress(
     logger.debug(
         f"futuresearch_progress: task_id={params.task_id}, cursor={params.cursor}"
     )
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
     task_id = params.task_id
 
     # Block server-side before polling — controls the cadence
@@ -1378,7 +1378,7 @@ async def futuresearch_status(
     task_id = params.task_id
 
     # One status check so we can return current state
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
     try:
         status_response = await _call_and_check(
             get_task_status_tasks_task_id_status_get.asyncio_detailed(
@@ -1474,7 +1474,7 @@ async def futuresearch_results_stdio(
     Pass output_path (ending in .csv) to save results as a local CSV file.
     """
     logger.info("futuresearch_results (stdio): task_id=%s", params.task_id)
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
     task_id = params.task_id
 
     try:
@@ -1540,7 +1540,7 @@ async def futuresearch_results_http(
         params.offset,
         params.page_size,
     )
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
     task_id = params.task_id
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
     log_client_info(ctx, "futuresearch_results")
@@ -1622,7 +1622,7 @@ async def futuresearch_list_sessions(
         params.limit,
     )
     log_client_info(ctx, "futuresearch_list_sessions")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         result = await list_sessions(
@@ -1693,7 +1693,7 @@ async def futuresearch_balance(ctx: FuturesearchContext) -> list[TextContent]:
     credits before submitting tasks.
     """
     logger.info("futuresearch_balance: called")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         response = await _call_and_check(
@@ -1752,7 +1752,7 @@ async def futuresearch_task_cost(
     cost calculation. Returns 'pending' if the cost hasn't settled yet.
     """
     logger.info("futuresearch_task_cost: task_id=%s", params.task_id)
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         response = await get_task_cost(
@@ -1814,7 +1814,7 @@ async def futuresearch_list_session_tasks(
     with mcp__display__show_task(task_id, label).
     """
     logger.info("futuresearch_list_session_tasks: session_id=%s", params.session_id)
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
 
     try:
         response = await client.get_async_httpx_client().request(
@@ -1892,7 +1892,7 @@ async def futuresearch_cancel(
     """Cancel a running futuresearch task. Use when the user wants to stop a task that is currently processing."""
     logger.info("futuresearch_cancel: task_id=%s", params.task_id)
     log_client_info(ctx, "futuresearch_cancel")
-    client = _get_client(ctx)
+    client = await _get_client(ctx)
     task_id = params.task_id
 
     try:

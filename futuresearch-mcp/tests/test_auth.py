@@ -16,15 +16,21 @@ from cryptography.hazmat.primitives.serialization import (
 from mcp.server.auth.provider import AccessToken, AuthorizationParams
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic import AnyUrl
+from starlette.exceptions import HTTPException
+from starlette.responses import HTMLResponse, RedirectResponse
 
 from futuresearch_mcp.auth import (
+    AccountChoice,
     FuturesearchAuthorizationCode,
     FuturesearchAuthProvider,
     FuturesearchRefreshToken,
     PendingAuth,
+    PendingSelection,
     SupabaseTokenResponse,
     SupabaseTokenVerifier,
 )
+from futuresearch_mcp.redis_store import account_selection_key
+from futuresearch_mcp.templates import render_account_selector
 
 # TTL/rate-limit defaults matching HttpSettings defaults.
 _AUTH_CODE_TTL = 300
@@ -899,6 +905,341 @@ class TestHostCookiePrefix:
         assert any("Path=/" in c for c in cookie_header)
         # Must not have the old path
         assert not any("Path=/auth/callback" in c for c in cookie_header)
+
+
+# ── Account selector tests ────────────────────────────────────────────
+
+
+def _pending_auth() -> PendingAuth:
+    return PendingAuth(
+        client_id="test-client-id",
+        params=AuthorizationParams(
+            state="client-state",
+            scopes=["read"],
+            redirect_uri=AnyUrl("https://example.com/callback"),
+            code_challenge="challenge",
+            redirect_uri_provided_explicitly=True,
+        ),
+        supabase_code_verifier="verifier",
+        supabase_redirect_url="https://supabase.test/auth",
+    )
+
+
+def _http_resp(json_data):
+    resp = MagicMock()
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value=json_data)
+    return resp
+
+
+def _select_request(body: str):
+    req = MagicMock()
+    req.body = AsyncMock(return_value=body.encode())
+    req.headers = {}
+    req.client = MagicMock()
+    req.client.host = "1.2.3.4"
+    return req
+
+
+def _async_pipe(redis_mock):
+    """Make redis_mock.pipeline() an async-context-manager for rate limiting."""
+    pipe = MagicMock()
+    pipe.incr = MagicMock()
+    pipe.expire = MagicMock()
+    pipe.execute = AsyncMock(return_value=[1, True])
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=False)
+    redis_mock.pipeline = MagicMock(return_value=pipe)
+
+
+class TestFetchAccounts:
+    @pytest.mark.asyncio
+    async def test_filters_gate_and_sorts_personal_first(self, provider):
+        rows = [
+            {
+                "account_id": "team-b",
+                "name": "Beta",
+                "kind": "team",
+                "personal_account": False,
+            },
+            {
+                "account_id": "gate-1",
+                "name": "Gate",
+                "kind": "gate",
+                "personal_account": False,
+            },
+            {
+                "account_id": "user-1",
+                "name": None,
+                "kind": "personal",
+                "personal_account": True,
+            },
+            {
+                "account_id": "team-a",
+                "name": "Alpha",
+                "kind": "team",
+                "personal_account": False,
+            },
+        ]
+        with patch.object(
+            provider._http_client,
+            "post",
+            new_callable=AsyncMock,
+            return_value=_http_resp(rows),
+        ):
+            accounts = await provider._fetch_accounts("supa-jwt")
+
+        assert [a.account_id for a in accounts] == ["user-1", "team-a", "team-b"]
+        assert accounts[0].name == "Personal"
+        assert accounts[0].personal is True
+
+    @pytest.mark.asyncio
+    async def test_fetch_accounts_safe_swallows_errors(self, provider):
+        with patch.object(
+            provider._http_client,
+            "post",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("postgrest down"),
+        ):
+            assert await provider._fetch_accounts_safe("supa-jwt") == []
+
+
+class TestHandleCallbackSelector:
+    @pytest.mark.asyncio
+    async def test_renders_selector_for_multiple_accounts(
+        self, provider, provider_redis
+    ):
+        supa = SupabaseTokenResponse(access_token="supa-at", refresh_token="supa-rt")
+        accounts = [
+            AccountChoice(account_id="user-1", name="Personal", personal=True),
+            AccountChoice(account_id="team-a", name="Alpha", personal=False),
+        ]
+        with (
+            patch.object(
+                provider,
+                "_validate_callback_request",
+                new_callable=AsyncMock,
+                return_value=(_pending_auth(), supa),
+            ),
+            patch.object(
+                provider,
+                "_fetch_accounts",
+                new_callable=AsyncMock,
+                return_value=accounts,
+            ),
+        ):
+            resp = await provider.handle_callback(MagicMock())
+
+        assert isinstance(resp, HTMLResponse)
+        body = bytes(resp.body).decode()
+        assert "Choose an account" in body
+        assert 'value="user-1"' in body
+        assert 'value="team-a"' in body
+
+        select_keys = [k for k in provider_redis._store if k.startswith("mcp:select:")]
+        assert len(select_keys) == 1
+        ps = PendingSelection.model_validate_json(provider_redis._store[select_keys[0]])
+        assert ps.account_ids == ["user-1", "team-a"]
+        assert ps.supabase_access_token == "supa-at"
+
+    @pytest.mark.asyncio
+    async def test_single_account_skips_selector(self, provider, provider_redis):
+        supa = SupabaseTokenResponse(access_token="supa-at", refresh_token="supa-rt")
+        accounts = [AccountChoice(account_id="user-1", name="Personal", personal=True)]
+        with (
+            patch.object(
+                provider,
+                "_validate_callback_request",
+                new_callable=AsyncMock,
+                return_value=(_pending_auth(), supa),
+            ),
+            patch.object(
+                provider,
+                "_fetch_accounts",
+                new_callable=AsyncMock,
+                return_value=accounts,
+            ),
+        ):
+            resp = await provider.handle_callback(MagicMock())
+
+        assert isinstance(resp, RedirectResponse)
+        assert resp.headers["location"].startswith("https://example.com/callback?")
+        assert "code=" in resp.headers["location"]
+
+        authcode_keys = [
+            k for k in provider_redis._store if k.startswith("mcp:authcode:")
+        ]
+        assert len(authcode_keys) == 1
+        ac = FuturesearchAuthorizationCode.model_validate_json(
+            provider_redis._store[authcode_keys[0]]
+        )
+        assert ac.selected_account_id is None
+
+
+class TestHandleSelectAccount:
+    @pytest.mark.asyncio
+    async def test_valid_selection_finishes_login(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        ps = PendingSelection(
+            pending=_pending_auth(),
+            supabase_access_token="supa-at",
+            supabase_refresh_token="supa-rt",
+            account_ids=["user-1", "team-a"],
+        )
+        await provider_redis.setex(
+            name="mcp:select:sel-state", time=600, value=ps.model_dump_json()
+        )
+
+        resp = await provider.handle_select_account(
+            _select_request("select_state=sel-state&account_id=team-a")
+        )
+
+        assert isinstance(resp, RedirectResponse)
+        assert resp.headers["location"].startswith("https://example.com/callback?")
+        # Pending selection is consumed (single-use).
+        assert "mcp:select:sel-state" not in provider_redis._store
+
+        authcode_keys = [
+            k for k in provider_redis._store if k.startswith("mcp:authcode:")
+        ]
+        ac = FuturesearchAuthorizationCode.model_validate_json(
+            provider_redis._store[authcode_keys[0]]
+        )
+        assert ac.selected_account_id == "team-a"
+
+    @pytest.mark.asyncio
+    async def test_rejects_account_not_in_allowed_set(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        ps = PendingSelection(
+            pending=_pending_auth(),
+            supabase_access_token="a",
+            supabase_refresh_token="b",
+            account_ids=["user-1"],
+        )
+        await provider_redis.setex(
+            name="mcp:select:s2", time=600, value=ps.model_dump_json()
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_select_account(
+                _select_request("select_state=s2&account_id=evil-team")
+            )
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_expired_or_unknown_state_rejected(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_select_account(
+                _select_request("select_state=missing&account_id=user-1")
+            )
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_missing_fields_rejected(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_select_account(_select_request("account_id=user-1"))
+        assert exc.value.status_code == 400
+
+
+class TestAccountSelectionPersistence:
+    @pytest.mark.asyncio
+    async def test_issue_token_writes_selection_and_refresh(
+        self, provider, provider_redis, rsa_keypair
+    ):
+        private_key, _ = rsa_keypair
+        access_token = _make_jwt(private_key)
+
+        await provider._issue_token_response(
+            access_token=access_token,
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+            selected_account_id="team-a",
+        )
+
+        assert provider_redis._store[account_selection_key(access_token)] == "team-a"
+        rt_keys = [k for k in provider_redis._store if k.startswith("mcp:refresh:")]
+        rt = FuturesearchRefreshToken.model_validate_json(
+            provider_redis._store[rt_keys[0]]
+        )
+        assert rt.selected_account_id == "team-a"
+
+    @pytest.mark.asyncio
+    async def test_no_selection_writes_no_acct_key(
+        self, provider, provider_redis, rsa_keypair
+    ):
+        private_key, _ = rsa_keypair
+        access_token = _make_jwt(private_key)
+
+        await provider._issue_token_response(
+            access_token=access_token,
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+            selected_account_id=None,
+        )
+
+        assert account_selection_key(access_token) not in provider_redis._store
+
+    @pytest.mark.asyncio
+    async def test_refresh_preserves_selection(
+        self, provider, provider_redis, test_client, rsa_keypair
+    ):
+        private_key, _ = rsa_keypair
+        fresh_jwt = _make_jwt(private_key)
+        rt = FuturesearchRefreshToken(
+            token="rt-1",
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+            selected_account_id="team-a",
+        )
+        with patch.object(
+            provider,
+            "_refresh_supabase_token",
+            new_callable=AsyncMock,
+            return_value=SupabaseTokenResponse(
+                access_token=fresh_jwt, refresh_token="new-supa-rt"
+            ),
+        ):
+            result = await provider.exchange_refresh_token(
+                test_client, rt, scopes=["read"]
+            )
+
+        assert provider_redis._store[account_selection_key(fresh_jwt)] == "team-a"
+        new_rt = FuturesearchRefreshToken.model_validate_json(
+            provider_redis._store[f"mcp:refresh:{result.refresh_token}"]
+        )
+        assert new_rt.selected_account_id == "team-a"
+
+
+class TestAccountSelectionKey:
+    def test_key_is_stable_sha256(self):
+        assert (
+            account_selection_key("tok")
+            == "mcp:acct:" + hashlib.sha256(b"tok").hexdigest()
+        )
+
+
+class TestRenderAccountSelector:
+    def test_escapes_and_preselects_first(self):
+        html_out = render_account_selector(
+            action="https://mcp.example.com/auth/select-account",
+            select_state="st8",
+            accounts=[("user-1", "Personal"), ("team-x", "<script>Ev&il</script>")],
+        )
+        assert (
+            '<input type="radio" name="account_id" value="user-1" checked>' in html_out
+        )
+        # Second option is not preselected, and its name is HTML-escaped.
+        assert (
+            '<input type="radio" name="account_id" value="team-x">'
+            "<span>&lt;script&gt;Ev&amp;il&lt;/script&gt;</span>" in html_out
+        )
+        assert "<script>Ev&il" not in html_out
+        assert 'name="select_state" value="st8"' in html_out
 
 
 # ── Two-phase refresh token tests ─────────────────────────────────────

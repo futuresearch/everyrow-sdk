@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
+import pytest
 from futuresearch.errors import (
     FuturesearchClientError,
     FuturesearchError,
@@ -17,12 +18,15 @@ from futuresearch.generated.models.task_progress_info import TaskProgressInfo
 from futuresearch.generated.models.task_status import TaskStatus
 from futuresearch.generated.types import UNSET, Unset
 
+from futuresearch_mcp.request_context import request_context
 from futuresearch_mcp.tool_helpers import (
     TaskState,
     _format_summary_lines,
+    _get_client,
+    _resolve_stored_account_id,
     format_sdk_error,
 )
-from tests.conftest import override_settings
+from tests.conftest import make_test_context, override_settings
 
 
 def _make_status_response(
@@ -377,3 +381,89 @@ class TestErrorTerminalMessage:
         msg = ts.progress_message("task-tf")
         assert "No rows completed successfully" in msg
         assert "futuresearch_results" not in msg
+
+
+# ── Account resolution / precedence tests ─────────────────────────────
+
+
+def _client_mock():
+    client = MagicMock()
+    client.with_headers = MagicMock(return_value=client)
+    return client
+
+
+class TestAccountHeaderPrecedence:
+    @pytest.mark.asyncio
+    async def test_inbound_header_wins_over_stored_selection(self):
+        """An explicit x-cohort-account-id header is never overridden."""
+        client = _client_mock()
+        ctx = make_test_context(client)
+        ctx.session.client_params = None
+        with (
+            request_context(
+                user_agent="", conversation_id="", cohort_account_id="header-acct"
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers._resolve_stored_account_id",
+                new_callable=AsyncMock,
+                return_value="stored-acct",
+            ),
+        ):
+            await _get_client(ctx)
+
+        headers = client.with_headers.call_args[0][0]
+        assert headers["x-cohort-account-id"] == "header-acct"
+
+    @pytest.mark.asyncio
+    async def test_stored_selection_used_when_no_header(self):
+        client = _client_mock()
+        ctx = make_test_context(client)
+        ctx.session.client_params = None
+        with (
+            request_context(user_agent="", conversation_id="", cohort_account_id=""),
+            patch(
+                "futuresearch_mcp.tool_helpers._resolve_stored_account_id",
+                new_callable=AsyncMock,
+                return_value="stored-acct",
+            ),
+        ):
+            await _get_client(ctx)
+
+        headers = client.with_headers.call_args[0][0]
+        assert headers["x-cohort-account-id"] == "stored-acct"
+
+
+class TestResolveStoredAccountId:
+    @pytest.mark.asyncio
+    async def test_stdio_mode_returns_empty(self):
+        # Default test transport is stdio — no stored selection concept.
+        assert await _resolve_stored_account_id() == ""
+
+    @pytest.mark.asyncio
+    async def test_http_mode_reads_redis(self):
+        access_token = MagicMock()
+        access_token.token = "tok"
+        with (
+            override_settings(transport="streamable-http"),
+            patch(
+                "futuresearch_mcp.tool_helpers.get_access_token",
+                return_value=access_token,
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers.redis_store.get_account_selection",
+                new_callable=AsyncMock,
+                return_value="acct-9",
+            ),
+        ):
+            assert await _resolve_stored_account_id() == "acct-9"
+
+    @pytest.mark.asyncio
+    async def test_http_mode_unauthenticated_returns_empty(self):
+        with (
+            override_settings(transport="streamable-http"),
+            patch(
+                "futuresearch_mcp.tool_helpers.get_access_token",
+                return_value=None,
+            ),
+        ):
+            assert await _resolve_stored_account_id() == ""

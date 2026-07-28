@@ -7,7 +7,7 @@ import logging
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode
 
 import httpx
 import jwt as pyjwt
@@ -25,11 +25,17 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 
 from futuresearch_mcp.config import settings
 from futuresearch_mcp.middleware import get_client_ip
-from futuresearch_mcp.redis_store import build_key, decrypt_value, encrypt_value
+from futuresearch_mcp.redis_store import (
+    account_selection_key,
+    build_key,
+    decrypt_value,
+    encrypt_value,
+)
+from futuresearch_mcp.templates import render_account_selector
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -224,12 +230,14 @@ class FuturesearchAuthorizationCode(AuthorizationCode):
 
     supabase_access_token: str
     supabase_refresh_token: str
+    selected_account_id: str | None = None
 
 
 class FuturesearchRefreshToken(RefreshToken):
     """Extends RefreshToken with the Supabase refresh token."""
 
     supabase_refresh_token: str
+    selected_account_id: str | None = None
 
 
 class SupabaseTokenResponse(BaseModel):
@@ -246,6 +254,27 @@ class PendingAuth(BaseModel):
     params: AuthorizationParams
     supabase_code_verifier: str
     supabase_redirect_url: str
+
+
+class AccountChoice(BaseModel):
+    """A non-gate account the user may pick on the login-page selector."""
+
+    account_id: str
+    name: str
+    personal: bool
+
+
+class PendingSelection(BaseModel):
+    """Saved between the account-selector page (GET) and its POST submit.
+
+    Holds the tokens exchanged in the callback plus the set of accounts the
+    user may legitimately pick.
+    """
+
+    pending: PendingAuth
+    supabase_access_token: str
+    supabase_refresh_token: str
+    account_ids: list[str]
 
 
 # ── OAuth provider ────────────────────────────────────────────────────
@@ -474,7 +503,10 @@ class FuturesearchAuthProvider(
         return response
 
     async def _create_authorisation_code(
-        self, pending: PendingAuth, supa_tokens: SupabaseTokenResponse
+        self,
+        pending: PendingAuth,
+        supa_tokens: SupabaseTokenResponse,
+        selected_account_id: str | None = None,
     ) -> str:
         code = secrets.token_urlsafe(32)
         auth_code = FuturesearchAuthorizationCode(
@@ -488,6 +520,7 @@ class FuturesearchAuthProvider(
             resource=pending.params.resource,
             supabase_access_token=supa_tokens.access_token,
             supabase_refresh_token=supa_tokens.refresh_token,
+            selected_account_id=selected_account_id,
         )
         await self._redis.setex(
             name=build_key("authcode", code),
@@ -496,9 +529,28 @@ class FuturesearchAuthProvider(
         )
         return code
 
-    async def handle_callback(self, request: Request) -> RedirectResponse:
+    async def handle_callback(self, request: Request) -> Response:
         pending, supa_tokens = await self._validate_callback_request(request)
-        auth_code_str = await self._create_authorisation_code(pending, supa_tokens)
+
+        # Offer an account choice only when the user has more than one
+        # selectable (non-gate) account.
+        accounts = await self._fetch_accounts_safe(supa_tokens.access_token)
+        if len(accounts) >= 2:
+            return await self._render_account_selector(pending, supa_tokens, accounts)
+        return await self._finish_callback(
+            pending, supa_tokens, selected_account_id=None
+        )
+
+    async def _finish_callback(
+        self,
+        pending: PendingAuth,
+        supa_tokens: SupabaseTokenResponse,
+        selected_account_id: str | None,
+    ) -> RedirectResponse:
+        """Issue the auth code and redirect back to the MCP client."""
+        auth_code_str = await self._create_authorisation_code(
+            pending, supa_tokens, selected_account_id
+        )
         redirect_params = {"code": auth_code_str, "state": pending.params.state}
         url = f"{pending.params.redirect_uri}?{urlencode(redirect_params)}"
         response = RedirectResponse(url=url, status_code=302)
@@ -510,6 +562,104 @@ class FuturesearchAuthProvider(
             secure=True,
         )
         return response
+
+    async def _fetch_accounts_safe(
+        self, supabase_access_token: str
+    ) -> list[AccountChoice]:
+        """Fetch selectable accounts, degrading to none on any failure."""
+        try:
+            return await self._fetch_accounts(supabase_access_token)
+        except Exception:
+            logger.warning("Failed to fetch accounts for selector", exc_info=True)
+            return []
+
+    async def _fetch_accounts(self, supabase_access_token: str) -> list[AccountChoice]:
+        """List the user's non-gate accounts via the Supabase get_accounts RPC."""
+        resp = await self._http_client.post(
+            f"{settings.supabase_url}/rest/v1/rpc/get_accounts",
+            json={},
+            headers={
+                "Authorization": f"Bearer {supabase_access_token}",
+                "apikey": settings.supabase_anon_key,
+                "Content-Type": "application/json",
+            },
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if not isinstance(rows, list):
+            return []
+        choices: list[AccountChoice] = []
+        for row in rows:
+            if not isinstance(row, dict) or row.get("kind") == "gate":
+                continue
+            account_id = row.get("account_id")
+            if not account_id:
+                continue
+            personal = bool(row.get("personal_account"))
+            name = "Personal" if personal else (row.get("name") or "Team")
+            choices.append(
+                AccountChoice(account_id=str(account_id), name=name, personal=personal)
+            )
+        # Personal first, then teams by name — a stable, predictable order.
+        choices.sort(key=lambda c: (not c.personal, c.name.lower()))
+        return choices
+
+    async def _render_account_selector(
+        self,
+        pending: PendingAuth,
+        supa_tokens: SupabaseTokenResponse,
+        accounts: list[AccountChoice],
+    ) -> HTMLResponse:
+        """Store the pending selection and render the account-picker page."""
+        select_state = secrets.token_urlsafe(32)
+        pending_selection = PendingSelection(
+            pending=pending,
+            supabase_access_token=supa_tokens.access_token,
+            supabase_refresh_token=supa_tokens.refresh_token,
+            account_ids=[a.account_id for a in accounts],
+        )
+        await self._redis.setex(
+            name=build_key("select", select_state),
+            time=settings.pending_auth_ttl,
+            value=encrypt_value(pending_selection.model_dump_json()),
+        )
+        html = render_account_selector(
+            action=f"{settings.mcp_server_url}/auth/select-account",
+            select_state=select_state,
+            accounts=[(a.account_id, a.name) for a in accounts],
+        )
+        return HTMLResponse(html)
+
+    async def handle_select_account(self, request: Request) -> RedirectResponse:
+        """Finish login after the user picks an account on the selector page."""
+        try:
+            await self._check_rate_limit("select", self._client_ip(request))
+        except ValueError:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+        body = (await request.body()).decode()
+        form = parse_qs(body)
+        select_state = (form.get("select_state") or [""])[0]
+        account_id = (form.get("account_id") or [""])[0]
+        if not select_state or not account_id:
+            raise HTTPException(status_code=400, detail="Missing selection")
+
+        # GETDEL consumes the pending selection so it can't be replayed.
+        raw = await self._redis.getdel(build_key("select", select_state))
+        if raw is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired selection")
+        pending_selection = PendingSelection.model_validate_json(decrypt_value(raw))
+
+        if account_id not in pending_selection.account_ids:
+            raise HTTPException(status_code=400, detail="Invalid account")
+
+        supa_tokens = SupabaseTokenResponse(
+            access_token=pending_selection.supabase_access_token,
+            refresh_token=pending_selection.supabase_refresh_token,
+        )
+        return await self._finish_callback(
+            pending_selection.pending, supa_tokens, selected_account_id=account_id
+        )
 
     async def load_authorization_code(
         self,
@@ -546,6 +696,7 @@ class FuturesearchAuthProvider(
         client_id: str,
         scopes: list[str],
         supabase_refresh_token: str,
+        selected_account_id: str | None = None,
     ) -> OAuthToken:
         # SECURITY: Extract exp from the Supabase JWT without signature
         # verification.  This is safe ONLY because the token was just received
@@ -565,12 +716,22 @@ class FuturesearchAuthProvider(
             client_id=client_id,
             scopes=scopes,
             supabase_refresh_token=supabase_refresh_token,
+            selected_account_id=selected_account_id,
         )
         await self._redis.setex(
             name=build_key("refresh", rt_str),
             time=settings.refresh_token_ttl,
             value=encrypt_value(rt.model_dump_json()),
         )
+
+        # Map this access token to the chosen account so header-less requests
+        # (raw MCP clients) resolve to it.
+        if selected_account_id and expires_in > 0:
+            await self._redis.setex(
+                name=account_selection_key(access_token),
+                time=expires_in,
+                value=selected_account_id,
+            )
 
         return OAuthToken(
             access_token=access_token,
@@ -591,6 +752,7 @@ class FuturesearchAuthProvider(
             client_id=client.client_id,
             scopes=authorization_code.scopes,
             supabase_refresh_token=authorization_code.supabase_refresh_token,
+            selected_account_id=authorization_code.selected_account_id,
         )
 
     async def load_access_token(self, token: str) -> AccessToken | None:
@@ -660,6 +822,7 @@ class FuturesearchAuthProvider(
             client_id=client.client_id,
             scopes=final_scopes,
             supabase_refresh_token=supa_tokens.refresh_token,
+            selected_account_id=refresh_token.selected_account_id,
         )
 
     async def revoke_token(self, token: AccessToken | FuturesearchRefreshToken) -> None:

@@ -198,6 +198,7 @@ class TestMcpProtocol:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=MagicMock(token="fake-token"),
                 ),
                 patch(
@@ -236,6 +237,7 @@ class TestMcpProtocol:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=MagicMock(token="fake-token"),
                 ),
                 patch(
@@ -281,6 +283,7 @@ class TestMcpProtocol:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=MagicMock(token="fake-token"),
                 ),
                 patch(
@@ -313,6 +316,7 @@ class TestMcpProtocol:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=MagicMock(token="fake-token"),
                 ),
                 patch(
@@ -335,6 +339,7 @@ class TestMcpProtocol:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=MagicMock(token="fake-token"),
                 ),
                 patch(
@@ -380,6 +385,7 @@ class TestMcpE2ERealApi:
         async with mcp_client() as session:
             with patch(
                 "futuresearch_mcp.tools._get_client",
+                new_callable=AsyncMock,
                 return_value=_real_client,
             ):
                 submit_result = await session.call_tool(
@@ -410,6 +416,7 @@ class TestMcpE2ERealApi:
             for _ in range(30):
                 with patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=_real_client,
                 ):
                     progress_result = await session.call_tool(
@@ -433,6 +440,7 @@ class TestMcpE2ERealApi:
             with (
                 patch(
                     "futuresearch_mcp.tools._get_client",
+                    new_callable=AsyncMock,
                     return_value=_real_client,
                 ),
                 patch(

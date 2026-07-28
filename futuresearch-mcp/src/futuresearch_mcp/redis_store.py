@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import re
 from enum import StrEnum
@@ -227,3 +228,17 @@ async def store_task_meta(task_id: str, meta_json: str) -> None:
 
 async def get_task_meta(task_id: str) -> str | None:
     return await get_redis_client().get(build_key("task_meta", task_id))
+
+
+# ── MCP account selection (login-page choice) ─────────────────
+
+
+def account_selection_key(access_token: str) -> str:
+    """Redis key for the account selected during a connection's login flow."""
+    fingerprint = hashlib.sha256(access_token.encode()).hexdigest()
+    return build_key("acct", fingerprint)
+
+
+async def get_account_selection(access_token: str) -> str | None:
+    """Return the account_id selected at login for the presented access token."""
+    return await get_redis_client().get(account_selection_key(access_token))

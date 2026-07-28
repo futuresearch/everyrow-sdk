@@ -173,6 +173,9 @@ def _register_routes(
     if auth_provider is not None:
         mcp.custom_route("/auth/start/{state}", ["GET"])(auth_provider.handle_start)
         mcp.custom_route("/auth/callback", ["GET"])(auth_provider.handle_callback)
+        mcp.custom_route("/auth/select-account", ["POST"])(
+            auth_provider.handle_select_account
+        )
 
 
 def _configure_mcp_auth(

@@ -1,5 +1,7 @@
 """MCP App UI HTML template for the unified session widget."""
 
+import html
+
 _APP_SCRIPT_SRC = "https://unpkg.com/@modelcontextprotocol/ext-apps@1.7.1/app-with-deps"
 
 
@@ -1722,3 +1724,78 @@ app.ontoolresult=({content,structuredContent})=>{
 await app.connect();
 applyTheme();
 </script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
+
+
+_ACCOUNT_SELECTOR_CSS = """
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:24px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color:#1a1a1a;background:#fafafa}
+.card{width:100%;max-width:400px;background:#fff;border:1px solid rgba(0,0,0,0.08);
+  border-radius:14px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
+h1{margin:0 0 6px;font-size:19px;font-weight:600}
+p{margin:0 0 20px;font-size:14px;line-height:1.5;color:#525252}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
+.opt{display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:10px;
+  border:1px solid rgba(0,0,0,0.1);cursor:pointer;font-size:15px;transition:border-color .12s,background .12s}
+.opt:hover{background:#f6f6fb}
+.opt:has(input:checked){border-color:#4D4FBD;background:rgba(77,79,189,0.06)}
+.opt input{accent-color:#4D4FBD;width:17px;height:17px;margin:0;flex:none}
+.opt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button{width:100%;padding:12px;border:0;border-radius:10px;background:#4D4FBD;color:#fff;
+  font-size:15px;font-weight:600;cursor:pointer}
+button:hover{background:#3f41a3}
+@media(prefers-color-scheme:dark){
+  body{color:#ededed;background:#161616}
+  .card{background:#1e1e1e;border-color:rgba(255,255,255,0.1);box-shadow:none}
+  p{color:#a3a3a3}
+  .opt{border-color:rgba(255,255,255,0.14)}
+  .opt:hover{background:#26263a}
+  .opt:has(input:checked){background:rgba(146,148,240,0.12);border-color:#9294F0}
+}
+"""
+
+
+def render_account_selector(
+    *,
+    action: str,
+    select_state: str,
+    accounts: list[tuple[str, str]],
+) -> str:
+    """Render the login-page account picker.
+
+    ``accounts`` is a list of ``(account_id, display_name)`` pairs, personal
+    first; the first entry is preselected. All values are user-influenced
+    (team names, ids), so every interpolation is HTML-escaped.
+    """
+    options = []
+    for i, (account_id, name) in enumerate(accounts):
+        checked = " checked" if i == 0 else ""
+        aid = html.escape(account_id, quote=True)
+        label = html.escape(name)
+        options.append(
+            f'<label class="opt">'
+            f'<input type="radio" name="account_id" value="{aid}"{checked}>'
+            f"<span>{label}</span></label>"
+        )
+    options_html = "".join(options)
+    action_esc = html.escape(action, quote=True)
+    state_esc = html.escape(select_state, quote=True)
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Choose an account · FutureSearch</title>
+<style>{_ACCOUNT_SELECTOR_CSS}</style>
+</head><body>
+<main class="card">
+<h1>Choose an account</h1>
+<p>Pick the account this connection will use for FutureSearch tasks and billing. To change it later, reconnect.</p>
+<form method="post" action="{action_esc}">
+<input type="hidden" name="select_state" value="{state_esc}">
+<div class="opts">{options_html}</div>
+<button type="submit">Continue</button>
+</form>
+</main>
+</body></html>"""
