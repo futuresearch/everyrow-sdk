@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from collections.abc import Callable
 from enum import StrEnum
 from typing import TypeVar
@@ -30,6 +31,12 @@ from futuresearch.generated.types import Unset
 from futuresearch.result import MergeBreakdown, MergeResult, ScalarResult, TableResult
 
 LLM = LLMEnumPublic
+
+# Status polling starts fast so short tasks stay snappy, then backs off to a
+# capped interval so long-running tasks don't hammer the status endpoint.
+POLL_INTERVAL_INITIAL_SECONDS = 2.0
+POLL_INTERVAL_MAX_SECONDS = 15.0
+POLL_BACKOFF_FACTOR = 1.5
 
 
 class EffortLevel(StrEnum):
@@ -144,10 +151,20 @@ async def await_task_completion(
     task_id: UUID,
     client: AuthenticatedClient,
     on_progress: Callable[[TaskProgressInfo], None] | None = None,
+    poll_interval_seconds: float = POLL_INTERVAL_INITIAL_SECONDS,
+    poll_interval_max_seconds: float = POLL_INTERVAL_MAX_SECONDS,
 ) -> TaskStatusResponse:
     max_retries = 3
     retries = 0
     last_progress: TaskProgressInfo | None = None
+    interval = poll_interval_seconds
+
+    def next_sleep() -> float:
+        nonlocal interval
+        # +/-10% jitter so many clients started together don't poll in lockstep
+        sleep_for = interval * random.uniform(0.9, 1.1)
+        interval = min(interval * POLL_BACKOFF_FACTOR, poll_interval_max_seconds)
+        return sleep_for
 
     while True:
         try:
@@ -158,7 +175,7 @@ async def await_task_completion(
                     f"Failed to get task status after {max_retries} retries"
                 ) from e
             retries += 1
-            await asyncio.sleep(2)
+            await asyncio.sleep(next_sleep())
             continue
 
         retries = 0
@@ -176,7 +193,7 @@ async def await_task_completion(
             TaskStatus.REVOKED,
         ):
             break
-        await asyncio.sleep(2)
+        await asyncio.sleep(next_sleep())
 
     if status_response.status == TaskStatus.REVOKED:
         raise FuturesearchError("Task was revoked")

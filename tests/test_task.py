@@ -230,6 +230,35 @@ async def test_revoked_task_raises(
 
 
 @pytest.mark.asyncio
+async def test_poll_interval_backs_off_to_cap(
+    mocker,
+    monkeypatch,
+    mock_client,
+):
+    """Poll interval grows exponentially from 2s and caps at 15s."""
+    task_id = uuid.uuid4()
+
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr("futuresearch.task.asyncio.sleep", sleep_mock)
+    # Pin jitter so the schedule is deterministic
+    monkeypatch.setattr("futuresearch.task.random.uniform", lambda _a, _b: 1.0)
+
+    statuses = [_make_status(TaskStatus.PENDING)] * 7 + [
+        _make_status(TaskStatus.COMPLETED)
+    ]
+    mocker.patch(
+        "futuresearch.task.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+        new_callable=AsyncMock,
+        side_effect=statuses,
+    )
+
+    await await_task_completion(task_id, mock_client)
+
+    slept = [call.args[0] for call in sleep_mock.call_args_list]
+    assert slept == [2.0, 3.0, 4.5, 6.75, 10.125, 15.0, 15.0]
+
+
+@pytest.mark.asyncio
 async def test_retries_on_transient_error(
     mocker,
     mock_client,
