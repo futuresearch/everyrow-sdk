@@ -72,6 +72,27 @@ class Settings(BaseSettings):
         description="Rate limit sliding window in seconds",
     )
 
+    # Request rate limiting on the /mcp transport (RateLimitMiddleware).
+    # Distinct from registration_rate_limit above, which guards the OAuth
+    # endpoints only.
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Enable the per-client-IP rate limiter on the HTTP transport. "
+        "NB: when trust_proxy_headers is False the limiter keys on the direct "
+        "peer IP, which behind an ingress is the PROXY's IP — so every client "
+        "shares one bucket. Disabling is a valid stopgap while that is true; "
+        "the durable fix is to key on the real client (see trust_proxy_headers).",
+    )
+    rate_limit_max_requests: PositiveInt = Field(
+        default=100,
+        description="Max requests per client key per rate_limit_window_seconds "
+        "on the HTTP transport.",
+    )
+    rate_limit_window_seconds: PositiveInt = Field(
+        default=60,
+        description="Fixed window, in seconds, for rate_limit_max_requests.",
+    )
+
     access_token_ttl: PositiveInt = Field(
         default=3300,
         description="Access token TTL in seconds (55 min, before Supabase JWT 1h expiry)",

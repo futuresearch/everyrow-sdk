@@ -26,6 +26,22 @@ resources:
 env:
   MCP_SERVER_URL: "https://mcp.futuresearch.ai"
   FUTURESEARCH_API_URL: "https://futuresearch.ai/api/v0"
+  # Rate limiter OFF (2026-08-03, launch day).
+  #
+  # RateLimitMiddleware keys on `get_client_ip()`, which falls back to the
+  # direct peer IP unless `trust_proxy_headers` is true. Behind our ingress
+  # the peer is always a Traefik pod, so the default 100 req/60s was a
+  # PLATFORM-WIDE budget of ~100/min per Traefik replica rather than a
+  # per-client one. Launch traffic saturated it: at 20:38 UTC the server
+  # served 0 successful requests and rejected 1140 with 429, and the
+  # everyrow-cc agent's MCP handshake failed, so users' sessions came up
+  # with no futuresearch tools at all ("No such tool available").
+  #
+  # Turned off rather than raised because any IP-keyed number is wrong
+  # while every client shares one bucket. Re-enable together with
+  # TRUST_PROXY_HEADERS=true (so the limit keys on the real client) or a
+  # limiter keyed on the authenticated account.
+  RATE_LIMIT_ENABLED: "false"
   REDIS_DB: "13"
   SUPABASE_URL: "https://iliivszxpymuffgrwsws.supabase.co"
   REDIS_SENTINEL_ENDPOINTS: "albert-valkey.utils.svc.cluster.local:26379"

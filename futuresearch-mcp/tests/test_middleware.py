@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,7 +13,28 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
+from futuresearch_mcp import http_config
 from futuresearch_mcp.middleware import BodySizeLimitMiddleware, RateLimitMiddleware
+
+
+def _rate_limit_installed(*, enabled: bool) -> bool:
+    """Wrap a bare app via `_add_middleware` and report whether the limiter is on.
+
+    Exercises the real wiring in `http_config`, not a reimplementation of it.
+    """
+
+    async def _ok(_request: Request):
+        return PlainTextResponse("ok")
+
+    app = Starlette(routes=[Route("/", _ok)])
+    fake_mcp = SimpleNamespace(streamable_http_app=lambda: app)
+
+    with patch.object(http_config.settings, "rate_limit_enabled", enabled):
+        http_config._add_middleware(fake_mcp, AsyncMock())  # type: ignore[arg-type]
+        fake_mcp.streamable_http_app()
+
+    return any(m.cls is RateLimitMiddleware for m in app.user_middleware)
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -95,6 +117,24 @@ def _make_redis_mock() -> AsyncMock:
 
 
 # ── Tests ───────────────────────────────────────────────────────────
+
+
+class TestRateLimitToggle:
+    """The `rate_limit_enabled` kill switch (added 2026-08-03)."""
+
+    def test_enabled_by_default_installs_the_limiter(self):
+        assert _rate_limit_installed(enabled=True) is True
+
+    def test_disabled_removes_the_limiter_entirely(self):
+        """Disabling must drop the middleware, not just raise the ceiling.
+
+        On 2026-08-03 the limiter keyed on the ingress pod's IP (see
+        `get_client_ip` + `trust_proxy_headers`), making the default
+        100 req/60s a platform-wide budget. It returned 429 to ~18% of
+        everyrow-cc agent turns, whose MCP handshake then failed and left
+        sessions with no futuresearch tools at all.
+        """
+        assert _rate_limit_installed(enabled=False) is False
 
 
 class TestRateLimitMiddleware:

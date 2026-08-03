@@ -257,7 +257,18 @@ def _add_middleware(
 
     def _wrapped():
         app = _original()
-        app.add_middleware(RateLimitMiddleware, redis=redis_client)
+        if settings.rate_limit_enabled:
+            app.add_middleware(
+                RateLimitMiddleware,
+                redis=redis_client,
+                max_requests=settings.rate_limit_max_requests,
+                window_seconds=settings.rate_limit_window_seconds,
+            )
+        else:
+            logger.warning(
+                "HTTP rate limiter DISABLED (rate_limit_enabled=false) — "
+                "no per-client request cap on this transport"
+            )
         app.add_middleware(_RequestLoggingMiddleware)
         # Pure-ASGI middlewares — outermost wraps first.
         # SecurityHeaders → BodySizeLimit → Starlette app
