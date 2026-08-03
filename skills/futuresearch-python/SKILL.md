@@ -70,67 +70,6 @@ If you have the FutureSearch MCP server configured, these 18 tools are available
 
 ## Core Operations
 
-### futuresearch_agent
-Run web research agents on each row.
-```
-Parameters:
-- task: (required) Natural language description of research task
-- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
-- data: Inline data as a list of row objects
-- response_schema: (optional) JSON schema for per-row agent response
-- session_id: (optional) Session UUID to resume
-- session_name: (optional) Name for a new session
-```
-
-### futuresearch_single_agent
-Run a single research agent on one input (no CSV needed).
-```
-Parameters:
-- task: (required) Natural language task for the agent
-- input_data: (optional) Context as key-value pairs (e.g. {"company": "Acme"})
-- response_schema: (optional) JSON schema for the agent response
-- session_id: (optional) Session UUID to resume
-- session_name: (optional) Name for a new session
-```
-
-### futuresearch_rank
-Score and sort rows based on qualitative criteria.
-```
-Parameters:
-- task: (required) Natural language instructions for scoring a single row
-- field_name: (required) Name of the score field to add
-- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
-- data: Inline data as a list of row objects
-- field_type: (optional) "float" (default), "int", "str", or "bool"
-- ascending_order: (optional) Sort ascending (default: true)
-- response_schema: (optional) JSON schema for the response model
-- session_id / session_name: (optional)
-```
-
-### futuresearch_dedupe
-Remove duplicate rows using semantic equivalence.
-```
-Parameters:
-- equivalence_relation: (required) Natural language description of what makes rows duplicates
-- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
-- data: Inline data as a list of row objects
-- session_id / session_name: (optional)
-```
-
-### futuresearch_merge
-Join two tables using intelligent entity matching (LEFT JOIN semantics).
-```
-Parameters:
-- task: (required) Natural language description of how to match rows
-- left_artifact_id / left_data: (required, exactly one) Left table — the table being enriched (all rows kept)
-- right_artifact_id / right_data: (required, exactly one) Right table — lookup/reference (columns appended to matches)
-- merge_on_left: (optional) Only set if you expect exact string matches or want to draw agent attention to a column
-- merge_on_right: (optional) Same as merge_on_left for right table
-- relationship_type: (optional) "many_to_one" (default), "one_to_one", "one_to_many", "many_to_many"
-- use_web_search: (optional) "auto" (default), "yes", or "no"
-- session_id / session_name: (optional)
-```
-
 ### futuresearch_forecast
 Forecast questions about the future. Five outcome types: binary probabilities,
 numeric percentiles, date percentiles, categorical (one probability per listed
@@ -173,6 +112,95 @@ Two mutually exclusive ways to supply the condition:
   will its Q3 stock return be if Claude Fable launches worldwide before August?"*).
 - **Per-row column** (`condition_field`): the name of an input column holding each
   row's own condition, for a sheet where rows carry distinct conditions.
+
+### futuresearch_decision
+Forecast a yes/no outcome under each alternative of a choice the user controls
+("if I fund this at $0 / $300k / $2M, will it ship by 2027?"). Use this, not
+futuresearch_forecast with a condition, whenever the "if" is the user's own
+decision: a conditional forecast is correlational, a decision is causal.
+```
+Parameters:
+- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
+- data: Inline data as a list of row objects (must include "question" column)
+- alternatives_field: (required) Column holding each row's mutually exclusive
+  alternatives as a JSON array of 2-50 numbers or strings
+- context: (optional) Table-level context applied to every row
+- intervention: (optional) What executing an alternative means (publicity, timing,
+  how the world responds). Replaces the default assumptions wholesale, so state
+  the full set. Tell the user which assumptions were active when presenting results.
+- session_id / session_name: (optional)
+```
+Output columns are `probabilities` (JSON object mapping each alternative to the
+outcome's probability) and `rationale`. Probabilities need not sum to 100 and need
+not be monotonic. Always HIGH effort. Not scored, since only one branch resolves.
+
+### futuresearch_multi_agent
+Answer one question with a team of agents that each take a different angle, then
+synthesize one structured result. Use it for a single deep question; use
+futuresearch_agent when you have a table and want one agent per row.
+```
+Parameters:
+- task: (required) Instructions for the multi-agent parallel research
+- artifact_id / data: (optional) Omit or pass empty data for a standalone question
+- directions: (optional) Up to 6 explicit research directions. Each must be a
+  detailed, self-contained brief, not a short title. Auto-generated if omitted.
+- response_schema: (optional) JSON schema for the synthesized response per row
+- effort_level: (optional) "low" (3 agents) and "medium" (4, default) run fast;
+  "high" (2 frontier agents) is deeper but slower
+- return_table: (optional) MUST be true when the task asks for a list of items
+  (e.g. "find 15 startups"). Pair with response_schema describing a single item.
+- session_id / session_name: (optional)
+```
+
+### futuresearch_agent
+Run web research agents on each row.
+```
+Parameters:
+- task: (required) Natural language description of research task
+- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
+- data: Inline data as a list of row objects
+- response_schema: (optional) JSON schema for per-row agent response
+- session_id: (optional) Session UUID to resume
+- session_name: (optional) Name for a new session
+```
+
+### futuresearch_rank
+Score and sort rows based on qualitative criteria.
+```
+Parameters:
+- task: (required) Natural language instructions for scoring a single row
+- field_name: (required) Name of the score field to add
+- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
+- data: Inline data as a list of row objects
+- field_type: (optional) "float" (default), "int", "str", or "bool"
+- ascending_order: (optional) Sort ascending (default: true)
+- response_schema: (optional) JSON schema for the response model
+- session_id / session_name: (optional)
+```
+
+### futuresearch_dedupe
+Remove duplicate rows using semantic equivalence.
+```
+Parameters:
+- equivalence_relation: (required) Natural language description of what makes rows duplicates
+- artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
+- data: Inline data as a list of row objects
+- session_id / session_name: (optional)
+```
+
+### futuresearch_merge
+Join two tables using intelligent entity matching (LEFT JOIN semantics).
+```
+Parameters:
+- task: (required) Natural language description of how to match rows
+- left_artifact_id / left_data: (required, exactly one) Left table — the table being enriched (all rows kept)
+- right_artifact_id / right_data: (required, exactly one) Right table — lookup/reference (columns appended to matches)
+- merge_on_left: (optional) Only set if you expect exact string matches or want to draw agent attention to a column
+- merge_on_right: (optional) Same as merge_on_left for right table
+- relationship_type: (optional) "many_to_one" (default), "one_to_one", "one_to_many", "many_to_many"
+- use_web_search: (optional) "auto" (default), "yes", or "no"
+- session_id / session_name: (optional)
+```
 
 ### futuresearch_classify
 Classify each row into one of the provided categories.
@@ -248,6 +276,24 @@ Parameters:
 - task_id: (required) Task ID to cancel
 ```
 
+### futuresearch_status
+Check task status and show a live progress widget that auto-updates by polling.
+Only registered for widget-capable clients (HTTP mode), so it is not available
+in stdio mode such as Claude Code. After calling it once, do NOT also call
+futuresearch_progress: the widget polls on its own.
+```
+Parameters:
+- task_id: (required) Task ID to display
+```
+
+### futuresearch_task_cost
+Get the billed cost of a completed task, in dollars. Cost settles some time
+after the task finishes, so this returns "pending" until it does.
+```
+Parameters:
+- task_id: (required) Task ID to price
+```
+
 ## Sessions & Account
 
 ### futuresearch_list_sessions
@@ -288,6 +334,121 @@ print(result.data.head())  # pandas DataFrame
 
 For quick one-off operations, sessions are created automatically.
 
+### forecast - Predict probabilities
+
+Produce probability estimates for binary questions:
+
+```python
+from futuresearch.ops import forecast
+
+result = await forecast(
+    input=DataFrame([
+        {"question": "Will the US Federal Reserve cut rates by at least 25bp before July 1, 2027?",
+         "resolution_criteria": "Resolves YES if the Fed announces at least one rate cut of 25bp or more."},
+    ]),
+    forecast_type="binary",
+)
+print(result.data[["question", "probability", "rationale"]])
+```
+
+Parameters: `input`, `forecast_type` (`"binary"` | `"numeric"` | `"date"` | `"categorical"` | `"thresholded"` | `"conditional"`), `effort_level`, `context`, `output_field` (required for numeric/date), `units` (required for numeric), `categories_field` (required for categorical), `thresholds_field` (required for thresholded), `condition_field` + `outcome_field` *or* `condition` + `outcome` (conditional), `session`
+
+For **conditional** forecasts (P(B|A) and P(B|not A) for a condition A and outcome B), see "Conditional forecasting" under `futuresearch_forecast` above. Two supply modes: `condition_field`/`outcome_field` (per-row columns) or `condition`/`outcome` (single shared questions mapped over a list of entities — the "ask this conditional about each of these" case).
+
+Recommended input columns beyond `question`: `resolution_criteria`, `resolution_date`, `background`. For questions tied to a prediction market or forecasting platform (Polymarket, Kalshi, Metaculus, ...), also pass `market_creation_date` and `market_price` (with its as-of date), and copy resolution criteria verbatim from the platform — including fine print. Self-contained questions (e.g. "When will Anthropic IPO?") need none of these.
+
+### decision - Outcome under each alternative
+
+Forecast a yes/no outcome under each alternative of a choice you control. Use this,
+not `forecast` with a `condition`, whenever the "if" clause is the user's own
+decision: a conditional forecast is correlational, a decision is causal.
+
+```python
+import json
+from pandas import DataFrame
+from futuresearch.ops import decision
+
+decisions = DataFrame([
+    {
+        "question": "Will the study be published in a peer-reviewed journal before 2028-01-01?",
+        "grant_size": json.dumps(["$0 (no grant)", "$300k", "$2M"]),
+        "resolution_criteria": "Resolves YES if it appears in a peer-reviewed journal before 2028-01-01.",
+    },
+])
+
+result = await decision(input=decisions, alternatives_field="grant_size")
+print(result.data[["question", "probabilities", "rationale"]])
+```
+
+Adds `probabilities` (JSON object mapping each alternative to the outcome's
+probability) and `rationale`. Probabilities need not sum to 100 and need not be
+monotonic. Always HIGH effort, and not scored, since only one branch resolves.
+
+Parameters: `input`, `alternatives_field` (required, keyword-only), `context`,
+`intervention`, `session`
+
+### multi_agent - A team of agents on one question
+
+Several agents each take a different angle on one question, then synthesize a single
+structured answer. Use it for a deep single question; use `agent_map` when you have a
+table and want one agent per row.
+
+```python
+import pandas as pd
+from futuresearch.ops import multi_agent
+
+result = await multi_agent(
+    task="Research the current state of formal verification for AI systems",
+    input=pd.DataFrame(),  # empty input for a standalone question
+)
+print(result.data.head())
+```
+
+Set `return_list=True` when the task asks for a list of items ("find 15 startups"),
+pairing it with a `response_schema` describing one item.
+
+Parameters: `task`, `input`, `session`, `directions` (up to 6 detailed, self-contained
+briefs), `effort_level` (`low` 3 agents, `medium` 4 agents default, `high` 2 frontier
+agents), `response_schema`, `join_with_input`, `return_list`
+
+### agent_map - Batch processing
+
+Run an AI agent across multiple rows:
+
+```python
+from futuresearch.ops import agent_map
+from pandas import DataFrame
+
+result = await agent_map(
+    task="Find this company's latest funding round and lead investors",
+    input=DataFrame([
+        {"company": "Anthropic"},
+        {"company": "OpenAI"},
+        {"company": "Mistral"},
+    ]),
+)
+print(result.data.head())
+```
+
+**Effort levels** - control research thoroughness:
+
+- `LOW`: Quick lookups, basic web searches
+- `MEDIUM` (default): More thorough research, multiple sources
+- `HIGH`: Deep research, cross-referencing sources
+
+```python
+from futuresearch.ops import agent_map
+from futuresearch.task import EffortLevel
+
+result = await agent_map(
+    task="Comprehensive competitive analysis",
+    input=competitors,
+    effort_level=EffortLevel.HIGH,
+)
+```
+
+Parameters: `task`, `input`, `effort_level`, `response_model`, `session`
+
 ### rank - Score and rank rows
 
 Score rows based on criteria you can't put in a database field:
@@ -322,60 +483,7 @@ result = await rank(
 )
 ```
 
-Parameters: `task`, `input`, `field_name`, `field_type` (default: "float"), `response_model`, `ascending_order` (default: True), `preview`, `session`
-
-### dedupe - Deduplicate data
-
-Remove duplicates using AI-powered semantic matching. The AI understands that "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are the same company:
-
-```python
-from futuresearch.ops import dedupe
-
-result = await dedupe(
-    input=crm_data,
-    equivalence_relation="Two entries are duplicates if they represent the same legal entity",
-)
-print(result.data.head())
-```
-
-**Strategies** - control what happens after clusters are identified:
-
-- `"select"` (default): Pick the best representative from each cluster
-- `"identify"`: Cluster only, no selection (for manual review)
-- `"combine"`: Synthesize a single combined row per cluster
-
-```python
-result = await dedupe(
-    input=crm_data,
-    equivalence_relation="Same legal entity",
-    strategy="select",
-    strategy_prompt="Prefer the record with the most complete contact information",
-)
-deduped = result.data[result.data["selected"] == True]
-```
-
-Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record when using select/combine strategy).
-
-Parameters: `input`, `equivalence_relation`, `strategy`, `strategy_prompt`, `session`
-
-### merge - Merge tables with AI matching
-
-Join two tables when the keys don't match exactly (LEFT JOIN semantics). The AI knows "Photoshop" belongs to "Adobe" and "Genentech" is a Roche subsidiary:
-
-```python
-from futuresearch.ops import merge
-
-result = await merge(
-    task="Match each software product to its parent company",
-    left_table=software_products,   # table being enriched — all rows kept
-    right_table=approved_suppliers,  # lookup/reference table — columns appended to matches
-    # merge_on_left/merge_on_right: omit unless you expect exact string matches
-    # on the chosen columns or want to draw agent attention to them.
-)
-print(result.data.head())
-```
-
-Parameters: `task`, `left_table`, `right_table`, `merge_on_left`, `merge_on_right`, `relationship_type`, `use_web_search`, `session`
+Parameters: `task`, `input`, `field_name`, `field_type` (default: "float"), `response_model`, `ascending_order` (default: True), `session`
 
 ### classify - Categorize rows
 
@@ -419,30 +527,65 @@ result = await classify(
 
 Parameters: `task`, `categories`, `input`, `classification_field` (default: "classification"), `include_reasoning` (default: False), `session`
 
-### forecast - Predict probabilities
+### merge - Merge tables with AI matching
 
-Produce probability estimates for binary questions:
+Join two tables when the keys don't match exactly (LEFT JOIN semantics). The AI knows "Photoshop" belongs to "Adobe" and "Genentech" is a Roche subsidiary:
 
 ```python
-from futuresearch.ops import forecast
+from futuresearch.ops import merge
 
-result = await forecast(
-    input=DataFrame([
-        {"question": "Will the US Federal Reserve cut rates by at least 25bp before July 1, 2027?",
-         "resolution_criteria": "Resolves YES if the Fed announces at least one rate cut of 25bp or more."},
-    ]),
-    forecast_type="binary",
+result = await merge(
+    task="Match each software product to its parent company",
+    left_table=software_products,   # table being enriched — all rows kept
+    right_table=approved_suppliers,  # lookup/reference table — columns appended to matches
+    # merge_on_left/merge_on_right: omit unless you expect exact string matches
+    # on the chosen columns or want to draw agent attention to them.
 )
-print(result.data[["question", "probability", "rationale"]])
+print(result.data.head())
 ```
 
-Parameters: `input`, `forecast_type` (`"binary"` | `"numeric"` | `"date"` | `"categorical"` | `"thresholded"` | `"conditional"`), `effort_level`, `context`, `output_field` (required for numeric/date), `units` (required for numeric), `categories_field` (required for categorical), `thresholds_field` (required for thresholded), `condition_field` + `outcome_field` *or* `condition` + `outcome` (conditional), `session`
+Parameters: `task`, `left_table`, `right_table`, `merge_on_left`, `merge_on_right`, `relationship_type`, `use_web_search`, `session`
 
-For **conditional** forecasts (P(B|A) and P(B|not A) for a condition A and outcome B), see "Conditional forecasting" under `futuresearch_forecast` above. Two supply modes: `condition_field`/`outcome_field` (per-row columns) or `condition`/`outcome` (single shared questions mapped over a list of entities — the "ask this conditional about each of these" case).
+### dedupe - Deduplicate data
 
-Recommended input columns beyond `question`: `resolution_criteria`, `resolution_date`, `background`. For questions tied to a prediction market or forecasting platform (Polymarket, Kalshi, Metaculus, ...), also pass `market_creation_date` and `market_price` (with its as-of date), and copy resolution criteria verbatim from the platform — including fine print. Self-contained questions (e.g. "When will Anthropic IPO?") need none of these.
+Remove duplicates using AI-powered semantic matching. The AI understands that "AbbVie Inc", "Abbvie", and "AbbVie Pharmaceutical" are the same company:
 
-### single_agent - Single input task
+```python
+from futuresearch.ops import dedupe
+
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Two entries are duplicates if they represent the same legal entity",
+)
+print(result.data.head())
+```
+
+**Strategies** - control what happens after clusters are identified:
+
+- `"select"` (default): Pick the best representative from each cluster
+- `"identify"`: Cluster only, no selection (for manual review)
+- `"combine"`: Synthesize a single combined row per cluster
+
+```python
+result = await dedupe(
+    input=crm_data,
+    equivalence_relation="Same legal entity",
+    strategy="select",
+    strategy_prompt="Prefer the record with the most complete contact information",
+)
+deduped = result.data[result.data["selected"] == True]
+```
+
+Results include `equivalence_class_id` (groups duplicates), `equivalence_class_name` (human-readable cluster name), and `selected` (the canonical record when using select/combine strategy).
+
+Parameters: `input`, `equivalence_relation`, `strategy`, `strategy_prompt`, `session`
+
+### single_agent - Single input task (DEPRECATED)
+
+> `single_agent` is deprecated and will be removed in a future release; calling it
+> emits a `DeprecationWarning`. Use `agent_map` (one task per row, optionally with
+> `return_table=True`) or `multi_agent` (parallel agents synthesized per row).
+> Both accept an empty input for a standalone task.
 
 Run an AI agent on a single input:
 
@@ -485,44 +628,6 @@ result = await single_agent(
 ```
 
 Parameters: `task`, `input`, `effort_level` (LOW/MEDIUM/HIGH), `response_model`, `return_table`, `session`
-
-### agent_map - Batch processing
-
-Run an AI agent across multiple rows:
-
-```python
-from futuresearch.ops import agent_map
-from pandas import DataFrame
-
-result = await agent_map(
-    task="Find this company's latest funding round and lead investors",
-    input=DataFrame([
-        {"company": "Anthropic"},
-        {"company": "OpenAI"},
-        {"company": "Mistral"},
-    ]),
-)
-print(result.data.head())
-```
-
-**Effort levels** - control research thoroughness:
-
-- `LOW` (default): Quick lookups, basic web searches
-- `MEDIUM`: More thorough research, multiple sources
-- `HIGH`: Deep research, cross-referencing sources
-
-```python
-from futuresearch.ops import agent_map
-from futuresearch.types import EffortLevel
-
-result = await agent_map(
-    task="Comprehensive competitive analysis",
-    input=competitors,
-    effort_level=EffortLevel.HIGH,
-)
-```
-
-Parameters: `task`, `input`, `effort_level`, `response_model`, `session`
 
 ## Explicit Sessions
 
@@ -619,4 +724,4 @@ FutureSearch operations have associated costs. To avoid re-running them unnecess
 - **Separate data processing from analysis**: Save FutureSearch results to a file (CSV, Parquet, etc.), then do analysis in a separate script. This way, if analysis code has bugs, you don't re-trigger the FutureSearch step.
 - **Use intermediate checkpoints**: For multi-step pipelines, consider saving results after each FutureSearch operation.
     - You are able to chain multiple operations together without needing to download and re-upload intermediate results via the SDK. However for most control, implement each step as a dedicated job, possibly orchestrated by tools such as Apache Airflow or Prefect.
-- **Test with `preview=True`**: Operations like `rank`, `classify`, and `merge` support `preview=True` to process only a few rows first.
+- **Test on a slice first**: Before running a large job, pass a few rows (e.g. `input=df.head(5)`) to check the task wording and output shape, then run the full table.

@@ -387,7 +387,7 @@ async def agent_map(
         session: Optional session. If not provided, one will be created automatically.
         input: The input table (DataFrame, UUID, or TableResult).
         effort_level: Effort level preset (low/medium/high). Mutually exclusive with
-            custom params (llm, iteration_budget, include_reasoning). Default: low.
+            custom params (llm, iteration_budget, include_reasoning). Default: medium.
         llm: LLM to use for each agent. Required when effort_level is None.
         iteration_budget: Number of agent iterations per row (0-20). Required when effort_level is None.
         include_reasoning: Include reasoning notes. Required when effort_level is None.

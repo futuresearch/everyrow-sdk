@@ -10,7 +10,7 @@
 
 **An API for frontier forecasting.**
 
-FutureSearch predicts the future. Accuracy is verifiable via our public track record on stocks, prediction markets, public benchmarks, and forecasting tournaments. As of July 2026 that record shows the forecaster first in Metaculus's Summer 2026 FutureEval tournament, above the superforecaster median on ForecastBench, and holding the best pooled score on BTF-3, our 1,907-question pastcasting benchmark. Every forecast draws on a [shared world model](https://futuresearch.ai/blog/world-modeling) that reconciles related questions against each other; it improved all eight base forecasters we tested.
+FutureSearch predicts the future. Accuracy is verifiable via our [public track record](https://evals.futuresearch.ai) on stocks, prediction markets, public benchmarks, and forecasting tournaments: the forecaster leads Metaculus's Summer 2026 FutureEval tournament, sits above the superforecaster median on ForecastBench, and holds the best pooled score on BTF-3, our 1,907-question pastcasting benchmark. Those are live standings, so the link carries the current positions. Every forecast draws on a [shared world model](https://futuresearch.ai/docs/world-modeling) that reconciles related questions against each other; it improved all nine base forecasters we tested, four of them significantly.
 
 | Track Record | |
 | --- | --- |
