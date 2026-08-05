@@ -9,7 +9,7 @@ import secrets
 from uuid import UUID
 
 import pandas as pd
-from futuresearch.errors import _call_and_check
+from futuresearch.errors import FuturesearchError, _call_and_check
 from futuresearch.generated.api.tasks import get_task_status_tasks_task_id_status_get
 from futuresearch.generated.client import AuthenticatedClient
 from starlette.requests import Request
@@ -26,6 +26,19 @@ from futuresearch_mcp.tool_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Machine-readable marker telling the widget its polling can never succeed
+# again, so it stops instead of retrying a credential that is gone.
+SESSION_EXPIRED = "session_expired"
+
+
+def _session_expired(cors: dict[str, str]) -> JSONResponse:
+    """401 for a task whose owner has no live credential."""
+    return JSONResponse(
+        {"error": "Session expired", "code": SESSION_EXPIRED},
+        status_code=401,
+        headers=cors,
+    )
 
 
 def _cors_headers() -> dict[str, str]:
@@ -218,7 +231,46 @@ async def _backfill_timeline(
             payload["cursor"] = new_cursor
 
 
-async def api_progress(request: Request) -> Response:
+async def _apply_live_aggregate(
+    client: AuthenticatedClient, task_id: str, payload: dict, cursor: str | None
+) -> None:
+    """Merge the current aggregate + micro-summaries into a progress payload."""
+    aggregate, summaries, new_cursor = await _fetch_aggregate_rest(
+        client, task_id, cursor
+    )
+    if aggregate:
+        payload["aggregate_summary"] = aggregate
+    if summaries:
+        payload["summaries"] = summaries
+    if new_cursor:
+        payload["cursor"] = new_cursor
+
+
+def _progress_failure(
+    exc: FuturesearchError, task_id: str, cors: dict[str, str]
+) -> JSONResponse:
+    """Map an SDK error to a response, logging enough to diagnose it.
+
+    A 4xx from upstream means the credential we hold is no longer accepted;
+    reporting that as a 500 tells the widget to retry something that can
+    never succeed.
+    """
+    logger.error(
+        "Progress poll failed for task %s: %s status=%s code=%s: %s",
+        task_id,
+        type(exc).__name__,
+        exc.status_code,
+        exc.error_code,
+        exc.message,
+    )
+    if exc.status_code in (401, 403):
+        return _session_expired(cors)
+    return JSONResponse(
+        {"error": "Internal server error"}, status_code=500, headers=cors
+    )
+
+
+async def api_progress(request: Request) -> Response:  # noqa: PLR0911
     """REST endpoint for the session widget to poll task progress."""
     cors = _cors_headers()
     if request.method == "OPTIONS":
@@ -235,9 +287,13 @@ async def api_progress(request: Request) -> Response:
     if err := await _validate_poll_token(task_id, request):
         return err
 
-    api_key = await redis_store.get_task_token(task_id)
+    api_key = await redis_store.get_task_credential(task_id)
 
     if not api_key:
+        # We know whose task it is but hold no live credential: their session
+        # lapsed. Distinct from a task we have no record of at all.
+        if await redis_store.get_task_owner(task_id):
+            return _session_expired(cors)
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
 
     try:
@@ -277,21 +333,15 @@ async def api_progress(request: Request) -> Response:
         # Skip for terminal first-call — _backfill_timeline already
         # fetched the tail aggregate covering any gap.
         if not ts.is_terminal:
-            aggregate, summaries, new_cursor = await _fetch_aggregate_rest(
-                client, task_id, cursor or payload.get("cursor")
+            await _apply_live_aggregate(
+                client, task_id, payload, cursor or payload.get("cursor")
             )
-            if aggregate:
-                payload["aggregate_summary"] = aggregate
-            if summaries:
-                payload["summaries"] = summaries
-            if new_cursor:
-                payload["cursor"] = new_cursor
 
         return JSONResponse(payload, headers=cors)
-    except Exception as exc:
-        logger.error(
-            "Progress poll failed for task %s: %s", task_id, type(exc).__name__
-        )
+    except FuturesearchError as exc:
+        return _progress_failure(exc, task_id, cors)
+    except Exception:
+        logger.exception("Progress poll failed for task %s", task_id)
         return JSONResponse(
             {"error": "Internal server error"}, status_code=500, headers=cors
         )
@@ -345,8 +395,10 @@ async def api_download(request: Request) -> Response:  # noqa: PLR0911
 
     # Fetch results via the public API (parquet-first path handles citation
     # resolution and internal column stripping automatically).
-    api_key = await redis_store.get_task_token(task_id)
+    api_key = await redis_store.get_task_credential(task_id)
     if not api_key:
+        if await redis_store.get_task_owner(task_id):
+            return _session_expired(cors)
         return JSONResponse(
             {"error": "Results not found or expired"}, status_code=404, headers=cors
         )

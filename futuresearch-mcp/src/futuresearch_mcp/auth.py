@@ -34,6 +34,7 @@ from futuresearch_mcp.redis_store import (
     build_key,
     decrypt_value,
     encrypt_value,
+    user_token_key,
 )
 from futuresearch_mcp.templates import render_account_selector
 
@@ -723,6 +724,17 @@ class FuturesearchAuthProvider(
             time=settings.refresh_token_ttl,
             value=encrypt_value(rt.model_dump_json()),
         )
+
+        # Keep the owner's live-credential slot current. Widgets poll for as
+        # long as a task is on screen, which can outlast the JWT that submitted
+        # it; refreshing this on every issue/refresh is what lets those polls
+        # keep working instead of failing against a frozen token.
+        if (sub := jwt_claims.get("sub")) and expires_in > 0:
+            await self._redis.setex(
+                name=user_token_key(sub),
+                time=expires_in,
+                value=encrypt_value(access_token),
+            )
 
         # Map this access token to the chosen account so header-less requests
         # (raw MCP clients) resolve to it.

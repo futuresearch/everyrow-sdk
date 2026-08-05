@@ -190,6 +190,64 @@ async def pop_task_token(task_id: str) -> None:
     await get_redis_client().delete(build_key("task_token", task_id))
 
 
+# ── Task credentials ──────────────────────────────────────────
+#
+# A task outlives the credential that submitted it. API keys never expire, so
+# they are stored verbatim per task (above). Supabase JWTs do expire, and their
+# lifetime is counted from login — not from submission — so a JWT frozen at
+# submission time can die long before the task's own TOKEN_TTL elapses. For
+# those we store only the owner's user id per task and keep the JWT itself in a
+# per-user slot that the OAuth layer overwrites on every refresh, so a poll
+# always presents a live credential rather than a snapshot.
+
+
+def user_token_key(user_id: str) -> str:
+    """Redis key for a user's current Supabase JWT."""
+    return build_key("user_token", user_id)
+
+
+async def store_user_token(user_id: str, token: str, ttl: int) -> None:
+    """Record a user's current JWT, expiring with the JWT itself."""
+    if ttl <= 0:
+        return
+    await get_redis_client().setex(user_token_key(user_id), ttl, encrypt_value(token))
+
+
+async def get_user_token(user_id: str) -> str | None:
+    encrypted = await get_redis_client().get(user_token_key(user_id))
+    if encrypted is None:
+        return None
+    return decrypt_value(encrypted)
+
+
+async def store_task_owner(task_id: str, user_id: str) -> None:
+    """Record which user submitted a task, so polls can resolve a live JWT."""
+    await get_redis_client().setex(build_key("task_owner", task_id), TOKEN_TTL, user_id)
+
+
+async def get_task_owner(task_id: str) -> str | None:
+    return await get_redis_client().get(build_key("task_owner", task_id))
+
+
+async def get_task_credential(task_id: str) -> str | None:
+    """Resolve a usable API credential for a task, or None if unavailable.
+
+    Prefers the owner's current JWT; falls back to a per-task credential for
+    API-key submissions and for tasks recorded before owner mapping existed
+    (the latter drain within TOKEN_TTL).
+    """
+    owner = await get_task_owner(task_id)
+    if owner:
+        if token := await get_user_token(owner):
+            return token
+        # Owner known but no live JWT: their session lapsed with nothing
+        # refreshing it. Returning None yields an honest "expired" response
+        # rather than a 401 from upstream.
+        logger.info("No live credential for owner of task %s", task_id)
+        return None
+    return await get_task_token(task_id)
+
+
 # ── Poll tokens ───────────────────────────────────────────────
 
 

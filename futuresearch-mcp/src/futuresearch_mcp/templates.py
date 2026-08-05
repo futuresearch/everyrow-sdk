@@ -64,6 +64,7 @@ body{font-family:'JetBrains Mono',ui-monospace,monospace;margin:0;padding:0;colo
 .prog-info{font-size:12px;color:var(--text-sec);margin:6px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;letter-spacing:0.01em}
 .status-done{color:var(--seg-done);font-weight:500}.status-fail{color:var(--seg-fail);font-weight:500}
 .eta{color:var(--text-dim);font-size:10px}
+.poll-note{font-size:11px;color:var(--text-dim);margin:2px 0 6px;font-style:italic}
 @keyframes flash{0%,100%{background:transparent}50%{background:rgba(45,122,62,.1)}}
 .flash{animation:flash 1s ease 3}
 
@@ -252,6 +253,7 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 <!-- ── Progress section (hidden until progress mode) ── -->
 <div id="progressSection" class="progress-section" style="display:none">
   <div id="progressContent"></div>
+  <div id="pollNote" class="poll-note" style="display:none"></div>
 </div>
 
 <!-- ── Tab bar (hidden until progress mode) ── -->
@@ -319,6 +321,7 @@ const widgetFrame=document.getElementById("widgetFrame");
 /* ── progress & tab elements ── */
 const progressSection=document.getElementById("progressSection");
 const progressContent=document.getElementById("progressContent");
+const pollNote=document.getElementById("pollNote");
 const tabBar=document.getElementById("tabBar");
 const activityTab=document.getElementById("activityTab");
 const activityList=document.getElementById("activityList");
@@ -528,7 +531,7 @@ function renderProgress(d){
     if(!resultsFetched)autoFetchResults();
     showDoneBanner();
   }
-  if(done&&pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  if(done){setPollNote("");stopPoll();}
 }
 
 
@@ -1045,15 +1048,53 @@ function enterProgressMode(d){
 }
 
 /* ── polling ── */
+function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
+
+/* Show a note without destroying the last rendered progress. */
+function setPollNote(msg){
+  if(!msg){pollNote.style.display="none";pollNote.textContent="";return;}
+  pollNote.textContent=msg;
+  pollNote.style.display="block";
+}
+
+/* A failed poll is either permanent (the credential or task is gone — no
+   amount of retrying brings it back) or transient (retry, but say so rather
+   than silently showing stale progress forever). Returns true when handled
+   permanently and polling has been stopped. */
+async function pollFailedPermanently(r){
+  let code="";
+  try{code=((await r.clone().json())||{}).code||"";}catch{}
+  if(r.status===401||code==="session_expired"){
+    stopPoll();
+    setPollNote("Session expired — ask Claude for this task's status again to reconnect.");
+    return true;
+  }
+  if(r.status===404){
+    stopPoll();
+    setPollNote("This task is no longer available.");
+    return true;
+  }
+  return false;
+}
+
 function startPoll(){
   const opts=pollToken?{headers:{"Authorization":"Bearer "+pollToken}}:{};
   pollTimer=setInterval(async()=>{
     try{
       let url=pollUrl;
       if(pollCursor)url+=(url.includes("?")?"&":"?")+"cursor="+encodeURIComponent(pollCursor);
-      const r=await fetch(url,opts);if(r.ok)renderProgress(await r.json());
-    }catch{}
+      const r=await fetch(url,opts);
+      if(r.ok){setPollNote("");renderProgress(await r.json());return;}
+      if(await pollFailedPermanently(r))return;
+      setPollNote("Reconnecting…");
+    }catch{setPollNote("Reconnecting…");}
   },10000);
+}
+
+/* Mount-time failure: only poll on if a retry could actually succeed. */
+async function startPollUnlessPermanent(r){
+  if(r&&await pollFailedPermanently(r))return;
+  if(!pollTimer)startPoll();
 }
 
 /* --- data processing --- */
@@ -1647,7 +1688,7 @@ app.ontoolresult=({content,structuredContent})=>{
       try{
         const opts=structuredContent.poll_token?{headers:{"Authorization":"Bearer "+structuredContent.poll_token}}:{};
         const r=await fetch(pollUrl,opts);
-        if(!r.ok){if(!pollTimer)startPoll();return;}
+        if(!r.ok){await startPollUnlessPermanent(r);return;}
         const d=await r.json();
         const currentStatus=d.status||structuredContent.status;
         const done=["completed","failed","revoked"].includes(currentStatus);
@@ -1682,7 +1723,7 @@ app.ontoolresult=({content,structuredContent})=>{
             try{
               const opts=d.poll_token?{headers:{"Authorization":"Bearer "+d.poll_token}}:{};
               const r2=await fetch(pollUrl,opts);
-              if(!r2.ok){if(!pollTimer)startPoll();return;}
+              if(!r2.ok){await startPollUnlessPermanent(r2);return;}
               const d2=await r2.json();
               const currentStatus=d2.status||d.status;
               const done2=["completed","failed","revoked"].includes(currentStatus);

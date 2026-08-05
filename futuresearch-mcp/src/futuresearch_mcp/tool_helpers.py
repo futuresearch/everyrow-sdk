@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import secrets
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -42,6 +43,10 @@ from futuresearch_mcp.request_context import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Marks a credential as a non-expiring API key rather than a Supabase JWT.
+# Must match the engine's own check in engine/auth.py::get_current_active_user.
+API_KEY_PREFIX = "sk-cho-"
 
 
 @dataclass(slots=True)
@@ -318,8 +323,39 @@ def _submission_text(label: str, task_id: str, session_id: str = "") -> str:
         Immediately call futuresearch_progress(task_id='{task_id}').""")
 
 
+async def _store_task_credential(task_id: str, token: str) -> None:
+    """Record how to authenticate later calls about this task.
+
+    API keys never expire, so they are stored verbatim. A Supabase JWT does
+    expire — and on a clock that started at login, not at submission — so we
+    record only the owner and let the OAuth layer keep their live JWT in a
+    per-user slot. Storing the JWT itself here would freeze a credential that
+    the task, and the widget polling it, routinely outlive.
+    """
+    if token.startswith(API_KEY_PREFIX):
+        await redis_store.store_task_token(task_id, token)
+        return
+
+    access_token = get_access_token()
+    if access_token is None or not access_token.client_id:
+        # Shouldn't happen: HTTP JWT requests are verified before a tool runs,
+        # and that verification is what populates this context.
+        logger.error(
+            "No auth context while recording ownership of task %s — storing a "
+            "credential that will stop working when this JWT expires",
+            task_id,
+        )
+        await redis_store.store_task_token(task_id, token)
+        return
+
+    # client_id is the Supabase `sub` (see SupabaseTokenVerifier.verify_token).
+    await redis_store.store_task_owner(task_id, access_token.client_id)
+    ttl = (access_token.expires_at or 0) - int(time.time())
+    await redis_store.store_user_token(access_token.client_id, token, ttl)
+
+
 async def _record_task_ownership(task_id: str, token: str) -> str:
-    """Store the API token and create a poll token for a submitted task.
+    """Store the API credential and create a poll token for a submitted task.
 
     Must run for every HTTP submission (including internal clients) so that
     downstream poll-token checks in progress/results don't fail.
@@ -327,7 +363,7 @@ async def _record_task_ownership(task_id: str, token: str) -> str:
     Returns the poll_token.
     """
     poll_token = secrets.token_urlsafe(32)
-    await redis_store.store_task_token(task_id, token)
+    await _store_task_credential(task_id, token)
     await redis_store.store_poll_token(task_id, poll_token)
     return poll_token
 

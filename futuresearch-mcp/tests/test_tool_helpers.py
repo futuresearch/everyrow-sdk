@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -18,12 +19,14 @@ from futuresearch.generated.models.task_progress_info import TaskProgressInfo
 from futuresearch.generated.models.task_status import TaskStatus
 from futuresearch.generated.types import UNSET, Unset
 
+from futuresearch_mcp import redis_store
 from futuresearch_mcp.request_context import request_context
 from futuresearch_mcp.tool_helpers import (
     TaskState,
     _format_summary_lines,
     _get_client,
     _resolve_stored_account_id,
+    _store_task_credential,
     format_sdk_error,
 )
 from tests.conftest import make_test_context, override_settings
@@ -431,6 +434,40 @@ class TestAccountHeaderPrecedence:
 
         headers = client.with_headers.call_args[0][0]
         assert headers["x-cohort-account-id"] == "stored-acct"
+
+
+class TestStoreTaskCredential:
+    """A task must not be pinned to a credential that expires before it does."""
+
+    @pytest.mark.asyncio
+    async def test_api_key_stored_verbatim(self, fake_redis):
+        """API keys don't expire, so there is nothing to keep live."""
+        with patch.object(redis_store, "get_redis_client", return_value=fake_redis):
+            await _store_task_credential("task-k", "sk-cho-abc123")
+
+            assert await redis_store.get_task_token("task-k") == "sk-cho-abc123"
+            assert await redis_store.get_task_owner("task-k") is None
+
+    @pytest.mark.asyncio
+    async def test_jwt_stored_as_owner_reference(self, fake_redis):
+        access_token = MagicMock()
+        access_token.client_id = "user-7"
+        access_token.expires_at = int(time.time()) + 3600
+
+        with (
+            patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+            patch(
+                "futuresearch_mcp.tool_helpers.get_access_token",
+                return_value=access_token,
+            ),
+        ):
+            await _store_task_credential("task-j", "the-jwt")
+
+            assert await redis_store.get_task_owner("task-j") == "user-7"
+            assert await redis_store.get_user_token("user-7") == "the-jwt"
+            # The JWT itself is never frozen against the task.
+            assert await redis_store.get_task_token("task-j") is None
+            assert await redis_store.get_task_credential("task-j") == "the-jwt"
 
 
 class TestResolveStoredAccountId:

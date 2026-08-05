@@ -29,7 +29,7 @@ from futuresearch_mcp.auth import (
     SupabaseTokenResponse,
     SupabaseTokenVerifier,
 )
-from futuresearch_mcp.redis_store import account_selection_key
+from futuresearch_mcp.redis_store import account_selection_key, user_token_key
 from futuresearch_mcp.templates import render_account_selector
 
 # TTL/rate-limit defaults matching HttpSettings defaults.
@@ -1165,6 +1165,51 @@ class TestAccountSelectionPersistence:
             provider_redis._store[rt_keys[0]]
         )
         assert rt.selected_account_id == "team-a"
+
+    @pytest.mark.asyncio
+    async def test_issue_token_refreshes_owner_credential(
+        self, provider, provider_redis, rsa_keypair
+    ):
+        """Every issued JWT updates the owner slot that task polls read.
+
+        This is what keeps a widget polling after the JWT it was submitted
+        with has expired.
+        """
+        private_key, _ = rsa_keypair
+
+        await provider._issue_token_response(
+            access_token=_make_jwt(private_key),
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+        )
+        first = provider_redis._store[user_token_key("user-123")]
+
+        refreshed = _make_jwt(private_key, {"iat": int(time.time()) + 1})
+        await provider._issue_token_response(
+            access_token=refreshed,
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt-2",
+        )
+
+        assert provider_redis._store[user_token_key("user-123")] != first
+
+    @pytest.mark.asyncio
+    async def test_expired_token_writes_no_owner_credential(
+        self, provider, provider_redis, rsa_keypair
+    ):
+        private_key, _ = rsa_keypair
+        expired = _make_jwt(private_key, {"exp": int(time.time()) - 10})
+
+        await provider._issue_token_response(
+            access_token=expired,
+            client_id="test-client-id",
+            scopes=["read"],
+            supabase_refresh_token="supa-rt",
+        )
+
+        assert user_token_key("user-123") not in provider_redis._store
 
     @pytest.mark.asyncio
     async def test_no_selection_writes_no_acct_key(
