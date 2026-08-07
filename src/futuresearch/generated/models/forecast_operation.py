@@ -8,7 +8,7 @@ from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
 from ..models.forecast_effort_level import ForecastEffortLevel
-from ..models.forecast_type import ForecastType
+from ..models.forecast_operation_forecast_type import ForecastOperationForecastType
 from ..types import UNSET, Unset
 
 if TYPE_CHECKING:
@@ -29,7 +29,14 @@ class ForecastOperation:
             of a list of JSON objects
         task (str): Overall context or instructions for the forecast. Each row in the input should contain the
             question/scenario to forecast.
-        forecast_type (ForecastType):
+        forecast_type (ForecastOperationForecastType): Type of the OUTCOME being forecast. 'binary': yes/no probability
+            (0-100) for questions like 'Will X happen?'. 'numeric': percentile estimates (p10-p90) for questions like 'What
+            will the price/value/count be?'. 'date': date percentile estimates (p10-p90) as YYYY-MM-DD strings for timing
+            questions like 'When will X happen?'. 'categorical': one probability per listed outcome + a single rationale,
+            for questions like 'Who will win: A, B, C or D?' (requires categories_field). 'thresholded': one probability per
+            listed threshold condition + a single rationale, for nested conditions on one outcome like 'oil above $80 / $90
+            / $100' or 'launch before 2027 / 2026' (requires thresholds_field). Requires output_field when 'numeric' or
+            'date'.
         session_id (None | Unset | UUID): Session ID. If not provided, a new session is auto-created for this task.
         webhook_url (None | str | Unset): Optional URL to receive a POST callback when the task completes or fails.
         output_field (None | str | Unset): Name of the numeric quantity being forecast (e.g. 'price', 'count'). Required
@@ -49,25 +56,26 @@ class ForecastOperation:
             the probability (0-100) that it is satisfied.
         alternatives_field (None | str | Unset): Name of the input column holding each row's mutually exclusive decision
             alternatives as a JSON array of numbers or strings (e.g. ["$0 (no grant)", "$1-$100k", "more than $1m"]).
-            Required when forecast_type is 'decision'. 2-50 unique alternatives per row; a binary decision ('do X' / 'don't
-            do X') is the 2-alternative case. Exactly one alternative will be chosen, and the row's outcome is forecast
-            under each alternative as its own hypothetical — the probabilities need not sum to 100 and need not be
-            monotonic. The output 'probabilities' column holds a JSON object mapping each alternative to the outcome's
-            probability (0-100) given that alternative is chosen.
-        intervention (None | str | Unset): Decision forecasts only: the intervention assumptions — what executing an
-            alternative means (publicity and signaling, timing, how the rest of the world responds in each branch). Omit to
-            apply the default assumptions: the decision maker is deciding soon, all downstream consequences count (including
-            other agents' reactions), the world responds realistically in every branch, and the forecast reasons through
-            mechanism, never through what the decision would reveal about the world. Supplying this text replaces the
-            default wholesale, so state the full assumptions (e.g. 'Assume the donation is anonymous and no other funder
-            backfills.'). The same assumptions apply to every row of the task.
+            Supplying it turns the forecast into a DECISION forecast (currently forecast_type='binary' only). 2-50 unique
+            alternatives per row; a binary decision ('do X' / 'don't do X') is the 2-alternative case. Exactly one
+            alternative will be chosen, and the row's outcome is forecast under each alternative as its own hypothetical —
+            the probabilities need not sum to 100 and need not be monotonic. The output 'probabilities' column holds a JSON
+            object mapping each alternative to the outcome's probability (0-100) given that alternative is chosen. Mutually
+            exclusive with condition / condition_field.
+        intervention (None | str | Unset): Decision mode only (requires alternatives_field): the intervention
+            assumptions — what executing an alternative means (publicity and signaling, timing, how the rest of the world
+            responds in each branch). Omit to apply the default assumptions: the decision maker is deciding soon, all
+            downstream consequences count (including other agents' reactions), the world responds realistically in every
+            branch, and the forecast reasons through mechanism, never through what the decision would reveal about the
+            world. Supplying this text replaces the default wholesale, so state the full assumptions (e.g. 'Assume the
+            donation is anonymous and no other funder backfills.'). The same assumptions apply to every row of the task.
         condition (None | str | Unset): Makes the forecast CONDITIONAL: a single condition, the same for every input row
             and mapped over the list (e.g. a list of companies). The outcome (a forecast of forecast_type, taken from each
             row's question) is forecast both in the world where this condition holds and the world where it does not. State
             it in plain language; where it refers to the entity (e.g. 'the company'), the agent grounds it in each row.
             Mutually exclusive with condition_field. Conditional forecasts require effort_level 'HIGH'. The output adds per-
             branch columns suffixed '_given_condition' and '_given_not_condition'. For a decision the user controls, prefer
-            forecast_type='decision' instead.
+            alternatives_field (decision mode) instead.
         condition_field (None | str | Unset): Makes the forecast CONDITIONAL using a per-row condition: the name of the
             input column holding each row's own condition. Like 'condition' but varies per row. Mutually exclusive with
             condition.
@@ -82,7 +90,7 @@ class ForecastOperation:
 
     input_: ForecastOperationInputType2 | list[ForecastOperationInputType1Item] | UUID
     task: str
-    forecast_type: ForecastType
+    forecast_type: ForecastOperationForecastType
     session_id: None | Unset | UUID = UNSET
     webhook_url: None | str | Unset = UNSET
     output_field: None | str | Unset = UNSET
@@ -270,7 +278,7 @@ class ForecastOperation:
 
         task = d.pop("task")
 
-        forecast_type = ForecastType(d.pop("forecast_type"))
+        forecast_type = ForecastOperationForecastType(d.pop("forecast_type"))
 
         def _parse_session_id(data: object) -> None | Unset | UUID:
             if data is None:

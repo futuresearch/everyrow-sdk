@@ -271,7 +271,8 @@ async def futuresearch_decision(
     """Forecast a decision: the outcome under each alternative of the user's choice.
 
     Causal decision support, e.g. "If I fund this organization at $0 / $300k /
-    $2M, will it ship its study by 2027?". Each row states a single yes/no
+    $2M, will it ship its study by 2027?" (binary), "…how many researchers will
+    it hire?" (numeric), or "…when will it ship?" (date). Each row states the
     outcome question, and ``alternatives_field`` names a column holding that
     row's mutually exclusive alternatives as a JSON array (2-50 entries; a
     binary "do X / don't do X" decision is the 2-alternative case). The outcome
@@ -280,18 +281,24 @@ async def futuresearch_decision(
     (``intervention``; sensible defaults apply when omitted — tell the user what
     assumptions were active when presenting results).
 
+    ``forecast_type`` selects the outcome shape, exactly as in
+    ``futuresearch_forecast``: ``"binary"`` (default) gives a probability per
+    alternative; ``"numeric"`` gives a percentile estimate (p10-p90) per
+    alternative and requires ``output_field`` and ``units``; ``"date"`` gives a
+    percentile date per alternative and requires ``output_field``.
+
     Use this tool — not ``futuresearch_forecast`` with a ``condition`` —
     whenever the user asks "what happens if I do X": it answers the causal
     question about their own decision rather than the correlational "in worlds
-    where X happens" question. Decisions always run at high effort.
-    Probabilities need not sum to 100 and need not be monotonic. Decision
-    forecasts are not scored (only one branch ever resolves).
+    where X happens" question.
 
-    Output columns: ``probabilities`` (JSON object mapping each alternative to
-    the outcome's probability given that alternative is chosen) and
-    ``rationale`` (str).
+    Output columns: ``rationale`` (str) plus a per-alternative column —
+    ``probabilities`` (binary: a JSON object mapping each alternative to the
+    outcome's probability) or ``percentiles`` (numeric/date: a JSON object
+    mapping each alternative to its p10..p90 record), given that alternative is
+    chosen.
 
-    The row should contain at minimum a ``question`` column (the yes/no outcome
+    The row should contain at minimum a ``question`` column (the outcome
     question) and the alternatives column. Recommended additional columns:
     ``resolution_criteria``, ``resolution_date``, ``background``. The optional
     ``context`` parameter provides batch-level instructions.
@@ -320,16 +327,27 @@ async def futuresearch_decision(
                 session=session,
                 input=input_data,
                 alternatives_field=params.alternatives_field,
+                forecast_type=params.forecast_type,
+                output_field=params.output_field,
+                units=params.units,
                 intervention=params.intervention,
             )
             task_id = str(cohort_task.task_id)
             total = len(input_data) if isinstance(input_data, pd.DataFrame) else 0
 
+        # forecast_type stays "decision" in the widget meta (how the viz keys the
+        # decision render); the outcome type + output_field/units ride alongside so
+        # numeric/date-decision cards can render percentile ranges per alternative.
         widget_meta: dict[str, Any] = {
             "task_type": "forecast",
             "forecast_type": "decision",
+            "decision_outcome_type": params.forecast_type,
             "alternatives_field": params.alternatives_field,
         }
+        if params.output_field:
+            widget_meta["output_field"] = params.output_field
+        if params.units:
+            widget_meta["units"] = params.units
         return await create_tool_response(
             task_id=task_id,
             label=f"Submitted: {total} rows for decision forecasting."

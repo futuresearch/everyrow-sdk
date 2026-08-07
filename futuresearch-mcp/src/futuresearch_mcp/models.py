@@ -548,9 +548,27 @@ class DecisionInput(_SingleSourceInput):
         "decision alternatives as a JSON array of numbers or strings (e.g. "
         '["$0 (no grant)", "$1-$100k", "more than $1m"]). 2-50 unique alternatives '
         "per row; a binary decision ('do X' / 'don't do X') is the 2-alternative "
-        "case. The output 'probabilities' column holds a JSON object mapping each "
-        "alternative to the outcome's probability (0-100) given that alternative is "
-        "chosen; the probabilities need not sum to 100 and need not be monotonic.",
+        "case. The output column holds a JSON object mapping each alternative to the "
+        "outcome under it (given that alternative is chosen); each alternative is its "
+        "own hypothetical, with no cross-alternative sum or monotonicity constraint.",
+    )
+    forecast_type: Literal["binary", "numeric", "date"] = Field(
+        default="binary",
+        description="Outcome type forecast under each alternative. 'binary' (default): "
+        "a probability (0-100) per alternative, output column 'probabilities'. "
+        "'numeric': a percentile estimate (p10-p90) per alternative, requires "
+        "output_field and units, output column 'percentiles'. 'date': a percentile "
+        "date per alternative, requires output_field, output column 'percentiles'.",
+    )
+    output_field: str | None = Field(
+        default=None,
+        description="Name of the quantity being forecast. Required when forecast_type "
+        "is 'numeric' or 'date'.",
+    )
+    units: str | None = Field(
+        default=None,
+        description="Units for a numeric outcome (e.g. 'USD'). Required when "
+        "forecast_type is 'numeric'.",
     )
     intervention: str | None = Field(
         default=None,

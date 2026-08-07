@@ -14,7 +14,7 @@ from futuresearch.errors import FuturesearchError
 from futuresearch.generated.models import (
     CreateArtifactResponse,
     ForecastEffortLevel,
-    ForecastType,
+    ForecastOperationForecastType,
     LLMEnumPublic,
     OperationResponse,
     PublicEffortLevel,
@@ -734,7 +734,7 @@ async def test_forecast_with_session_threads_effort_level(mocker, mock_session):
     )
 
     body = mock_submit.call_args.kwargs["body"]
-    assert body.forecast_type == ForecastType.BINARY
+    assert body.forecast_type == ForecastOperationForecastType.BINARY
     assert body.effort_level == ForecastEffortLevel.HIGH
 
 
@@ -745,12 +745,12 @@ async def test_forecast_with_session_threads_effort_level(mocker, mock_session):
         (
             "categorical",
             {"categories_field": "options"},
-            ForecastType.CATEGORICAL,
+            ForecastOperationForecastType.CATEGORICAL,
         ),
         (
             "thresholded",
             {"thresholds_field": "thresholds"},
-            ForecastType.THRESHOLDED,
+            ForecastOperationForecastType.THRESHOLDED,
         ),
     ],
 )
@@ -816,8 +816,9 @@ async def test_forecast_grouped_types_thread_field_params(
 
 @pytest.mark.asyncio
 async def test_decision_threads_params_to_the_forecast_wire_body(mocker, mock_session):
-    """decision() submits a forecast operation with forecast_type='decision'
-    and threads alternatives_field and intervention to the wire body."""
+    """decision() submits a forecast operation in decision mode:
+    forecast_type='binary' plus alternatives_field and intervention on the wire
+    (decision is a modifier, no longer a forecast_type of its own)."""
     task_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
 
@@ -862,9 +863,65 @@ async def test_decision_threads_params_to_the_forecast_wire_body(mocker, mock_se
     )
 
     body = mock_submit.call_args.kwargs["body"]
-    assert body.forecast_type == ForecastType.DECISION
+    assert body.forecast_type == ForecastOperationForecastType.BINARY
     assert body.alternatives_field == "scenarios"
     assert body.intervention == "Assume the donation is anonymous."
+
+
+@pytest.mark.asyncio
+async def test_decision_numeric_outcome_threads_output_field_and_units(
+    mocker, mock_session
+):
+    """A numeric-decision submits the forecast wire body with forecast_type='numeric'
+    plus output_field/units and alternatives_field."""
+    task_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+
+    mock_submit = mocker.patch(
+        "futuresearch.ops.forecast_operations_forecast_post.asyncio_detailed",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = _wrap(
+        OperationResponse(
+            task_id=task_id,
+            session_id=mock_session.session_id,
+            status=TaskStatus.PENDING,
+        )
+    )
+    mock_status = mocker.patch(
+        "futuresearch.task.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+        new_callable=AsyncMock,
+    )
+    mock_status.return_value = _make_status_response(
+        task_id, mock_session.session_id, artifact_id
+    )
+    mock_result = mocker.patch(
+        "futuresearch.task.get_task_result_tasks_task_id_result_get.asyncio_detailed",
+        new_callable=AsyncMock,
+    )
+    mock_result.return_value = _make_table_result(
+        task_id,
+        [{"question": "How many?", "percentiles": "{}"}],
+        artifact_id,
+    )
+
+    input_df = pd.DataFrame(
+        [{"question": "How many researchers?", "scenarios": '["$0", "$462k"]'}]
+    )
+    await decision(
+        input=input_df,
+        session=mock_session,
+        alternatives_field="scenarios",
+        forecast_type="numeric",
+        output_field="researchers",
+        units="people",
+    )
+
+    body = mock_submit.call_args.kwargs["body"]
+    assert body.forecast_type == ForecastOperationForecastType.NUMERIC
+    assert body.alternatives_field == "scenarios"
+    assert body.output_field == "researchers"
+    assert body.units == "people"
 
 
 @pytest.mark.asyncio

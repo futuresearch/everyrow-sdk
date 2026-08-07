@@ -1,11 +1,10 @@
 from enum import Enum
 
 
-class ForecastType(str, Enum):
+class ForecastOperationForecastType(str, Enum):
     BINARY = "binary"
     CATEGORICAL = "categorical"
     DATE = "date"
-    DECISION = "decision"
     NUMERIC = "numeric"
     THRESHOLDED = "thresholded"
 

@@ -35,8 +35,8 @@ from futuresearch.generated.models import (
     DedupeOperationStrategy,
     ForecastEffortLevel,
     ForecastOperation,
+    ForecastOperationForecastType,
     ForecastOperationInputType1Item,
-    ForecastType,
     LLMEnumPublic,
     MergeOperation,
     MergeOperationLeftInputType1Item,
@@ -1161,7 +1161,7 @@ async def forecast_async(
         input_=input_data,
         task=task,
         session_id=session.session_id,
-        forecast_type=ForecastType(forecast_type),
+        forecast_type=ForecastOperationForecastType(forecast_type),
         effort_level=effort_level if effort_level is not None else UNSET,
         output_field=output_field,
         units=units,
@@ -1197,6 +1197,9 @@ async def decision(
     session: Session | None = None,
     *,
     alternatives_field: str,
+    forecast_type: Literal["binary", "numeric", "date"] = "binary",
+    output_field: str | None = None,
+    units: str | None = None,
     intervention: str | None = None,
     config: dict[str, Any] | None = None,
 ) -> TableResult:
@@ -1204,18 +1207,22 @@ async def decision(
     user controls.
 
     Causal decision support, e.g. "If I fund this organization at $0 / $300k /
-    $2M, will it ship its study by 2027?". Each row states a yes/no outcome
-    question and lists the decision's mutually exclusive alternatives (in the
-    column named by ``alternatives_field``, as a JSON array of 2-50 numbers or
-    strings; a binary "do X / don't do X" decision is the 2-alternative case).
-    Exactly one alternative will be chosen, and the row's outcome is forecast
-    under each alternative as its own hypothetical, all alternatives researched
-    jointly so their differences reflect the decision's real effect. The
-    probabilities need not sum to 100 and need not be monotonic.
+    $2M, will it ship its study by 2027?" (binary), "…how many researchers will
+    it hire?" (numeric), or "…when will it ship?" (date). Each row states the
+    outcome question and lists the decision's mutually exclusive alternatives
+    (in the column named by ``alternatives_field``, as a JSON array of 2-50
+    numbers or strings; a binary "do X / don't do X" decision is the
+    2-alternative case). Exactly one alternative will be chosen, and the row's
+    outcome is forecast under each alternative as its own hypothetical, all
+    alternatives researched jointly so their differences reflect the decision's
+    real effect. Each alternative answers its own hypothetical, with no
+    cross-alternative sum or monotonicity constraint.
 
-    The forecast applies explicit intervention assumptions (see
-    ``intervention``), which are also why decision forecasts are not scored:
-    only one branch ever resolves. Decisions always run at HIGH effort.
+    ``forecast_type`` selects the outcome shape, exactly as in :func:`forecast`:
+    ``"binary"`` (default) gives a probability (0-100) per alternative;
+    ``"numeric"`` gives a percentile estimate (p10-p90) per alternative and
+    requires ``output_field`` and ``units``; ``"date"`` gives a percentile date
+    per alternative and requires ``output_field``.
 
     Unlike :func:`forecast` with a ``condition``, which answers the
     correlational question ("in worlds where X happens, what else is true?"),
@@ -1228,8 +1235,8 @@ async def decision(
     are used in the forecast.
 
     Args:
-        input: The input table. Each row should contain the yes/no outcome
-            question and the row's alternatives (in ``alternatives_field``).
+        input: The input table. Each row should contain the outcome question
+            and the row's alternatives (in ``alternatives_field``).
         context: Optional batch-level context or instructions that apply to
             every row. Leave *None* when the rows are self-contained.
         session: Optional session. If not provided, one will be created
@@ -1237,6 +1244,12 @@ async def decision(
         alternatives_field: Name of the input column holding each row's
             mutually exclusive decision alternatives as a JSON array of
             numbers or strings (2-50 unique values).
+        forecast_type: Outcome type forecast under each alternative:
+            ``"binary"`` (default), ``"numeric"``, or ``"date"``.
+        output_field: Name of the quantity being forecast (required when
+            *forecast_type* is ``"numeric"`` or ``"date"``).
+        units: Units for a numeric outcome (required when *forecast_type* is
+            ``"numeric"``, e.g. ``"researchers"``).
         intervention: The intervention assumptions — what executing an
             alternative means (publicity and signaling, timing, how the rest
             of the world responds in each branch). Omit to apply the default
@@ -1253,10 +1266,11 @@ async def decision(
             validated server-side. See :func:`forecast`.
 
     Returns:
-        TableResult with ``probabilities`` (JSON object mapping each
-        alternative to the outcome's probability, 0-100, given that
-        alternative is chosen) and ``rationale`` (str) columns added to each
-        input row.
+        TableResult with ``rationale`` (str) and a per-alternative column:
+        ``probabilities`` (binary — a JSON object mapping each alternative to
+        the outcome's probability, 0-100) or ``percentiles`` (numeric/date — a
+        JSON object mapping each alternative to its {p10..p90} record), given
+        that alternative is chosen.
     """
     task = context or ""
     if session is None:
@@ -1266,6 +1280,9 @@ async def decision(
                 session=internal_session,
                 input=input,
                 alternatives_field=alternatives_field,
+                forecast_type=forecast_type,
+                output_field=output_field,
+                units=units,
                 intervention=intervention,
                 config=config,
             )
@@ -1278,6 +1295,9 @@ async def decision(
         session=session,
         input=input,
         alternatives_field=alternatives_field,
+        forecast_type=forecast_type,
+        output_field=output_field,
+        units=units,
         intervention=intervention,
         config=config,
     )
@@ -1293,6 +1313,9 @@ async def decision_async(
     input: DataFrame | UUID | TableResult,
     *,
     alternatives_field: str,
+    forecast_type: Literal["binary", "numeric", "date"] = "binary",
+    output_field: str | None = None,
+    units: str | None = None,
     intervention: str | None = None,
     config: dict[str, Any] | None = None,
 ) -> FuturesearchTask[BaseModel]:
@@ -1304,6 +1327,10 @@ async def decision_async(
         input: Input data.
         alternatives_field: Input column with each row's mutually exclusive
             decision alternatives as a JSON array (2-50 unique values).
+        forecast_type: Outcome type forecast under each alternative:
+            ``"binary"`` (default), ``"numeric"``, or ``"date"``.
+        output_field: Name of the quantity (required for numeric and date).
+        units: Units for a numeric outcome (required for numeric).
         intervention: The intervention assumptions. Omit for the defaults;
             supplied text replaces them wholesale. See :func:`decision`.
         config: Experimental per-task overrides of internal forecast pipeline
@@ -1315,13 +1342,17 @@ async def decision_async(
     """
     input_data = _prepare_table_input(input, ForecastOperationInputType1Item)
 
-    # A decision is a forecast operation on the wire: same endpoint, its own
-    # forecast_type. Only the SDK surface splits them.
+    # A decision is a forecast operation on the wire: same endpoint, with the
+    # decision expressed as a modifier — an outcome forecast_type plus
+    # alternatives_field (and optional intervention), not a forecast_type of its
+    # own. Only the SDK surface keeps decision() and forecast() separate.
     body = ForecastOperation(
         input_=input_data,
         task=task,
         session_id=session.session_id,
-        forecast_type=ForecastType.DECISION,
+        forecast_type=ForecastOperationForecastType(forecast_type),
+        output_field=output_field,
+        units=units,
         alternatives_field=alternatives_field,
         intervention=intervention,
     )
