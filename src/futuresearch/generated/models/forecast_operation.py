@@ -56,12 +56,11 @@ class ForecastOperation:
             the probability (0-100) that it is satisfied.
         alternatives_field (None | str | Unset): Name of the input column holding each row's mutually exclusive decision
             alternatives as a JSON array of numbers or strings (e.g. ["$0 (no grant)", "$1-$100k", "more than $1m"]).
-            Supplying it turns the forecast into a DECISION forecast (currently forecast_type='binary' only). 2-50 unique
-            alternatives per row; a binary decision ('do X' / 'don't do X') is the 2-alternative case. Exactly one
-            alternative will be chosen, and the row's outcome is forecast under each alternative as its own hypothetical —
-            the probabilities need not sum to 100 and need not be monotonic. The output 'probabilities' column holds a JSON
-            object mapping each alternative to the outcome's probability (0-100) given that alternative is chosen. Mutually
-            exclusive with condition / condition_field.
+            Supplying it turns the forecast into a DECISION forecast: the outcome under each alternative is forecast as its
+            own hypothetical, of whatever forecast_type you set: 'binary', 'numeric', or 'date'. output_field and units
+            follow the same rules as a plain forecast of that type: the per-alternative outcome rides in one JSON-string
+            column: 'probabilities' for a binary outcome or 'percentiles' for a numeric/date outcome, given that alternative
+            is chosen. Mutually exclusive with condition / condition_field.
         intervention (None | str | Unset): Decision mode only (requires alternatives_field): the intervention
             assumptions — what executing an alternative means (publicity and signaling, timing, how the rest of the world
             responds in each branch). Omit to apply the default assumptions: the decision maker is deciding soon, all
@@ -80,8 +79,8 @@ class ForecastOperation:
             input column holding each row's own condition. Like 'condition' but varies per row. Mutually exclusive with
             condition.
         effort_level (ForecastEffortLevel | None | Unset): Effort level for the forecast. 'LOW' tends to be faster and
-            cheaper. 'HIGH' tends to be more accurate. When not specified, defaults to 'HIGH'. 'categorical', 'thresholded'
-            and 'decision' forecasts, and any conditional forecast (condition / condition_field), require 'HIGH'.
+            cheaper. 'HIGH' tends to be more accurate. When not specified, defaults to 'HIGH'. 'categorical' and
+            'thresholded' forecasts, as well as any conditional forecast, require 'HIGH'.
         config (ForecastTaskConfig | None | Unset): Experimental per-task overrides of internal forecast pipeline
             parameters (forecaster/refiner ensembles, summarizer model, iteration budget). Internal accounts only. Every
             field is optional and defaults to the effort level's stock value; supplied list fields replace the default

@@ -114,25 +114,34 @@ Two mutually exclusive ways to supply the condition:
   row's own condition, for a sheet where rows carry distinct conditions.
 
 ### futuresearch_decision
-Forecast a yes/no outcome under each alternative of a choice the user controls
-("if I fund this at $0 / $300k / $2M, will it ship by 2027?"). Use this, not
-futuresearch_forecast with a condition, whenever the "if" is the user's own
-decision: a conditional forecast is correlational, a decision is causal.
+Forecast the outcome under each alternative of a choice the user controls
+("if I fund this at $0 / $300k / $2M, will it ship by 2027?"). The outcome under
+each alternative can be a probability, a number, or a date (`forecast_type`
+`binary` / `numeric` / `date`, as in futuresearch_forecast). Use this, whenever
+the "if" is the user's own decision: a conditional forecast is correlational,
+a decision is causal.
 ```
 Parameters:
 - artifact_id: Artifact ID (UUID) from upload_data or request_upload_url
 - data: Inline data as a list of row objects (must include "question" column)
 - alternatives_field: (required) Column holding each row's mutually exclusive
   alternatives as a JSON array of 2-50 numbers or strings
+- forecast_type: (optional) "binary" (default), "numeric", or "date" (the OUTCOME
+  type forecast under each alternative)
+- output_field: Name of the forecast quantity (required for numeric/date)
+- units: Units of the forecast quantity (required for numeric)
 - context: (optional) Table-level context applied to every row
 - intervention: (optional) What executing an alternative means (publicity, timing,
   how the world responds). Replaces the default assumptions wholesale, so state
   the full set. Tell the user which assumptions were active when presenting results.
 - session_id / session_name: (optional)
 ```
-Output columns are `probabilities` (JSON object mapping each alternative to the
-outcome's probability) and `rationale`. Probabilities need not sum to 100 and need
-not be monotonic. Always HIGH effort. Not scored, since only one branch resolves.
+The output always contains a `rationale`. Additionally, for a binary outcome,
+there is a `probabilities` field, which is a JSON object mapping each alternative to
+the outcome's probability. For a numeric or date outcome, the output contains a
+`percentiles` field, which is a JSON object mapping each alternative to its
+`{p10, p25, p50, p75, p90}` record. The values across alternatives need not sum to
+100 and need not be monotonic.
 
 ### futuresearch_multi_agent
 Answer one question with a team of agents that each take a different angle, then
@@ -351,17 +360,18 @@ result = await forecast(
 print(result.data[["question", "probability", "rationale"]])
 ```
 
-Parameters: `input`, `forecast_type` (`"binary"` | `"numeric"` | `"date"` | `"categorical"` | `"thresholded"` | `"conditional"`), `effort_level`, `context`, `output_field` (required for numeric/date), `units` (required for numeric), `categories_field` (required for categorical), `thresholds_field` (required for thresholded), `condition_field` + `outcome_field` *or* `condition` + `outcome` (conditional), `session`
+Parameters: `input`, `forecast_type` (`"binary"` | `"numeric"` | `"date"` | `"categorical"` | `"thresholded"`), `effort_level`, `context`, `output_field` (required for numeric/date), `units` (required for numeric), `categories_field` (required for categorical), `thresholds_field` (required for thresholded), `condition` *or* `condition_field` (makes any type conditional), `session`
 
-For **conditional** forecasts (P(B|A) and P(B|not A) for a condition A and outcome B), see "Conditional forecasting" under `futuresearch_forecast` above. Two supply modes: `condition_field`/`outcome_field` (per-row columns) or `condition`/`outcome` (single shared questions mapped over a list of entities — the "ask this conditional about each of these" case).
+For **conditional** forecasts (P(B|A) and P(B|not A) for a condition A and outcome B), see "Conditional forecasting" under `futuresearch_forecast` above. Conditionality is a modifier on any `forecast_type`, not a type of its own: keep `forecast_type` describing the outcome B (taken from each row's `question`) and supply the condition A via `condition` (a single shared condition mapped over every row) or `condition_field` (a per-row condition column). The two are mutually exclusive.
 
 Recommended input columns beyond `question`: `resolution_criteria`, `resolution_date`, `background`. For questions tied to a prediction market or forecasting platform (Polymarket, Kalshi, Metaculus, ...), also pass `market_creation_date` and `market_price` (with its as-of date), and copy resolution criteria verbatim from the platform — including fine print. Self-contained questions (e.g. "When will Anthropic IPO?") need none of these.
 
 ### decision - Outcome under each alternative
 
-Forecast a yes/no outcome under each alternative of a choice you control. Use this,
-not `forecast` with a `condition`, whenever the "if" clause is the user's own
-decision: a conditional forecast is correlational, a decision is causal.
+Forecast the outcome under each alternative of a choice you control. Use this
+whenever the "if" clause is the user's own decision: a conditional forecast is
+correlational, a decision is causal. The outcome under each alternative can be a
+probability, a number, or a date, set by `forecast_type`, exactly as in `forecast`.
 
 ```python
 import json
@@ -380,12 +390,15 @@ result = await decision(input=decisions, alternatives_field="grant_size")
 print(result.data[["question", "probabilities", "rationale"]])
 ```
 
-Adds `probabilities` (JSON object mapping each alternative to the outcome's
-probability) and `rationale`. Probabilities need not sum to 100 and need not be
-monotonic. Always HIGH effort, and not scored, since only one branch resolves.
+The output contains `rationale` plus a per-alternative outcome column:
+- For binary forecasts, a `probabilities` field containing a JSON object mapping
+  each alternative to the outcome's probability.
+- For numeric and date forecasts, a `percentiles` field containing a JSON object
+  mapping each alternative to its `{p10, p25, p50, p75, p90}` record).
 
-Parameters: `input`, `alternatives_field` (required, keyword-only), `context`,
-`intervention`, `session`
+Parameters: `input`, `alternatives_field` (required, keyword-only), `forecast_type`
+(`"binary"` | `"numeric"` | `"date"`), `output_field` (required for numeric/date),
+`units` (required for numeric), `context`, `intervention`, `session`
 
 ### multi_agent - A team of agents on one question
 
