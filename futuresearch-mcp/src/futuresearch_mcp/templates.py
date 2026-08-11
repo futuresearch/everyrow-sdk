@@ -177,9 +177,6 @@ body.fullscreen .resize-handle{display:none}
 .done-banner .banner-text{flex:1}
 .done-banner .banner-close{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;opacity:.8}
 .done-banner .banner-close:hover{opacity:1}
-.session-link{margin-bottom:6px;font-size:11px;display:flex;align-items:center;gap:8px}
-.session-link a{font-weight:500}
-.session-link .spacer{flex:1}
 .col-resize-handle{position:absolute;top:0;right:-2px;width:4px;height:100%;cursor:col-resize;z-index:5;user-select:none}
 .col-resize-handle:hover{background:var(--accent);opacity:.3}
 body.col-resizing,body.col-resizing *{cursor:col-resize!important;user-select:none!important}
@@ -336,7 +333,7 @@ const fcExportLink=document.getElementById("fcExportLink");
 let forecastMeta=null;
 let forecastRows=null;
 
-let sessionUrl="",csvUrl="",pollToken="",downloadUrl="";
+let csvUrl="",pollToken="",downloadUrl="";
 const TRUNC=200;
 let didDrag=false;
 const copyFmt="csv";
@@ -559,13 +556,11 @@ async function autoFetchResults(){
       /* Forecast tasks get the card grid; the table is hidden. */
       showForecastUI();
       renderForecastCards(Array.isArray(data)?data:[data]);
-      updateSessionLink();
       switchTab("results");
     }else{
       /* All other operation types keep the original table UI. */
       showResultsUI();
       processData(data);
-      updateSessionLink();
       switchTab("results");
     }
     /* NOTE: we deliberately do NOT call app.sendMessage() or
@@ -1031,7 +1026,6 @@ function enterProgressMode(d){
   activityTab.style.display="block";
   resultsTab.style.display="none";
   forecastTab.style.display="none";
-  sessionUrl=d.session_url||sessionUrl;
   if(d.task_id)currentTaskId=d.task_id;
   /* Extract task_id from progress_url as fallback */
   if(!currentTaskId&&d.progress_url){const m=d.progress_url.match(/progress\\/([0-9a-f-]+)/);if(m)currentTaskId=m[1];}
@@ -1579,7 +1573,7 @@ function getDownloadUrl(){
   }
   return csvUrl;
 }
-function updateDownloadLink(){updateSessionLink();}
+function updateDownloadLink(){}
 document.getElementById("exportLink")?.addEventListener("click",()=>{
   const url=getDownloadUrl();
   if(!url){showToast("No download link yet");return;}
@@ -1623,7 +1617,6 @@ function onRowResizeUp(){
   document.removeEventListener("mouseup",onRowResizeUp);
 }
 
-function updateSessionLink(){}
 
 /* --- data loading (for standalone results entry) --- */
 async function fetchFullResultsWithFreshToken(hasPreview,total){
@@ -1750,7 +1743,6 @@ app.ontoolresult=({content,structuredContent})=>{
     const isWidget=meta.fetch_full_results||meta.preview||Array.isArray(meta);
     if(!isWidget)return;
     showResultsUI();
-    if(meta.session_url&&!sessionUrl){sessionUrl=meta.session_url;updateSessionLink();}
     if(meta.poll_token){pollToken=meta.poll_token;}
     if(meta.download_url){downloadUrl=meta.download_url;}
     if(meta.csv_url){csvUrl=meta.csv_url;updateDownloadLink();}

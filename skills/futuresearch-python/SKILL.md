@@ -644,17 +644,15 @@ Parameters: `task`, `input`, `effort_level` (LOW/MEDIUM/HIGH), `response_model`,
 
 ## Explicit Sessions
 
-For multiple operations or when you need visibility into progress, use an explicit session:
+For multiple operations that should be grouped together, use an explicit session:
 
 ```python
 from futuresearch import create_session
 
 async with create_session(name="My Session") as session:
-    print(f"View session at: {session.get_url()}")
     # All operations here share the same session
+    ...
 ```
-
-Sessions are visible on the futuresearch.ai dashboard.
 
 ## Async Operations
 
@@ -691,11 +689,10 @@ df = await fetch_task_data("12345678-1234-1234-1234-123456789abc")
 FutureSearch operations (classify, rank, dedupe, merge, forecast, agent) take 1-10+ minutes.
 All MCP tools use an async pattern:
 
-1. Call the operation tool (e.g., `futuresearch_agent(...)`) to get task_id and session_url
-2. Share session_url with the user
-3. Call futuresearch_progress(task_id) — the tool handles pacing internally
-4. After each status update, immediately call futuresearch_progress again
-5. When status is "completed" or "failed", call futuresearch_results(task_id)
+1. Call the operation tool (e.g., `futuresearch_agent(...)`) to get a task_id
+2. Call futuresearch_progress(task_id) — the tool handles pacing internally
+3. After each status update, immediately call futuresearch_progress again
+4. When status is "completed" or "failed", call futuresearch_results(task_id)
 
 ## Chaining Operations
 

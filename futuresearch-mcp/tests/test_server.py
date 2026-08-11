@@ -163,9 +163,6 @@ def _make_mock_session(session_id=None):
     """Create a mock Session."""
     session = MagicMock()
     session.session_id = session_id or uuid4()
-    session.get_url.return_value = (
-        f"https://futuresearch.ai/sessions/{session.session_id}"
-    )
     return session
 
 
@@ -677,14 +674,12 @@ class TestListSessions:
                 name="My Session",
                 created_at=datetime(2025, 6, 1, 12, 0, tzinfo=UTC),
                 updated_at=datetime(2025, 6, 1, 13, 0, tzinfo=UTC),
-                get_url=lambda: "https://futuresearch.ai/sessions/abc",
             ),
             MagicMock(
                 session_id=uuid4(),
                 name="Another Session",
                 created_at=datetime(2025, 6, 2, 10, 0, tzinfo=UTC),
                 updated_at=datetime(2025, 6, 2, 11, 0, tzinfo=UTC),
-                get_url=lambda: "https://futuresearch.ai/sessions/def",
             ),
         ]
 
@@ -746,8 +741,8 @@ class TestListSessions:
         mock_ls.assert_called_once_with(client=mock_client, offset=5, limit=10)
 
     @pytest.mark.asyncio
-    async def test_list_sessions_output_contains_urls_and_dates(self):
-        """Test that the formatted output includes URLs and timestamps."""
+    async def test_list_sessions_output_contains_dates(self):
+        """Test that the formatted output includes timestamps."""
         mock_client = _make_mock_client()
         ctx = make_test_context(mock_client)
         session_id = uuid4()
@@ -757,7 +752,6 @@ class TestListSessions:
                 name="Pipeline Run",
                 created_at=datetime(2025, 8, 15, 9, 30, tzinfo=UTC),
                 updated_at=datetime(2025, 8, 15, 10, 45, tzinfo=UTC),
-                get_url=lambda: f"https://futuresearch.ai/sessions/{session_id}",
             ),
         ]
 
@@ -772,7 +766,6 @@ class TestListSessions:
         assert "Pipeline Run" in text
         assert "2025-08-15 09:30 UTC" in text
         assert "2025-08-15 10:45 UTC" in text
-        assert f"https://futuresearch.ai/sessions/{session_id}" in text
 
     @pytest.mark.asyncio
     async def test_list_sessions_pagination_params(self):
@@ -803,7 +796,6 @@ class TestListSessions:
                 name=f"Session {i}",
                 created_at=now,
                 updated_at=now,
-                get_url=lambda: "https://futuresearch.ai/sessions/x",
             )
             for i in range(10)
         ]

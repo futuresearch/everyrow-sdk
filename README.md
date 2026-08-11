@@ -163,13 +163,14 @@ The same API researches, cleans, and joins datasets, which is often how a foreca
 
 ## Sessions
 
-You can also use a session to output a URL to see the research and data processing in the [futuresearch.ai/app](https://futuresearch.ai/app) application, which streams the research and makes charts. Or you can use it purely as an intelligent data utility, and [chain intelligent pandas operations](https://futuresearch.ai/docs/chaining-operations) with normal pandas operations where LLMs are used to process every row.
+Group related operations into a session so their tasks are tracked together. You can also use FutureSearch purely as an intelligent data utility, and [chain intelligent pandas operations](https://futuresearch.ai/docs/chaining-operations) with normal pandas operations where LLMs are used to process every row.
 
 ```python
 from futuresearch import create_session
 
 async with create_session(name="My Session") as session:
-    print(f"View session at: {session.get_url()}")
+    # All operations here share the same session
+    ...
 ```
 
 ### Async operations

@@ -1,7 +1,6 @@
 import warnings
 from typing import Any
 
-DEFAULT_FUTURESEARCH_APP_URL = "https://futuresearch.ai"
 DEFAULT_FUTURESEARCH_API_URL = "https://futuresearch.ai/api/v0"
 
 

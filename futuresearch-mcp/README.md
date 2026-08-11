@@ -52,7 +52,7 @@ Alternatively, install with pip (ideally in a venv) and use `"command": "futures
 
 All operations follow an async pattern:
 
-1. **Start** - Call an operation tool (e.g., `futuresearch_agent`) to start a task. Returns immediately with a task ID and session URL.
+1. **Start** - Call an operation tool (e.g., `futuresearch_agent`) to start a task. Returns immediately with a task ID.
 2. **Monitor** - Call `futuresearch_progress(task_id)` repeatedly to check status. The tool blocks ~12s to limit the polling rate.
 3. **Retrieve** - Once complete, call `futuresearch_results(task_id, output_path)` to save results to CSV.
 

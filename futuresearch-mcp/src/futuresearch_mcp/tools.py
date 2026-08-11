@@ -1630,7 +1630,7 @@ async def futuresearch_list_sessions(
 ) -> list[TextContent]:
     """List futuresearch sessions owned by the authenticated user (paginated).
 
-    Returns session names, IDs, timestamps, and dashboard URLs.
+    Returns session names, IDs, and timestamps.
     Use this to find past sessions or check what's been run.
     Results are paginated — 25 sessions per page by default.
     """
@@ -1676,8 +1676,7 @@ async def futuresearch_list_sessions(
         lines.append(
             f"- **{s.name}** (id: {s.session_id})\n"
             f"  Created: {s.created_at:%Y-%m-%d %H:%M UTC} | "
-            f"Updated: {s.updated_at:%Y-%m-%d %H:%M UTC}\n"
-            f"  URL: {s.get_url()}"
+            f"Updated: {s.updated_at:%Y-%m-%d %H:%M UTC}"
         )
 
     has_more = (result.offset + result.limit) < result.total

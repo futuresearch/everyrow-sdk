@@ -1,4 +1,3 @@
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -6,7 +5,6 @@ from datetime import datetime
 from uuid import UUID
 
 from futuresearch.api_utils import create_client
-from futuresearch.constants import DEFAULT_FUTURESEARCH_APP_URL
 from futuresearch.errors import _call_and_check
 from futuresearch.generated.api.sessions import (
     create_session_endpoint_sessions_post,
@@ -18,13 +16,6 @@ from futuresearch.generated.models.create_session import CreateSession
 from futuresearch.generated.models.update_session import UpdateSession
 
 
-def get_session_url(session_id: UUID) -> str:
-    base_url = (
-        os.environ.get("FUTURESEARCH_APP_URL") or DEFAULT_FUTURESEARCH_APP_URL
-    ).rstrip("/")
-    return f"{base_url}/sessions/{session_id}"
-
-
 @dataclass
 class SessionInfo:
     """Summary of an existing session."""
@@ -33,10 +24,6 @@ class SessionInfo:
     name: str
     created_at: datetime
     updated_at: datetime
-
-    def get_url(self) -> str:
-        """Get the URL to view this session in the web interface."""
-        return get_session_url(self.session_id)
 
 
 @dataclass
@@ -55,10 +42,6 @@ class Session:
     def __init__(self, client: AuthenticatedClient, session_id: UUID):
         self.client = client
         self.session_id = session_id
-
-    def get_url(self) -> str:
-        """Get the URL to view this session in the web interface."""
-        return get_session_url(self.session_id)
 
 
 @asynccontextmanager
