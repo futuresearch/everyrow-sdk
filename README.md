@@ -17,7 +17,7 @@ FutureSearch predicts the future. Accuracy is verifiable via our [public track r
 | [markets.futuresearch.ai](https://markets.futuresearch.ai) | Live trading on Kalshi, Polymarket, and the S&P 500. Every position, including the losers. |
 | [evals.futuresearch.ai](https://evals.futuresearch.ai) | Benchmarks: Bench To the Future, Deep Research Bench, and live forecasting tournament standings (Metaculus, ForecastBench). |
 
-Try it yourself in the [app](https://futuresearch.ai/app), or give advanced forecasting and multi-agent capabilities to your AI wherever you use it ([Claude.ai](https://futuresearch.ai/docs/claude-ai), [Claude Cowork](https://futuresearch.ai/docs/claude-cowork), [Claude Code](https://futuresearch.ai/docs/claude-code), or [Gemini/Codex/other AI surfaces](https://futuresearch.ai/docs/)), or point them to this [Python SDK](https://futuresearch.ai/docs/getting-started).
+Try it yourself in the [app](https://futuresearch.ai/app), or give advanced forecasting and multi-agent capabilities to your AI wherever you use it ([Claude.ai](https://futuresearch.ai/docs/claude-ai), [Claude Code](https://futuresearch.ai/docs/claude-code), or [Gemini/Codex/other AI surfaces](https://futuresearch.ai/docs/)), or point them to this [Python SDK](https://futuresearch.ai/docs/getting-started).
 
 ## Installation
 
@@ -130,7 +130,7 @@ print(result.data[["probabilities", "rationale"]])
 
 ### Conditional
 
-Any mode can be made conditional on a stated scenario: pass `condition` (one condition applied to every row) or `condition_field` (a column of per-row conditions). Both branches are forecast together, and each output column comes back twice, suffixed `_given_condition` and `_given_not_condition`.
+Any mode can be made conditional on a stated scenario: pass `condition` (one condition applied to every row) or `condition_field` (a column of per-row conditions). Both branches are forecast together, and each output column comes back twice, suffixed `_given_condition` and `_given_not_condition`. (To forecast outcomes under alternatives you control, see [decision](https://futuresearch.ai/docs/reference/DECISION).)
 
 ```python
 result = await forecast(
@@ -154,16 +154,14 @@ The same API researches, cleans, and joins datasets, which is often how a foreca
 
 - [agent_map()](https://futuresearch.ai/docs/reference/RESEARCH): web research on every row of a dataset, 1-11¢
 - [multi_agent()](https://futuresearch.ai/docs/reference/MULTIAGENT): parallel research on one question, $0.30-$2
-- [rank()](https://futuresearch.ai/docs/reference/RANK): research, then score each row, 1-5¢
-- [classify()](https://futuresearch.ai/docs/reference/CLASSIFY): research, then categorize each row, 0.1-0.7¢
-- [dedupe()](https://futuresearch.ai/docs/reference/DEDUPE): find duplicate rows, 0.2-0.5¢
-- [merge()](https://futuresearch.ai/docs/reference/MERGE): match rows between two tables, 0.2-0.5¢
+
+Additional data operations (rank, classify, merge, dedupe) are documented in the [API reference](https://futuresearch.ai/docs/api).
 
 ---
 
 ## Sessions
 
-Group related operations into a session so their tasks are tracked together. You can also use FutureSearch purely as an intelligent data utility, and [chain intelligent pandas operations](https://futuresearch.ai/docs/chaining-operations) with normal pandas operations where LLMs are used to process every row.
+Group related operations into a session so their tasks are tracked together.
 
 ```python
 from futuresearch import create_session
@@ -179,14 +177,14 @@ All ops have async variants for background processing:
 
 ```python
 from futuresearch import create_session
-from futuresearch.ops import rank_async
+from futuresearch.ops import forecast_async
 
-async with create_session(name="Async Ranking") as session:
-    task = await rank_async(
+async with create_session(name="Async Forecast") as session:
+    task = await forecast_async(
         session=session,
-        task="Score this organization",
+        task="Forecast each question about AI lab milestones.",
         input=dataframe,
-        field_name="score",
+        forecast_type="binary",
     )
     print(f"Task ID: {task.task_id}")  # Print this! Useful if your script crashes.
     # Do other stuff...
@@ -279,28 +277,23 @@ uv sync
 uv sync --group case-studies  # for notebooks
 ```
 
-Requires Python 3.12+. Then you can use the SDK directly, as in the [Forecasting](#forecasting) examples above. Data operations follow the same pattern, for example classify:
+Requires Python 3.12+. Then you can use the SDK directly, as in the [Forecasting](#forecasting) examples above:
 
 ```python
 import asyncio
-import pandas as pd
-from futuresearch.ops import classify
-
-companies = pd.DataFrame([
-    {"company": "Apple"}, {"company": "JPMorgan Chase"}, {"company": "ExxonMobil"},
-    {"company": "Tesla"}, {"company": "Pfizer"}, {"company": "Duke Energy"},
-])
+from pandas import DataFrame
+from futuresearch.ops import forecast
 
 async def main():
-    result = await classify(
-        task="Classify this company by its GICS industry sector",
-        categories=["Energy", "Materials", "Industrials", "Consumer Discretionary",
-                     "Consumer Staples", "Health Care", "Financials",
-                     "Information Technology", "Communication Services",
-                     "Utilities", "Real Estate"],
-        input=companies,
+    result = await forecast(
+        input=DataFrame([
+            {"question": "What will the price of Brent crude oil be on December 31, 2026?"},
+        ]),
+        forecast_type="numeric",
+        output_field="price",
+        units="USD per barrel",
     )
-    print(result.data[["company", "classification"]])
+    print(result.data[["price_p10", "price_p50", "price_p90"]])
 
 asyncio.run(main())
 ```

@@ -12,12 +12,14 @@ FutureSearch turns questions about the future into forecasts, with dataset resea
 > - GitHub: [github.com/futuresearch/futuresearch-python](https://github.com/futuresearch/futuresearch-python)
 
 **Operations:**
-- Forecast probabilities for binary questions
-- Classify rows into predefined categories
+- Forecast probabilities, numbers, dates, and categories for questions about the future
+- Forecast the outcome under each alternative of a decision you control
+- Research one question with a team of parallel agents
+- Run AI agents over dataframe rows
 - Rank/score rows based on qualitative criteria
 - Deduplicate data using semantic understanding
 - Merge tables using AI-powered matching
-- Run AI agents over dataframe rows
+- Classify rows into predefined categories
 
 ## Installation
 
