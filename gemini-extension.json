@@ -1,7 +1,7 @@
 {
   "name": "futuresearch",
   "description": "Gemini extension for FutureSearch: AI forecasting (probabilities, numbers, dates, categories, and decisions) with a public track record, plus multi-agent research over datasets.",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "mcpServers": {
     "futuresearch": {
       "command": "uvx",
