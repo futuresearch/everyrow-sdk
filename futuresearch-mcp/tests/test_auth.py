@@ -6,6 +6,7 @@ import secrets
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -852,59 +853,224 @@ class TestSupabaseResponseValidation:
 # ── Deny list fail-closed tests ───────────────────────────────────────
 
 
-# ── Cookie prefix tests ───────────────────────────────────────────────
+# ── Login page and provider redirect tests ────────────────────────────
 
 
-class TestHostCookiePrefix:
+def _store_pending(provider_redis, state: str) -> PendingAuth:
+    pending = PendingAuth(
+        client_id="test-client-id",
+        params=AuthorizationParams(
+            state="s1",
+            scopes=["read"],
+            redirect_uri=AnyUrl("https://example.com/callback"),
+            code_challenge="challenge",
+            redirect_uri_provided_explicitly=True,
+        ),
+        supabase_code_verifier="verifier",
+    )
+    provider_redis._store[f"mcp:pending:{state}"] = pending.model_dump_json()
+    return pending
+
+
+def _page_request(state: str, provider: str | None = None):
+    request = MagicMock()
+    request.path_params = {"state": state}
+    if provider is not None:
+        request.path_params["provider"] = provider
+    request.headers = {}
+    request.client = MagicMock()
+    request.client.host = "1.2.3.4"
+    return request
+
+
+class TestLoginPage:
     @pytest.mark.asyncio
-    async def test_handle_start_sets_host_prefixed_cookie(
+    async def test_handle_start_renders_all_login_methods(
         self, provider, provider_redis
     ):
-        """handle_start sets a __Host- prefixed cookie with path=/."""
-        # Create a PendingAuth entry in Redis
+        _async_pipe(provider_redis)
         state = secrets.token_urlsafe(32)
-        pending = PendingAuth(
-            client_id="test-client-id",
-            params=AuthorizationParams(
-                state="s1",
-                scopes=["read"],
-                redirect_uri=AnyUrl("https://example.com/callback"),
-                code_challenge="challenge",
-                redirect_uri_provided_explicitly=True,
-            ),
-            supabase_code_verifier="verifier",
-            supabase_redirect_url="https://supabase.test/auth",
+        _store_pending(provider_redis, state)
+
+        response = await provider.handle_start(_page_request(state))
+
+        assert isinstance(response, HTMLResponse)
+        body = bytes(response.body).decode()
+        assert "Continue with Google" in body
+        assert "Continue with GitHub" in body
+        assert "Continue with Microsoft" in body
+        assert 'name="password"' in body
+        assert f"/auth/start/{state}/google" in body
+        # Pending state survives for the next step.
+        assert f"mcp:pending:{state}" in provider_redis._store
+
+
+class TestProviderStart:
+    @pytest.mark.asyncio
+    async def test_redirects_to_supabase_with_provider_params(
+        self, provider, provider_redis
+    ):
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+
+        response = await provider.handle_provider_start(
+            _page_request(state, provider="google")
         )
-        await provider_redis.setex(
-            f"mcp:pending:{state}",
-            600,
-            pending.model_dump_json(),
+
+        location = response.headers["location"]
+        assert location.startswith("https://test.supabase.co/auth/v1/authorize?")
+        assert "provider=google" in location
+        assert "prompt=select_account" in location
+
+    @pytest.mark.asyncio
+    async def test_sets_host_prefixed_cookie(self, provider, provider_redis):
+        """The provider redirect sets a __Host- prefixed cookie with path=/."""
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+
+        response = await provider.handle_provider_start(
+            _page_request(state, provider="github")
         )
 
-        # Fix pipeline mock to be an async context manager
-        pipe_mock = MagicMock()
-        pipe_mock.incr = MagicMock()
-        pipe_mock.expire = MagicMock()
-        pipe_mock.execute = AsyncMock(return_value=[1, True])
-        pipe_mock.__aenter__ = AsyncMock(return_value=pipe_mock)
-        pipe_mock.__aexit__ = AsyncMock(return_value=False)
-        provider_redis.pipeline = MagicMock(return_value=pipe_mock)
-
-        # Build a fake request
-        request = MagicMock()
-        request.path_params = {"state": state}
-        request.headers = {}
-        request.client = MagicMock()
-        request.client.host = "1.2.3.4"
-
-        response = await provider.handle_start(request)
-
-        # Check cookie name and path
         cookie_header = response.headers.getlist("set-cookie")
         assert any("mcp_auth_state" in c for c in cookie_header)
         assert any("Path=/" in c for c in cookie_header)
-        # Must not have the old path
         assert not any("Path=/auth/callback" in c for c in cookie_header)
+
+    @pytest.mark.asyncio
+    async def test_unknown_provider_rejected(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_provider_start(
+                _page_request(state, provider="facebook")
+            )
+        assert exc.value.status_code == 400
+
+
+def _password_request(body: str):
+    req = MagicMock()
+    req.body = AsyncMock(return_value=body.encode())
+    req.headers = {}
+    req.client = MagicMock()
+    req.client.host = "1.2.3.4"
+    return req
+
+
+class TestPasswordLogin:
+    @pytest.mark.asyncio
+    async def test_success_consumes_state_and_renders_selector(
+        self, provider, provider_redis
+    ):
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+        supa = SupabaseTokenResponse(access_token="supa-at", refresh_token="supa-rt")
+        accounts = [
+            AccountChoice(account_id="user-1", name="Personal", personal=True),
+            AccountChoice(account_id="team-a", name="Alpha", personal=False),
+        ]
+        with (
+            patch.object(
+                provider,
+                "_supabase_token_request",
+                new_callable=AsyncMock,
+                return_value=supa,
+            ) as grant,
+            patch.object(
+                provider,
+                "_fetch_accounts",
+                new_callable=AsyncMock,
+                return_value=accounts,
+            ),
+        ):
+            resp = await provider.handle_password_login(
+                _password_request(f"state={state}&email=a%40b.co&password=pw")
+            )
+
+        grant.assert_awaited_once_with(
+            "password", {"email": "a@b.co", "password": "pw"}
+        )
+        assert isinstance(resp, HTMLResponse)
+        assert "Choose an account" in bytes(resp.body).decode()
+        # The pending state is single-use.
+        assert f"mcp:pending:{state}" not in provider_redis._store
+
+    @pytest.mark.asyncio
+    async def test_bad_credentials_rerenders_form_and_keeps_state(
+        self, provider, provider_redis
+    ):
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+        err = httpx.HTTPStatusError(
+            "400",
+            request=MagicMock(),
+            response=MagicMock(status_code=400),
+        )
+        with patch.object(
+            provider,
+            "_supabase_token_request",
+            new_callable=AsyncMock,
+            side_effect=err,
+        ):
+            resp = await provider.handle_password_login(
+                _password_request(f"state={state}&email=a%40b.co&password=nope")
+            )
+
+        assert isinstance(resp, HTMLResponse)
+        assert resp.status_code == 401
+        body = bytes(resp.body).decode()
+        assert "Invalid email or password" in body
+        assert 'value="a@b.co"' in body
+        # A failed attempt leaves the state usable for a retry.
+        assert f"mcp:pending:{state}" in provider_redis._store
+
+    @pytest.mark.asyncio
+    async def test_supabase_outage_returns_502(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        state = secrets.token_urlsafe(32)
+        _store_pending(provider_redis, state)
+        err = httpx.HTTPStatusError(
+            "503",
+            request=MagicMock(),
+            response=MagicMock(status_code=503),
+        )
+        with (
+            patch.object(
+                provider,
+                "_supabase_token_request",
+                new_callable=AsyncMock,
+                side_effect=err,
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await provider.handle_password_login(
+                _password_request(f"state={state}&email=a%40b.co&password=pw")
+            )
+        assert exc.value.status_code == 502
+
+    @pytest.mark.asyncio
+    async def test_missing_fields_rejected(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_password_login(
+                _password_request("state=whatever&email=a%40b.co")
+            )
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_unknown_state_rejected(self, provider, provider_redis):
+        _async_pipe(provider_redis)
+        with pytest.raises(HTTPException) as exc:
+            await provider.handle_password_login(
+                _password_request("state=missing&email=a%40b.co&password=pw")
+            )
+        assert exc.value.status_code == 400
 
 
 # ── Account selector tests ────────────────────────────────────────────
@@ -921,7 +1087,6 @@ def _pending_auth() -> PendingAuth:
             redirect_uri_provided_explicitly=True,
         ),
         supabase_code_verifier="verifier",
-        supabase_redirect_url="https://supabase.test/auth",
     )
 
 
@@ -1043,7 +1208,8 @@ class TestHandleCallbackSelector:
         assert ps.supabase_access_token == "supa-at"
 
     @pytest.mark.asyncio
-    async def test_single_account_skips_selector(self, provider, provider_redis):
+    async def test_single_account_still_renders_selector(self, provider):
+        """One account renders the selector too: it confirms the identity."""
         supa = SupabaseTokenResponse(access_token="supa-at", refresh_token="supa-rt")
         accounts = [AccountChoice(account_id="user-1", name="Personal", personal=True)]
         with (
@@ -1058,6 +1224,60 @@ class TestHandleCallbackSelector:
                 "_fetch_accounts",
                 new_callable=AsyncMock,
                 return_value=accounts,
+            ),
+        ):
+            resp = await provider.handle_callback(MagicMock())
+
+        assert isinstance(resp, HTMLResponse)
+        body = bytes(resp.body).decode()
+        assert 'value="user-1" checked required>' in body
+
+    @pytest.mark.asyncio
+    async def test_selector_shows_signed_in_email(self, provider):
+        token = jwt.encode({"email": "user@example.com"}, "secret", algorithm="HS256")
+        supa = SupabaseTokenResponse(access_token=token, refresh_token="supa-rt")
+        accounts = [
+            AccountChoice(account_id="user-1", name="Personal", personal=True),
+            AccountChoice(account_id="team-a", name="Alpha", personal=False),
+        ]
+        with (
+            patch.object(
+                provider,
+                "_validate_callback_request",
+                new_callable=AsyncMock,
+                return_value=(_pending_auth(), supa),
+            ),
+            patch.object(
+                provider,
+                "_fetch_accounts",
+                new_callable=AsyncMock,
+                return_value=accounts,
+            ),
+        ):
+            resp = await provider.handle_callback(MagicMock())
+
+        body = bytes(resp.body).decode()
+        assert "Signed in as" in body
+        assert "user@example.com" in body
+        # Multiple accounts: nothing preselected, an explicit choice required.
+        assert " checked" not in body
+        assert " required>" in body
+
+    @pytest.mark.asyncio
+    async def test_failed_account_fetch_skips_selector(self, provider, provider_redis):
+        supa = SupabaseTokenResponse(access_token="supa-at", refresh_token="supa-rt")
+        with (
+            patch.object(
+                provider,
+                "_validate_callback_request",
+                new_callable=AsyncMock,
+                return_value=(_pending_auth(), supa),
+            ),
+            patch.object(
+                provider,
+                "_fetch_accounts",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("postgrest down"),
             ),
         ):
             resp = await provider.handle_callback(MagicMock())
@@ -1269,22 +1489,37 @@ class TestAccountSelectionKey:
 
 
 class TestRenderAccountSelector:
-    def test_escapes_and_preselects_first(self):
+    def test_escapes_and_requires_explicit_choice(self):
         html_out = render_account_selector(
             action="https://mcp.example.com/auth/select-account",
             select_state="st8",
             accounts=[("user-1", "Personal"), ("team-x", "<script>Ev&il</script>")],
+            signed_in_email="<u>@example.com",
         )
+        # Multiple accounts: no preselection, first radio carries `required`.
         assert (
-            '<input type="radio" name="account_id" value="user-1" checked>' in html_out
+            '<input type="radio" name="account_id" value="user-1" required>' in html_out
         )
-        # Second option is not preselected, and its name is HTML-escaped.
         assert (
             '<input type="radio" name="account_id" value="team-x">'
             "<span>&lt;script&gt;Ev&amp;il&lt;/script&gt;</span>" in html_out
         )
         assert "<script>Ev&il" not in html_out
         assert 'name="select_state" value="st8"' in html_out
+        assert "&lt;u&gt;@example.com" in html_out
+
+    def test_single_account_preselected(self):
+        html_out = render_account_selector(
+            action="https://mcp.example.com/auth/select-account",
+            select_state="st8",
+            accounts=[("user-1", "Personal")],
+            signed_in_email=None,
+        )
+        assert (
+            '<input type="radio" name="account_id" value="user-1" checked required>'
+            in html_out
+        )
+        assert "Signed in as" not in html_out
 
 
 # ── Two-phase refresh token tests ─────────────────────────────────────

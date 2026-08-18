@@ -29,7 +29,7 @@ Claude Code:
 claude mcp add futuresearch --scope project --transport http https://mcp.futuresearch.ai/mcp
 ```
 
-Then sign in with Google.
+Then sign in the same way you do in the FutureSearch web app and pick the account the connection should use.
 
 ## Forecasting
 

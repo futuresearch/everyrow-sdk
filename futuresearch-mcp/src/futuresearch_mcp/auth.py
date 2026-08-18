@@ -36,12 +36,20 @@ from futuresearch_mcp.redis_store import (
     encrypt_value,
     user_token_key,
 )
-from futuresearch_mcp.templates import render_account_selector
+from futuresearch_mcp.templates import render_account_selector, render_login_page
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 logger = logging.getLogger(__name__)
+
+# Login methods offered on the MCP login page. Must stay in parity with the
+# everyrow-cc app's login methods (email+password handled separately).
+OAUTH_PROVIDERS: dict[str, dict[str, str]] = {
+    "google": {"prompt": "select_account"},
+    "github": {},
+    "azure": {"scopes": "email"},
+}
 
 
 class SupabaseTokenVerifier(TokenVerifier):
@@ -254,7 +262,6 @@ class PendingAuth(BaseModel):
     client_id: str
     params: AuthorizationParams
     supabase_code_verifier: str
-    supabase_redirect_url: str
 
 
 class AccountChoice(BaseModel):
@@ -286,12 +293,18 @@ class PendingSelection(BaseModel):
 #   ──────────────────           ────────────────────          ────────
 #   1. POST /register  ──────►  store client_id in Redis
 #   2. GET  /authorize ──────►  generate PKCE pair
-#                                save PendingAuth ─────────►  redirect to
-#                                                             Google OAuth
+#                                save PendingAuth
+#                                render login page (provider
+#                                buttons + email form)
+#   2a. (OAuth provider) ────►  redirect to Supabase ──────►  provider OAuth
 #   3.                 ◄─────────────────────────────────────  callback with
 #                                                             auth code
 #   4. GET /auth/callback ───►  exchange code for tokens ──►  POST /token
-#                                issue auth code (Redis)       (PKCE)
+#                                                              (PKCE)
+#   2b. (email+password) ────►  password grant ────────────►  POST /token
+#                                                              (password)
+#   4'. either way:              account selector page,
+#                                issue auth code (Redis),
 #                                redirect with ?code=…
 #   5. POST /token     ──────►  load+consume code (GETDEL)
 #                                return Supabase JWT as
@@ -353,7 +366,7 @@ class FuturesearchAuthProvider(
         logger.info("Registered new OAuth client client_id=%s", client_info.client_id)
 
     @staticmethod
-    def _supabase_redirect_url(supabase_verifier: str) -> str:
+    def _supabase_oauth_url(supabase_verifier: str, provider: str) -> str:
         challenge_bytes = hashlib.sha256(supabase_verifier.encode()).digest()
         supabase_challenge = (
             base64.urlsafe_b64encode(challenge_bytes).rstrip(b"=").decode()
@@ -361,11 +374,12 @@ class FuturesearchAuthProvider(
         return f"{settings.supabase_url}/auth/v1/authorize?{
             urlencode(
                 {
-                    'provider': 'google',
+                    'provider': provider,
                     'redirect_to': f'{settings.mcp_server_url}/auth/callback',
                     'flow_type': 'pkce',
                     'code_challenge': supabase_challenge,
                     'code_challenge_method': 's256',
+                    **OAUTH_PROVIDERS[provider],
                 }
             )
         }"
@@ -471,7 +485,6 @@ class FuturesearchAuthProvider(
             client_id=client.client_id,
             params=params,
             supabase_code_verifier=supabase_verifier,
-            supabase_redirect_url=self._supabase_redirect_url(supabase_verifier),
         )
         await self._redis.setex(
             name=build_key("pending", state),
@@ -480,18 +493,43 @@ class FuturesearchAuthProvider(
         )
         return f"{settings.mcp_server_url}/auth/start/{state}"
 
-    async def handle_start(self, request: Request) -> RedirectResponse:
-        state = request.path_params["state"]
-        pending = await self._validate_auth_request(
-            request, "start", state, consume=True
-        )
-        # Re-store so the callback can still find it
+    async def _refresh_pending(self, state: str, pending: PendingAuth) -> None:
+        """Re-store a consumed PendingAuth with a fresh TTL."""
         await self._redis.setex(
             name=build_key("pending", state),
             time=settings.pending_auth_ttl,
             value=encrypt_value(pending.model_dump_json()),
         )
-        response = RedirectResponse(url=pending.supabase_redirect_url, status_code=302)
+
+    async def handle_start(self, request: Request) -> HTMLResponse:
+        """Render the login page offering the same methods as the app."""
+        state = request.path_params["state"]
+        pending = await self._validate_auth_request(
+            request, "start", state, consume=True
+        )
+        await self._refresh_pending(state, pending)
+        html = render_login_page(
+            provider_url_base=f"{settings.mcp_server_url}/auth/start/{state}",
+            password_action=f"{settings.mcp_server_url}/auth/password",
+            state=state,
+        )
+        return HTMLResponse(html)
+
+    async def handle_provider_start(self, request: Request) -> RedirectResponse:
+        """Redirect to Supabase OAuth for the provider chosen on the login page."""
+        state = request.path_params["state"]
+        provider = request.path_params["provider"]
+        if provider not in OAUTH_PROVIDERS:
+            raise HTTPException(status_code=400, detail="Unknown provider")
+        pending = await self._validate_auth_request(
+            request, "provider", state, consume=True
+        )
+        # Re-store so the callback can still find it
+        await self._refresh_pending(state, pending)
+        response = RedirectResponse(
+            url=self._supabase_oauth_url(pending.supabase_code_verifier, provider),
+            status_code=302,
+        )
         response.set_cookie(
             key="__Host-mcp_auth_state",
             value=state,
@@ -502,6 +540,54 @@ class FuturesearchAuthProvider(
             path="/",
         )
         return response
+
+    async def handle_password_login(self, request: Request) -> Response:
+        """Finish login from the email+password form on the login page."""
+        body = (await request.body()).decode()
+        form = parse_qs(body)
+        state = (form.get("state") or [""])[0]
+        email = (form.get("email") or [""])[0].strip()
+        password = (form.get("password") or [""])[0]
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Missing email or password")
+
+        pending = await self._validate_auth_request(
+            request, "password", state, consume=False
+        )
+
+        try:
+            supa_tokens = await self._supabase_token_request(
+                "password", {"email": email, "password": password}
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
+                html = render_login_page(
+                    provider_url_base=f"{settings.mcp_server_url}/auth/start/{state}",
+                    password_action=f"{settings.mcp_server_url}/auth/password",
+                    state=state,
+                    email=email,
+                    error=(
+                        "Invalid email or password. If you normally sign in "
+                        "with Google, GitHub, or Microsoft, use that button "
+                        "instead."
+                    ),
+                )
+                return HTMLResponse(html, status_code=401)
+            logger.error("Supabase password grant failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=502, detail="Authentication failed. Please try again."
+            )
+        except Exception as exc:
+            logger.error("Supabase password grant failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=502, detail="Authentication failed. Please try again."
+            )
+
+        # Consume the pending state only after a successful login, so a failed
+        # attempt leaves the form usable but a granted login can't be replayed.
+        if await self._redis.getdel(build_key("pending", state)) is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+        return await self._continue_after_login(pending, supa_tokens)
 
     async def _create_authorisation_code(
         self,
@@ -532,11 +618,14 @@ class FuturesearchAuthProvider(
 
     async def handle_callback(self, request: Request) -> Response:
         pending, supa_tokens = await self._validate_callback_request(request)
+        return await self._continue_after_login(pending, supa_tokens)
 
-        # Offer an account choice only when the user has more than one
-        # selectable (non-gate) account.
+    async def _continue_after_login(
+        self, pending: PendingAuth, supa_tokens: SupabaseTokenResponse
+    ) -> Response:
+        """Show the account selector, or finish directly if it can't be built."""
         accounts = await self._fetch_accounts_safe(supa_tokens.access_token)
-        if len(accounts) >= 2:
+        if accounts:
             return await self._render_account_selector(pending, supa_tokens, accounts)
         return await self._finish_callback(
             pending, supa_tokens, selected_account_id=None
@@ -628,8 +717,23 @@ class FuturesearchAuthProvider(
             action=f"{settings.mcp_server_url}/auth/select-account",
             select_state=select_state,
             accounts=[(a.account_id, a.name) for a in accounts],
+            signed_in_email=self._email_from_supabase_jwt(supa_tokens.access_token),
         )
         return HTMLResponse(html)
+
+    @staticmethod
+    def _email_from_supabase_jwt(access_token: str) -> str | None:
+        # Only intended for display, so return None on error
+        try:
+            claims = pyjwt.decode(
+                access_token,
+                options={"verify_signature": False},
+                algorithms=["RS256"],
+            )
+        except pyjwt.PyJWTError:
+            return None
+        email = claims.get("email")
+        return email if isinstance(email, str) else None
 
     async def handle_select_account(self, request: Request) -> RedirectResponse:
         """Finish login after the user picks an account on the selector page."""

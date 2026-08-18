@@ -1759,7 +1759,7 @@ applyTheme();
 </script></body></html>""".replace("SCRIPT_SRC", _APP_SCRIPT_SRC)
 
 
-_ACCOUNT_SELECTOR_CSS = """
+_AUTH_PAGES_CSS = """
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
   padding:24px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -1768,6 +1768,9 @@ body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:c
   border-radius:14px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
 h1{margin:0 0 6px;font-size:19px;font-weight:600}
 p{margin:0 0 20px;font-size:14px;line-height:1.5;color:#525252}
+p.who{margin-bottom:8px}
+p.hint{margin:14px 0 0;font-size:13px}
+p.error{color:#c62828;font-weight:500}
 .opts{display:flex;flex-direction:column;gap:8px;margin-bottom:22px}
 .opt{display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:10px;
   border:1px solid rgba(0,0,0,0.1);cursor:pointer;font-size:15px;transition:border-color .12s,background .12s}
@@ -1775,6 +1778,18 @@ p{margin:0 0 20px;font-size:14px;line-height:1.5;color:#525252}
 .opt:has(input:checked){border-color:#4D4FBD;background:rgba(77,79,189,0.06)}
 .opt input{accent-color:#4D4FBD;width:17px;height:17px;margin:0;flex:none}
 .opt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.providers{display:flex;flex-direction:column;gap:8px}
+a.pbtn{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 15px;
+  border-radius:10px;border:1px solid rgba(0,0,0,0.15);font-size:15px;font-weight:500;
+  color:inherit;text-decoration:none;transition:border-color .12s,background .12s}
+a.pbtn:hover{background:#f6f6fb}
+a.pbtn svg{flex:none}
+.divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:#a3a3a3;font-size:13px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:rgba(0,0,0,0.1)}
+.field{display:block;margin-bottom:12px;font-size:13px;font-weight:500;color:#525252}
+.field input{display:block;width:100%;margin-top:5px;padding:10px 12px;font-size:15px;
+  color:inherit;background:transparent;border:1px solid rgba(0,0,0,0.15);border-radius:10px}
+.field input:focus{outline:none;border-color:#4D4FBD}
 button{width:100%;padding:12px;border:0;border-radius:10px;background:#4D4FBD;color:#fff;
   font-size:15px;font-weight:600;cursor:pointer}
 button:hover{background:#3f41a3}
@@ -1782,11 +1797,83 @@ button:hover{background:#3f41a3}
   body{color:#ededed;background:#161616}
   .card{background:#1e1e1e;border-color:rgba(255,255,255,0.1);box-shadow:none}
   p{color:#a3a3a3}
+  p.error{color:#ef9a9a}
   .opt{border-color:rgba(255,255,255,0.14)}
   .opt:hover{background:#26263a}
   .opt:has(input:checked){background:rgba(146,148,240,0.12);border-color:#9294F0}
+  a.pbtn{border-color:rgba(255,255,255,0.18)}
+  a.pbtn:hover{background:#26263a}
+  .divider::before,.divider::after{background:rgba(255,255,255,0.12)}
+  .field input{border-color:rgba(255,255,255,0.18)}
+  .field input:focus{border-color:#9294F0}
 }
 """
+
+# Brand marks copied from the app's login buttons (OAuthProviderButton.tsx)
+# so both login pages look the same.
+_GOOGLE_SVG = """<svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/></g></svg>"""
+
+_GITHUB_SVG = """<svg width="18" height="18" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>"""
+
+_MICROSOFT_SVG = """<svg width="18" height="18" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="0" y="0" width="10" height="10" fill="#f25022"/><rect x="11" y="0" width="10" height="10" fill="#7fba00"/><rect x="0" y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>"""
+
+# (url path segment, label, svg) per login-page button.
+_LOGIN_PROVIDERS = [
+    ("google", "Google", _GOOGLE_SVG),
+    ("github", "GitHub", _GITHUB_SVG),
+    ("azure", "Microsoft", _MICROSOFT_SVG),
+]
+
+
+def render_login_page(
+    *,
+    provider_url_base: str,
+    password_action: str,
+    state: str,
+    email: str = "",
+    error: str | None = None,
+) -> str:
+    """Render the MCP login page: OAuth provider buttons plus an email form.
+
+    ``provider_url_base`` is the /auth/start/{state} URL; each provider button
+    links to ``{provider_url_base}/{provider}``. ``email`` and ``error`` let a
+    failed password attempt re-render with the address kept and a message
+    shown.
+    """
+    base_esc = html.escape(provider_url_base, quote=True)
+    buttons = "".join(
+        f'<a class="pbtn" href="{base_esc}/{provider}">{svg}'
+        f"<span>Continue with {label}</span></a>"
+        for provider, label, svg in _LOGIN_PROVIDERS
+    )
+    error_html = f'<p class="error">{html.escape(error)}</p>' if error else ""
+    action_esc = html.escape(password_action, quote=True)
+    state_esc = html.escape(state, quote=True)
+    email_esc = html.escape(email, quote=True)
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Sign in · FutureSearch</title>
+<style>{_AUTH_PAGES_CSS}</style>
+</head><body>
+<main class="card">
+<h1>Connect to FutureSearch</h1>
+<p>Sign in the same way you do in the FutureSearch app.</p>
+{error_html}
+<div class="providers">{buttons}</div>
+<div class="divider"><span>or</span></div>
+<form method="post" action="{action_esc}">
+<input type="hidden" name="state" value="{state_esc}">
+<label class="field">Email
+<input type="email" name="email" autocomplete="email" required value="{email_esc}"></label>
+<label class="field">Password
+<input type="password" name="password" autocomplete="current-password" required></label>
+<button type="submit">Continue with email</button>
+</form>
+</main>
+</body></html>"""
 
 
 def render_account_selector(
@@ -1794,41 +1881,51 @@ def render_account_selector(
     action: str,
     select_state: str,
     accounts: list[tuple[str, str]],
+    signed_in_email: str | None,
 ) -> str:
     """Render the login-page account picker.
 
     ``accounts`` is a list of ``(account_id, display_name)`` pairs, personal
-    first; the first entry is preselected. All values are user-influenced
-    (team names, ids), so every interpolation is HTML-escaped.
+    first. With a single account it is preselected; with several, none is, so
+    the choice has to be made deliberately. All values are user-influenced
+    (team names, ids, the email), so every interpolation is HTML-escaped.
     """
     options = []
     for i, (account_id, name) in enumerate(accounts):
-        checked = " checked" if i == 0 else ""
+        checked = " checked" if len(accounts) == 1 else ""
+        required = " required" if i == 0 else ""
         aid = html.escape(account_id, quote=True)
         label = html.escape(name)
         options.append(
             f'<label class="opt">'
-            f'<input type="radio" name="account_id" value="{aid}"{checked}>'
+            f'<input type="radio" name="account_id" value="{aid}"{checked}{required}>'
             f"<span>{label}</span></label>"
         )
     options_html = "".join(options)
     action_esc = html.escape(action, quote=True)
     state_esc = html.escape(select_state, quote=True)
+    who_html = (
+        f'<p class="who">Signed in as <strong>{html.escape(signed_in_email)}</strong></p>'
+        if signed_in_email
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
 <title>Choose an account · FutureSearch</title>
-<style>{_ACCOUNT_SELECTOR_CSS}</style>
+<style>{_AUTH_PAGES_CSS}</style>
 </head><body>
 <main class="card">
 <h1>Choose an account</h1>
+{who_html}
 <p>Pick the account this connection will use for FutureSearch tasks and billing. To change it later, reconnect.</p>
 <form method="post" action="{action_esc}">
 <input type="hidden" name="select_state" value="{state_esc}">
 <div class="opts">{options_html}</div>
 <button type="submit">Continue</button>
 </form>
+<p class="hint">Missing a team you expected? You may be signed in with a different login than you use in the FutureSearch app. Try reconnecting with a different login method.</p>
 </main>
 </body></html>"""
