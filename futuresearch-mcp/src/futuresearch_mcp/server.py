@@ -78,29 +78,111 @@ def parse_args() -> InputArgs:
     return input_args
 
 
-def _sentry_before_send(event, hint):
-    """Classify the expected Supabase refresh-token 400 so the alert can rate-gate.
+# Marker(s) for transport drops that reach Sentry as a *log* line rather than a
+# raised exception (mcp's streamable-HTTP transport logs "Received exception
+# from stream" when a client vanishes mid-response). Those records may arrive
+# without ``exc_info`` in the hint, so we also recognise them by message.
+_TRANSIENT_TRANSPORT_MESSAGE_MARKERS = ("Received exception from stream",)
 
-    A 400 from Supabase ``/auth/v1/token?grant_type=refresh_token`` means the
-    user's stored refresh token is expired or has been rotated — they simply
-    need to re-authenticate. It is not a server bug, but ``raise_for_status``
-    (auth.py ``_supabase_token_request``) turns it into an ``HTTPStatusError``
-    that pages Sentry on every occurrence (FS-MCP-1, thousands/day).
 
-    Default-to-page: we NEVER drop an event and touch only this one explicitly
-    recognised expected case — downgrade it to ``warning`` and tag
-    ``error_category=user_input`` so the Sentry alert rule can rate-gate on the
-    tag instead of paging each time. Everything else passes through untouched
-    and keeps paging. The actual page-vs-rate routing is a Sentry UI alert-rule
-    change keyed on the level/tag, NOT here.
+def _transient_transport_types() -> tuple[type[BaseException], ...]:
+    """Exception classes for transient transport drops (client hung up / a
+    closed stream was torn down). Imports are lazy and guarded so a
+    missing/renamed dependency can never break error reporting at init time —
+    same idiom as cohort-engine's ``_classify_exception``.
+
+    ``httpx.TransportError`` (already a dependency) covers the
+    RemoteProtocolError/ReadError/ConnectError family the mcp stream wraps and
+    fs-mcp's own upstream (Supabase) blips; anyio's ``ClosedResourceError`` /
+    ``BrokenResourceError`` and starlette's ``ClientDisconnect`` cover the
+    mid-stream client disconnects (FS-MCP-8 and siblings).
     """
-    exc_info = hint.get("exc_info")
-    if not exc_info:
-        return event
-    exc = exc_info[1]
+    types: tuple[type[BaseException], ...] = (httpx.TransportError,)
+    try:
+        from anyio import BrokenResourceError, ClosedResourceError  # noqa: PLC0415
+
+        types += (ClosedResourceError, BrokenResourceError)
+    except ImportError:
+        pass
+    try:
+        from starlette.requests import ClientDisconnect  # noqa: PLC0415
+
+        types += (ClientDisconnect,)
+    except ImportError:
+        pass
+    return types
+
+
+def _leaf_exceptions(exc: BaseException) -> list[BaseException]:
+    """Flatten an ``ExceptionGroup`` to its non-group leaves.
+
+    anyio task groups (which back the streamable-HTTP transport) surface child
+    failures as an ``ExceptionGroup``, so the real transport error lives on the
+    leaves, not the wrapper. A plain exception is returned as a single-item list.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        leaves: list[BaseException] = []
+        for sub in exc.exceptions:
+            leaves.extend(_leaf_exceptions(sub))
+        return leaves
+    return [exc]
+
+
+def _is_transient_transport(exc: BaseException) -> bool:
+    """True only when EVERY leaf of ``exc`` is a recognised transport drop.
+
+    Requiring all leaves preserves default-to-page: a real bug bundled into the
+    same ``ExceptionGroup`` as a transport blip still pages.
+    """
+    transient = _transient_transport_types()
+    leaves = _leaf_exceptions(exc)
+    return bool(leaves) and all(isinstance(leaf, transient) for leaf in leaves)
+
+
+def _event_mentions_transient(event) -> bool:
+    """Match a transport drop that was only *logged* (no ``exc_info`` in hint).
+
+    The mcp transport's "Received exception from stream" record arrives as a
+    logentry, not a raised exception, so class-based matching can't see it.
+    Match the serialized message instead so it can rate-gate too. Only ever used
+    to downgrade (never drop), so a coincidental substring match is harmless.
+    """
+    parts = [str(event.get("message") or "")]
+    logentry = event.get("logentry") or {}
+    parts.append(str(logentry.get("message") or ""))
+    parts.append(str(logentry.get("formatted") or ""))
+    haystack = " ".join(parts)
+    return any(m in haystack for m in _TRANSIENT_TRANSPORT_MESSAGE_MARKERS)
+
+
+def _sentry_before_send(event, hint):
+    """Classify expected fs-mcp errors so the Sentry alert rule can rate-gate.
+
+    Default-to-page (see cohort-engine's ``_sentry_before_send`` and
+    ``docs/error-taxonomy.md``): we NEVER drop an event and touch only the
+    categories we've explicitly recognised as expected. Everything else passes
+    through untouched and keeps paging, so a real bug still fires. The actual
+    page-vs-rate routing is a Sentry UI alert-rule change keyed on the level/tag,
+    NOT here.
+
+    Recognised cases:
+
+    * The expected Supabase ``/auth/v1/token?grant_type=refresh_token`` **400**
+      (user's stored refresh token expired/rotated — they just re-authenticate,
+      FS-MCP-1): downgrade to ``warning`` + ``error_category=user_input``.
+    * Transient transport drops — a client hung up mid-stream, or anyio/httpx
+      tore down a closed stream (FS-MCP-8 ``ClosedResourceError`` ~333 events
+      since March, ``ClientDisconnect``, "Received exception from stream"):
+      downgrade to ``warning`` + ``error_category=infra``. Self-recovering and
+      not user-facing, so they should rate-alert, not page per occurrence.
+    """
     # Wrapped defensively: a before_send that raises drops the event entirely,
     # so any unexpected shape must fall through and page as before.
     try:
+        exc_info = hint.get("exc_info")
+        exc = exc_info[1] if exc_info else None
+
+        # (1) Expected Supabase refresh-token 400 -> user_input (FS-MCP-1).
         if (
             isinstance(exc, httpx.HTTPStatusError)
             and exc.response.status_code == 400
@@ -109,6 +191,16 @@ def _sentry_before_send(event, hint):
         ):
             event["level"] = "warning"
             event.setdefault("tags", {})["error_category"] = "user_input"
+            return event
+
+        # (2) Transient transport drops -> infra (FS-MCP-8 and siblings).
+        # Recognise them from the raised/logged exception, or — when a transport
+        # drop is only logged without exc_info — from the event message.
+        if (exc is not None and _is_transient_transport(exc)) or (
+            _event_mentions_transient(event)
+        ):
+            event["level"] = "warning"
+            event.setdefault("tags", {})["error_category"] = "infra"
     except Exception:
         pass
     return event
