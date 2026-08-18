@@ -251,11 +251,14 @@ def _progress_failure(
 ) -> JSONResponse:
     """Map an SDK error to a response, logging enough to diagnose it.
 
-    A 4xx from upstream means the credential we hold is no longer accepted;
-    reporting that as a 500 tells the widget to retry something that can
-    never succeed.
+    A 4xx from upstream means the credential we hold is no longer accepted,
+    or the task is gone; reporting either as a 500 tells the widget to retry
+    something that can never succeed.
     """
-    logger.error(
+    # A permanent client-side condition must not log at error level: the
+    # widget polls every ~10s, so one page per poll until the tab is closed.
+    log = logger.warning if exc.status_code == 404 else logger.error
+    log(
         "Progress poll failed for task %s: %s status=%s code=%s: %s",
         task_id,
         type(exc).__name__,
@@ -265,6 +268,9 @@ def _progress_failure(
     )
     if exc.status_code in (401, 403):
         return _session_expired(cors)
+    if exc.status_code == 404:
+        # Terminal, same as the unknown-task branch in api_progress.
+        return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
     return JSONResponse(
         {"error": "Internal server error"}, status_code=500, headers=cors
     )
