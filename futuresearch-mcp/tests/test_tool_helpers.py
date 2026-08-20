@@ -20,12 +20,13 @@ from futuresearch.generated.models.task_status import TaskStatus
 from futuresearch.generated.types import UNSET, Unset
 
 from futuresearch_mcp import redis_store
+from futuresearch_mcp.engine_client import _stored_account_id
 from futuresearch_mcp.request_context import request_context
 from futuresearch_mcp.tool_helpers import (
     TaskState,
     _format_summary_lines,
     _get_client,
-    _resolve_stored_account_id,
+    _record_task_ownership,
     _store_task_credential,
     format_sdk_error,
 )
@@ -407,7 +408,7 @@ class TestAccountHeaderPrecedence:
                 user_agent="", conversation_id="", cohort_account_id="header-acct"
             ),
             patch(
-                "futuresearch_mcp.tool_helpers._resolve_stored_account_id",
+                "futuresearch_mcp.engine_client._stored_account_id",
                 new_callable=AsyncMock,
                 return_value="stored-acct",
             ),
@@ -425,7 +426,7 @@ class TestAccountHeaderPrecedence:
         with (
             request_context(user_agent="", conversation_id="", cohort_account_id=""),
             patch(
-                "futuresearch_mcp.tool_helpers._resolve_stored_account_id",
+                "futuresearch_mcp.engine_client._stored_account_id",
                 new_callable=AsyncMock,
                 return_value="stored-acct",
             ),
@@ -470,11 +471,26 @@ class TestStoreTaskCredential:
             assert await redis_store.get_task_credential("task-j") == "the-jwt"
 
 
+class TestRecordTaskOwnership:
+    @pytest.mark.asyncio
+    async def test_records_the_submitting_account(self, fake_redis):
+        """The selected account is persisted, not just applied to the submission."""
+        with (
+            patch.object(redis_store, "get_redis_client", return_value=fake_redis),
+            request_context(
+                user_agent="", conversation_id="", cohort_account_id="team-acct"
+            ),
+        ):
+            await _record_task_ownership("task-t", "sk-cho-abc123")
+
+            assert await redis_store.get_task_account("task-t") == "team-acct"
+
+
 class TestResolveStoredAccountId:
     @pytest.mark.asyncio
     async def test_stdio_mode_returns_empty(self):
         # Default test transport is stdio — no stored selection concept.
-        assert await _resolve_stored_account_id() == ""
+        assert await _stored_account_id() == ""
 
     @pytest.mark.asyncio
     async def test_http_mode_reads_redis(self):
@@ -483,24 +499,24 @@ class TestResolveStoredAccountId:
         with (
             override_settings(transport="streamable-http"),
             patch(
-                "futuresearch_mcp.tool_helpers.get_access_token",
+                "futuresearch_mcp.engine_client.get_access_token",
                 return_value=access_token,
             ),
             patch(
-                "futuresearch_mcp.tool_helpers.redis_store.get_account_selection",
+                "futuresearch_mcp.engine_client.redis_store.get_account_selection",
                 new_callable=AsyncMock,
                 return_value="acct-9",
             ),
         ):
-            assert await _resolve_stored_account_id() == "acct-9"
+            assert await _stored_account_id() == "acct-9"
 
     @pytest.mark.asyncio
     async def test_http_mode_unauthenticated_returns_empty(self):
         with (
             override_settings(transport="streamable-http"),
             patch(
-                "futuresearch_mcp.tool_helpers.get_access_token",
+                "futuresearch_mcp.engine_client.get_access_token",
                 return_value=None,
             ),
         ):
-            assert await _resolve_stored_account_id() == ""
+            assert await _stored_account_id() == ""

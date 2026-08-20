@@ -11,7 +11,6 @@ from textwrap import dedent
 from typing import Any
 from uuid import UUID
 
-import httpx
 from futuresearch.errors import (
     FuturesearchClientError,
     FuturesearchError,
@@ -36,8 +35,12 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 
 from futuresearch_mcp import redis_store
 from futuresearch_mcp.config import settings
+from futuresearch_mcp.engine_client import (
+    ACCOUNT_ID_HEADER,
+    engine_httpx_client,
+    resolve_account_id,
+)
 from futuresearch_mcp.request_context import (
-    get_cohort_account_id,
     get_conversation_id,
     get_user_agent,
 )
@@ -119,39 +122,12 @@ async def _get_client(ctx: FuturesearchContext) -> AuthenticatedClient:
     conv_id = _get_conversation_id()
     if conv_id:
         extra_headers["x-conversation-id"] = conv_id
-    # An explicit inbound header (sent by the everyrow-cc app) always wins.
-    # Only when it is absent (raw MCP clients) do we fall back to the account
-    # the user chose on the login-page selector.
-    account_id = get_cohort_account_id() or await _resolve_stored_account_id()
-    if account_id:
-        extra_headers["x-cohort-account-id"] = account_id
+    if account_id := await resolve_account_id():
+        extra_headers[ACCOUNT_ID_HEADER] = account_id
     logger.debug(f"Setting extra headers to {extra_headers}")
     if extra_headers:
         client = client.with_headers(extra_headers)
     return client
-
-
-async def _resolve_stored_account_id() -> str:
-    """Resolve the login-time account selection for the current connection.
-
-    Keyed on the current access token, so it is scoped to this OAuth
-    connection. Returns "" in stdio/no-auth mode, when unauthenticated, or
-    when no selection was stored (the API then defaults to personal).
-    """
-    if not settings.is_http:
-        return ""
-    try:
-        access_token = get_access_token()
-    except Exception:
-        logger.warning("Failed to get access token", exc_info=True)
-        return ""
-    if access_token is None:
-        return ""
-    try:
-        return await redis_store.get_account_selection(access_token.token) or ""
-    except Exception:
-        logger.warning("Account selection lookup failed", exc_info=True)
-        return ""
 
 
 def _extract_client_headers(ctx: FuturesearchContext) -> dict[str, str]:
@@ -364,6 +340,7 @@ async def _record_task_ownership(task_id: str, token: str) -> str:
     """
     poll_token = secrets.token_urlsafe(32)
     await _store_task_credential(task_id, token)
+    await redis_store.store_task_account(task_id, await resolve_account_id())
     await redis_store.store_poll_token(task_id, poll_token)
     return poll_token
 
@@ -393,13 +370,10 @@ async def _submission_ui_json(
     return json.dumps(data)
 
 
-async def _start_headless_summarizer(task_id: str, token: str) -> None:
+async def _start_headless_summarizer(task_id: str, token: str, account_id: str) -> None:
     """Fire-and-forget request to start headless summarizer for a task."""
     try:
-        async with httpx.AsyncClient(
-            base_url=settings.futuresearch_api_url,
-            headers={"Authorization": f"Bearer {token}"},
-        ) as client:
+        async with engine_httpx_client(token=token, account_id=account_id) as client:
             await client.post(f"/tasks/{task_id}/summaries/start")
     except Exception:
         logger.debug("Failed to start headless summarizer for %s", task_id)
@@ -430,7 +404,7 @@ async def create_tool_response(
     if not is_internal_client():
         # Start headless summarizer so external clients (stdio and HTTP)
         # get progress summaries without needing a frontend SSE connection.
-        await _start_headless_summarizer(task_id, token)
+        await _start_headless_summarizer(task_id, token, await resolve_account_id())
     if settings.is_http:
         poll_token = await _record_task_ownership(task_id, token)
         if widget_meta:

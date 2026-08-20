@@ -345,6 +345,58 @@ class TestApiProgress:
         assert mock_status.await_args is not None
         assert mock_status.await_args.kwargs["client"].token == "jwt-fresh"
 
+    @pytest.mark.asyncio
+    async def test_poll_acts_as_the_submitting_account(self):
+        """A team task polls as the team, not as the owner's personal account."""
+        task_id = str(uuid4())
+        poll_token = secrets.token_urlsafe(16)
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_owner(task_id, "user-1")
+        await redis_store.store_user_token("user-1", "jwt-fresh", 3600)
+        await redis_store.store_task_account(task_id, "team-acct")
+
+        req = FakeRequest(
+            path_params={"task_id": task_id},
+            headers={"authorization": f"Bearer {poll_token}"},
+        )
+
+        with patch(
+            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            new_callable=AsyncMock,
+            return_value=_make_status_response(status="running"),
+        ) as mock_status:
+            await api_progress(req)  # pyright: ignore[reportArgumentType]
+
+        assert mock_status.await_args is not None
+        client = mock_status.await_args.kwargs["client"]
+        headers = client.get_async_httpx_client().headers
+        assert headers["x-cohort-account-id"] == "team-acct"
+
+    @pytest.mark.asyncio
+    async def test_poll_sends_no_account_when_none_was_selected(self):
+        """Personal-only submissions stay header-free rather than guessing one."""
+        task_id = str(uuid4())
+        poll_token = secrets.token_urlsafe(16)
+        await redis_store.store_poll_token(task_id, poll_token)
+        await redis_store.store_task_owner(task_id, "user-1")
+        await redis_store.store_user_token("user-1", "jwt-fresh", 3600)
+
+        req = FakeRequest(
+            path_params={"task_id": task_id},
+            headers={"authorization": f"Bearer {poll_token}"},
+        )
+
+        with patch(
+            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            new_callable=AsyncMock,
+            return_value=_make_status_response(status="running"),
+        ) as mock_status:
+            await api_progress(req)  # pyright: ignore[reportArgumentType]
+
+        assert mock_status.await_args is not None
+        client = mock_status.await_args.kwargs["client"]
+        assert "x-cohort-account-id" not in client.get_async_httpx_client().headers
+
 
 class TestCorsHeaders:
     """Tests for CORS headers on widget endpoints."""

@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from futuresearch_mcp import redis_store
-from futuresearch_mcp.config import settings
+from futuresearch_mcp.engine_client import NO_ACCOUNT_SELECTED, build_engine_client
 from futuresearch_mcp.result_store import _sanitize_records
 from futuresearch_mcp.tool_helpers import (
     _UI_EXCLUDE,
@@ -303,11 +303,10 @@ async def api_progress(request: Request) -> Response:  # noqa: PLR0911
         return JSONResponse({"error": "Unknown task"}, status_code=404, headers=cors)
 
     try:
-        client = AuthenticatedClient(
-            base_url=settings.futuresearch_api_url,
+        client = build_engine_client(
             token=api_key,
-            raise_on_unexpected_status=True,
-            follow_redirects=True,
+            account_id=await redis_store.get_task_account(task_id)
+            or NO_ACCOUNT_SELECTED,
         )
         status_response = await _call_and_check(
             get_task_status_tasks_task_id_status_get.asyncio_detailed(
@@ -409,11 +408,10 @@ async def api_download(request: Request) -> Response:  # noqa: PLR0911
             {"error": "Results not found or expired"}, status_code=404, headers=cors
         )
     try:
-        client = AuthenticatedClient(
-            base_url=settings.futuresearch_api_url,
+        client = build_engine_client(
             token=api_key,
-            raise_on_unexpected_status=True,
-            follow_redirects=True,
+            account_id=await redis_store.get_task_account(task_id)
+            or NO_ACCOUNT_SELECTED,
         )
         rows, _total, _session_id, _artifact_id = await _fetch_task_result(
             client, task_id

@@ -10,6 +10,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from futuresearch_mcp.request_context import request_context
 from futuresearch_mcp.uploads import (
     RequestUploadUrlInput,
     _rewrite_upload_url,
@@ -110,8 +111,11 @@ class TestRequestUploadUrlTool:
 
         # Verify the Engine API was called with correct auth
         mock_http.post.assert_called_once()
+        assert (
+            mock_httpx.call_args[1]["headers"]["Authorization"] == "Bearer fake-token"
+        )
         call_kwargs = mock_http.post.call_args
-        assert call_kwargs[1]["headers"]["Authorization"] == "Bearer fake-token"
+        assert call_kwargs[0][0] == "/uploads/request"
         assert call_kwargs[1]["json"] == {"filename": "data.csv"}
 
     @pytest.mark.asyncio
@@ -284,11 +288,41 @@ class TestRequestUploadUrlTool:
             params = RequestUploadUrlInput(filename="test.csv")
             await tool_fn(params, ctx)
 
-        call_args = mock_http.post.call_args
         assert (
-            call_args[0][0]
-            == "https://custom-engine.example.com/api/v0/uploads/request"
+            mock_httpx.call_args[1]["base_url"]
+            == "https://custom-engine.example.com/api/v0"
         )
+        assert mock_http.post.call_args[0][0] == "/uploads/request"
+
+    @pytest.mark.asyncio
+    async def test_forwards_account_header(self):
+        """The upload request acts as the caller's selected account, not personal."""
+        mock_mcp = MagicMock()
+        tool_fn = _capture_tool_fn(mock_mcp)
+
+        mock_client = MagicMock(token="fake-token")
+        ctx = make_test_context(mock_client)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = ENGINE_RESPONSE
+        mock_response.raise_for_status = MagicMock()
+
+        with (
+            request_context(
+                user_agent="", conversation_id="", cohort_account_id="team-acct"
+            ),
+            patch("futuresearch_mcp.uploads.httpx.AsyncClient") as mock_httpx,
+        ):
+            mock_http = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_http.__aexit__ = AsyncMock(return_value=False)
+            mock_httpx.return_value = mock_http
+
+            await tool_fn(RequestUploadUrlInput(filename="data.csv"), ctx)
+
+        headers = mock_httpx.call_args[1]["headers"]
+        assert headers["x-cohort-account-id"] == "team-acct"
 
 
 class TestRewriteUploadUrl:

@@ -229,6 +229,19 @@ async def get_task_owner(task_id: str) -> str | None:
     return await get_redis_client().get(build_key("task_owner", task_id))
 
 
+async def store_task_account(task_id: str, account_id: str) -> None:
+    """Record which account submitted a task, so later polls present the same one."""
+    if not account_id:
+        return
+    await get_redis_client().setex(
+        build_key("task_account", task_id), TOKEN_TTL, account_id
+    )
+
+
+async def get_task_account(task_id: str) -> str | None:
+    return await get_redis_client().get(build_key("task_account", task_id))
+
+
 async def get_task_credential(task_id: str) -> str | None:
     """Resolve a usable API credential for a task, or None if unavailable.
 

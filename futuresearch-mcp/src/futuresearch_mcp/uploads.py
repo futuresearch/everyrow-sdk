@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from futuresearch_mcp.config import settings
+from futuresearch_mcp.engine_client import engine_httpx_client, resolve_account_id
 from futuresearch_mcp.tool_helpers import FuturesearchContext
 
 logger = logging.getLogger(__name__)
@@ -92,17 +93,14 @@ def register_upload_tool(mcp: FastMCP, mcp_server_url: str) -> None:
             ]
 
         # Delegate to the Cohort Engine API
-        engine_url = f"{settings.futuresearch_api_url}/uploads/request"
         request_body: dict = {"filename": params.filename}
         if params.session_id is not None:
             request_body["session_id"] = params.session_id
         try:
-            async with httpx.AsyncClient(timeout=10) as http:
-                resp = await http.post(
-                    engine_url,
-                    headers={"Authorization": f"Bearer {api_token}"},
-                    json=request_body,
-                )
+            async with engine_httpx_client(
+                token=api_token, account_id=await resolve_account_id()
+            ) as http:
+                resp = await http.post("/uploads/request", json=request_body)
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as exc:
