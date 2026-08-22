@@ -138,6 +138,7 @@ class LLMEnum(str, Enum):
     GROK_4_5 = "GROK_4_5"
     O3 = "O3"
     O3_MINI = "O3_MINI"
+    OX_ALPHA = "OX_ALPHA"
 
     def __str__(self) -> str:
         return str(self.value)
