@@ -222,6 +222,10 @@ async def futuresearch_forecast(
             widget_meta["categories_field"] = params.categories_field
         if params.thresholds_field:
             widget_meta["thresholds_field"] = params.thresholds_field
+        # Either form of the condition, so the widget can label the two
+        # branches it splits a conditional card into.
+        if params.condition:
+            widget_meta["condition"] = params.condition
         if params.condition_field:
             widget_meta["condition_field"] = params.condition_field
         return await create_tool_response(

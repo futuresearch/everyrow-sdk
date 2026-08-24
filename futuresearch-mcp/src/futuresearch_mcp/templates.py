@@ -17,10 +17,7 @@ UNIFIED_HTML = """<!DOCTYPE html>
   --text:#333;--text-sec:#525252;--text-dim:#a3a3a3;
   --border:rgba(0,0,0,0.08);--border-light:rgba(0,0,0,0.04);
   --accent:#4D4FBD;
-  /* Purple used for section headers / field keys / median value /
-     IQR shading / iteration progress bar. Distinct from --accent (links)
-     so the eye registers them as different colors. Values pulled from
-     landing-site (--brand-secondary) and everyrow-cc (--color-brand-400). */
+  /* Distinct from --accent (links) so the eye reads them as different. */
   --section-purple:#1D1F8A;
   --median-fill:#4D4FBD;
   --median-text:#1D1F8A;
@@ -79,7 +76,7 @@ body{font-family:'JetBrains Mono',ui-monospace,monospace;margin:0;padding:0;colo
    researcher's latest micro-summary, plus a small icon, with a faint
    pulsing background while the overall task is running. The team-level
    aggregate text (when present) is shown as a small italic banner
-   above the boxes. Modeled on everyrow-cc's ResearcherStreamItem. */
+   above the boxes. */
 .activity-tab{padding:0 12px;max-height:360px;overflow-y:auto}
 .activity-banner{margin:0 0 8px;padding:8px 12px;background:var(--bg-alt);border:1px solid var(--border);border-radius:4px;font-size:11px;line-height:1.5;color:var(--text-sec)}
 /* Title row: "researcher team activity" label + horizontal strip of
@@ -89,8 +86,6 @@ body{font-family:'JetBrains Mono',ui-monospace,monospace;margin:0;padding:0;colo
 .activity-banner-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .activity-banner-label{font-style:normal;font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em}
 .activity-banner-text{font-style:italic;display:block}
-/* One icon per unique trace_id, capped at 10 with a "[…]" suffix if
-   more. Each icon-cell pulses while the task is running. */
 .banner-icon-row{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
 .banner-icon-cell{width:18px;height:18px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;color:var(--accent);transition:background-color .3s ease,border-color .3s ease}
 .banner-icon-cell.running{animation:researcher-pulse 2.2s ease-in-out infinite}
@@ -110,14 +105,8 @@ body{font-family:'JetBrains Mono',ui-monospace,monospace;margin:0;padding:0;colo
 .researcher-icon{flex-shrink:0;display:block}
 .researcher-label{font-weight:600;color:var(--text)}
 .researcher-rows{color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums}
-/* Iteration progress: thin purple bar only, no numeric label.
-   Width = min(iter, visualMax)/visualMax * 100%. visualMax derives
-   from the engine's effort-level budgets (medium=5, high=10), and
-   ratchets up to the next multiple of 5 when observations exceed it. */
 .researcher-iter-bar{display:block;flex:1;height:5px;background:var(--border-light);border-radius:3px;overflow:hidden;margin-left:auto;min-width:50px;max-width:110px}
-/* The fill must be block (not inline) — inline spans ignore explicit
-   height/width %, which was making the purple fill invisible even when
-   pct > 0. */
+/* Must be block: inline spans ignore explicit height and width %. */
 .researcher-iter-bar-fill{display:block;height:100%;background:var(--median-fill);border-radius:3px;transition:width .4s ease}
 .researcher-summary{font-size:11px;line-height:1.5;color:var(--text-sec)}
 .researchers-empty{padding:14px 4px;color:var(--text-dim);font-size:11px;text-align:center}
@@ -193,7 +182,7 @@ body.row-resizing,body.row-resizing *{cursor:row-resize!important;user-select:no
 body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none!important}
 .hdr-row th.drag-over-left{box-shadow:inset 3px 0 0 var(--accent)}
 .hdr-row th.drag-over-right{box-shadow:inset -3px 0 0 var(--accent)}
-/* ── Forecast cards (only for futuresearch_forecast results) ── */
+/* ── Forecast cards ── */
 .fc-toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px 0;flex-wrap:wrap}
 .fc-toolbar #fcSum{flex:1;font-size:11px;color:var(--text-sec);min-width:120px}
 .fc-toolbar button{padding:5px 12px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--btn-bg);color:var(--btn-text);transition:background-color .15s ease;font-family:inherit}
@@ -215,8 +204,33 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 .fc-prob-value{font-size:28px;font-weight:600;color:var(--median-text);font-variant-numeric:tabular-nums;line-height:1}
 .fc-card.solo .fc-prob-value{font-size:40px}
 .fc-prob-label{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em}
-.fc-prob-bar{height:6px;border-radius:3px;background:linear-gradient(90deg,rgba(229,57,53,0.22),rgba(77,79,189,0.22),rgba(77,79,189,0.30));position:relative;margin-top:4px}
-.fc-prob-bar-marker{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--median-fill);border-radius:2px;transform:translateX(-1.5px);box-shadow:0 0 0 2px var(--bg)}
+/* One track+fill for every probability the widget draws, so a binary card and
+   a categorical card carry the same mark at different counts. */
+.fc-prob-bar,.fc-opt-bar{height:6px;border-radius:3px;background:var(--iqr-fill);overflow:hidden}
+.fc-prob-bar-fill,.fc-opt-bar-fill{height:100%;border-radius:3px;background:var(--median-fill)}
+.fc-prob-bar{margin-top:4px}
+/* Grouped option bars (categorical / thresholded / decision). */
+.fc-opts{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+.fc-opt-head{display:flex;align-items:baseline;gap:8px}
+.fc-opt-label{flex:1;min-width:0;font-size:11px;color:var(--text-sec);line-height:1.4;word-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fc-card.solo .fc-opt-label,.fc-card.expanded .fc-opt-label{display:block;overflow:visible;font-size:12px}
+.fc-opt-value{flex-shrink:0;font-size:12px;font-weight:600;color:var(--text-sec);font-variant-numeric:tabular-nums}
+.fc-card.solo .fc-opt-value{font-size:15px}
+.fc-opt.lead .fc-opt-label{color:var(--text)}
+.fc-opt.lead .fc-opt-value{color:var(--median-text)}
+.fc-opt-bar{margin-top:3px}
+.fc-opt-bar-fill{opacity:.55}
+.fc-opt.lead .fc-opt-bar-fill{opacity:1}
+.fc-opt-more{font-size:9px;color:var(--text-dim);font-style:italic}
+.fc-alt{margin-top:6px}
+.fc-alt .fc-pctl-header{margin-bottom:2px}
+/* Conditional forecasts: the condition, then the outcome under each branch. */
+.fc-condition{border-left:2px solid var(--iqr-stroke);padding-left:8px;margin-top:2px}
+.fc-condition .fc-section-label{margin-top:0}
+.fc-condition-text{font-size:11px;color:var(--text-sec);line-height:1.4;word-wrap:break-word}
+.fc-card.solo .fc-condition-text{font-size:12px}
+.fc-branch{margin-top:8px}
+.fc-branch-label{font-size:10px;font-weight:500;color:var(--text-sec);margin-bottom:2px}
 .fc-pctl-bar{margin-top:2px}
 .fc-pctl-header{display:flex;align-items:baseline;gap:6px;margin-bottom:4px;font-size:11px;flex-wrap:wrap}
 .fc-pctl-field{color:var(--text-sec);font-weight:500}
@@ -327,9 +341,7 @@ const forecastTab=document.getElementById("forecastTab");
 const fcGrid=document.getElementById("fcGrid");
 const fcSum=document.getElementById("fcSum");
 const fcExportLink=document.getElementById("fcExportLink");
-/* forecastMeta is non-null only when the submission/status tool flagged
-   this task as task_type=forecast; in that mode we render cards instead
-   of the table. Set by enterProgressMode() from the widget JSON. */
+/* Non-null only for forecast tasks, which render cards, not the table. */
 let forecastMeta=null;
 let forecastRows=null;
 
@@ -567,9 +579,8 @@ async function autoFetchResults(){
        app.updateModelContext() here. Both are advertised by claude.ai for
        custom connectors but their delivery is reconnect-gated — the message
        only materializes in the chat on page refresh, producing a mystery
-       user message that hurts UX more than it helps. See SKILL.md's
-       "Autonomous Widget→Model Handoff" section for the investigation
-       trail. The widget shows results; the user asks Claude to analyze. */
+       user message that hurts UX more than it helps. The widget shows
+       results; the user asks Claude to analyze. */
   }catch(e){
     resultsFetched=false;
   }
@@ -594,10 +605,7 @@ function showForecastUI(){
 }
 
 /* ──────────────────────────────────────────────────────────────────
-   Forecast card rendering — used only when forecastMeta is set
-   (i.e. task_type=forecast). Mirrors the everyrow-cc ResearcherStreamItem
-   + ResearcherFullView layouts in vanilla JS. Sources for design choices:
-   PercentileRangeBar.tsx, DatePercentileRangeBar.tsx, PercentileGrid.tsx.
+   Forecast card rendering — used only when forecastMeta is set.
    ────────────────────────────────────────────────────────────────── */
 
 const FC_PERCENTILES=[10,25,50,75,90];
@@ -643,6 +651,74 @@ function fcExtractDatePctl(row,field){
   return out;
 }
 
+/* Categorical, thresholded and binary-decision forecasts all put one
+   probability per option in a single `probabilities` column, JSON-encoded by
+   the engine. Only the meaning of an option and its ordering differ. */
+const FC_GROUPED_TYPES=new Set(["categorical","thresholded","decision"]);
+const FC_GROUPED_LABEL={categorical:"outcomes",thresholded:"thresholds",decision:"alternatives"};
+const FC_GROUPED_VISIBLE=4;
+
+/* Engine columns holding a JSON map arrive as strings; some paths hand back
+   the decoded object, so accept both. */
+function fcParseJsonMap(raw){
+  if(raw&&typeof raw==="object"&&!Array.isArray(raw))return raw;
+  if(typeof raw==="string"){
+    try{
+      const p=JSON.parse(raw);
+      if(p&&typeof p==="object"&&!Array.isArray(p))return p;
+    }catch{}
+  }
+  return null;
+}
+
+/* Categorical is ranked, so sort it most-likely-first. Thresholded keys run
+   least to most strict and decision keys are the user's own ordering of the
+   alternatives, so both keep engine order. */
+function fcExtractProbabilities(row,kind){
+  const obj=fcParseJsonMap(row.probabilities);
+  if(!obj)return null;
+  const entries=[];
+  for(const[label,v]of Object.entries(obj)){
+    const n=typeof v==="number"?v:Number(v);
+    if(isFinite(n))entries.push({label,value:n});
+  }
+  if(!entries.length)return null;
+  if(kind==="categorical")entries.sort((a,b)=>b.value-a.value);
+  return entries;
+}
+
+/* Put entries in a caller-supplied label order, keeping any label the order
+   doesn't mention at the end. */
+function fcApplyOrder(entries,order){
+  const rank=new Map(order.map((label,i)=>[label,i]));
+  return entries.slice().sort((a,b)=>
+    (rank.get(a.label)??order.length)-(rank.get(b.label)??order.length));
+}
+
+function fcRenderProbBars(entries,kind,full){
+  const shown=full?entries:entries.slice(0,FC_GROUPED_VISIBLE);
+  /* Only categorical has a single winning outcome to highlight; thresholded
+     bars are monotonic by construction and decision bars need not be. Taken
+     as the max rather than the first row, since a shared order can put a
+     lower-probability outcome first. */
+  const lead=kind==="categorical"?Math.max(...entries.map(e=>e.value)):null;
+  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(FC_GROUPED_LABEL[kind]||"outcomes")}</div>`;
+  for(const e of shown){
+    const pct=Math.max(0,Math.min(100,e.value));
+    const isLead=lead!==null&&e.value===lead;
+    out+=`<div class="fc-opt${isLead?" lead":""}">`+
+      `<div class="fc-opt-head">`+
+      `<span class="fc-opt-label" title="${escAttr(e.label)}">${esc(e.label)}</span>`+
+      `<span class="fc-opt-value">${esc(Math.round(pct))}%</span>`+
+      `</div>`+
+      /* A 1% outcome would otherwise draw a sub-pixel sliver. */
+      `<div class="fc-opt-bar"><div class="fc-opt-bar-fill" style="width:${pct}%${pct>0?";min-width:2px":""}"></div></div>`+
+      `</div>`;
+  }
+  if(shown.length<entries.length)out+=`<div class="fc-opt-more">+${entries.length-shown.length} more</div>`;
+  return out+`</div>`;
+}
+
 function fcPickDateGran(dates){
   const ms=dates.filter(d=>!fcIsNever(d)).map(d=>new Date(d+"T00:00:00").getTime());
   if(ms.length<2)return "year-month";
@@ -662,9 +738,10 @@ function fcFmtDate(iso,compact,gran){
 
 /* Render an SVG numeric percentile bar (p10-p90 with IQR box + median dot).
    Non-compact mode staggers labels above/below so p25/p75 don't collide
-   with their neighbors when percentiles are bunched together - matches
-   PercentileRangeBar.tsx's topPad/aboveLabelY behaviour. */
-function fcRenderPctlSVG(p,units,compact){
+   with their neighbors when percentiles are bunched together.
+   `domain` ({min,max}) puts several bars on one scale; without it the bar
+   spans its own p10-p90. */
+function fcRenderPctlSVG(p,units,compact,domain){
   const W=200,svgH=compact?24:36,pad=6,trackW=W-2*pad;
   const topPad=compact?0:14;
   const bottomPad=compact?14:18;
@@ -672,10 +749,12 @@ function fcRenderPctlSVG(p,units,compact){
   const totalH=topPad+svgH+bottomPad;
   const aboveLabelY=topPad-4;
   const belowLabelY=topPad+svgH+(compact?10:14);
-  const range=p.p90-p.p10;
-  const scale=v=>range===0?trackW/2:((v-p.p10)/range)*trackW;
+  const lo=domain?domain.min:p.p10;
+  const hi=domain?domain.max:p.p90;
+  const range=hi-lo;
+  const scale=v=>range===0?trackW/2:((v-lo)/range)*trackW;
   const x={};
-  for(const k of FC_PERCENTILES)x["p"+k]=pad+(k===10?0:scale(p["p"+k]));
+  for(const k of FC_PERCENTILES)x["p"+k]=pad+scale(p["p"+k]);
   const tickH=compact?6:10;
   const dotR=compact?3.5:5;
   /* Compact: p10/p50/p90 below. Non-compact: p10/p50/p90 below + p25/p75 above. */
@@ -702,8 +781,10 @@ function fcRenderPctlSVG(p,units,compact){
 
 /* Render an SVG date percentile bar. Same staggered-label trick as
    fcRenderPctlSVG. Plus a dashed →never tail when any percentile is the
-   sentinel (matches DatePercentileRangeBar.tsx). */
-function fcRenderDatePctlSVG(dp,compact){
+   sentinel.
+   `domain` ({minMs,maxMs,hasTail,gran}) puts several bars on one scale, and
+   reserves the tail on all of them when any one of them runs to "never". */
+function fcRenderDatePctlSVG(dp,compact,domain){
   const W=200,svgH=compact?24:36,pad=6,trackW=W-2*pad;
   const topPad=compact?0:14;
   const bottomPad=compact?14:18;
@@ -715,18 +796,22 @@ function fcRenderDatePctlSVG(dp,compact){
   const dotR=compact?3.5:5;
   const dates=FC_PERCENTILES.map(p=>dp["p"+p]);
   const neverFlags=dates.map(fcIsNever);
+  /* This bar's own sentinels decide whether the →never tail is DRAWN; the
+     shared domain decides whether its space is RESERVED, so a branch that
+     ends in a real date still maps onto the same pixels as one that doesn't. */
   const hasTail=neverFlags.some(Boolean);
+  const reserveTail=domain?domain.hasTail:hasTail;
   const medianIsNever=neverFlags[2];
-  const gran=fcPickDateGran(dates);
+  const gran=domain?domain.gran:fcPickDateGran(dates);
 
-  const tailFrac=hasTail?0.22:0;
+  const tailFrac=reserveTail?0.22:0;
   const realTrackW=trackW*(1-tailFrac);
   const tailStartX=pad+realTrackW;
   const tailEndX=pad+trackW;
 
   const realMs=dates.map((d,i)=>neverFlags[i]?null:new Date(d+"T00:00:00").getTime()).filter(v=>v!==null);
-  const msLeft=realMs[0]??0;
-  const msRight=realMs[realMs.length-1]??msLeft;
+  const msLeft=domain?domain.minMs:(realMs[0]??0);
+  const msRight=domain?domain.maxMs:(realMs[realMs.length-1]??msLeft);
   const realRange=msRight-msLeft;
   const scale=v=>realRange===0?realTrackW/2:((v-msLeft)/realRange)*realTrackW;
   const positions=dates.map((d,i)=>neverFlags[i]?tailStartX:(pad+scale(new Date(d+"T00:00:00").getTime())));
@@ -774,6 +859,81 @@ function fcRenderDatePctlSVG(dp,compact){
   </svg>`;
 }
 
+/* The window a set of percentile records has to share for their bars to be
+   comparable — spanning the lowest p10 to the highest p90 across all of them.
+   Used both for the two branches of a conditional forecast and for the
+   alternatives of a decision. */
+function fcNumericDomain(records){
+  if(!records.length)return null;
+  return {min:Math.min(...records.map(r=>r.p10)),max:Math.max(...records.map(r=>r.p90))};
+}
+
+function fcDateDomain(records){
+  if(!records.length)return null;
+  const dates=records.flatMap(r=>FC_PERCENTILES.map(k=>r["p"+k]));
+  const realMs=dates.filter(d=>!fcIsNever(d)).map(d=>new Date(d+"T00:00:00").getTime());
+  if(!realMs.length)return null;
+  return {
+    minMs:Math.min(...realMs),
+    maxMs:Math.max(...realMs),
+    hasTail:dates.some(fcIsNever),
+    gran:fcPickDateGran(dates),
+  };
+}
+
+/* A numeric/date decision puts one percentile record per alternative in a
+   single `percentiles` column: {alternative: {p10..p90}}, numbers for a
+   numeric outcome and YYYY-MM-DD / "never" strings for a date one. Rejects a
+   map whose records don't all carry the five keys of one single kind. */
+function fcExtractDecisionPctl(row){
+  const obj=fcParseJsonMap(row.percentiles);
+  if(!obj)return null;
+  const isDate=v=>v==="never"||(typeof v==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(v));
+  const isNum=v=>typeof v==="number"&&isFinite(v);
+  const entries=[];
+  let kind=null;
+  for(const[label,record]of Object.entries(obj)){
+    if(!record||typeof record!=="object"||Array.isArray(record))return null;
+    const values=FC_PERCENTILES.map(p=>record["p"+p]);
+    const recordKind=isNum(values[2])?"numeric":(isDate(values[2])?"date":null);
+    if(!recordKind)return null;
+    /* A task is one kind throughout; a mixed map is malformed. */
+    if(kind===null)kind=recordKind;
+    else if(kind!==recordKind)return null;
+    if(!values.every(kind==="numeric"?isNum:isDate))return null;
+    entries.push({label,record});
+  }
+  if(!entries.length)return null;
+  return {kind,entries};
+}
+
+/* One range bar per decision alternative, all on a shared axis: the spread
+   across the alternatives is the decision's effect, so bars that each filled
+   their own track would hide the very thing being asked. Same section-label /
+   capped-rows / "+N more" shape as the probability bars. */
+function fcRenderDecisionPctlBars(kind,entries,full){
+  const records=entries.map(e=>e.record);
+  const domain=kind==="numeric"?fcNumericDomain(records):fcDateDomain(records);
+  const shown=full?entries:entries.slice(0,FC_GROUPED_VISIBLE);
+  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(FC_GROUPED_LABEL.decision)}</div>`;
+  for(const{label,record}of shown){
+    out+=`<div class="fc-alt"><div class="fc-pctl-header"><span class="fc-pctl-field">${esc(label)}</span>`;
+    if(kind==="numeric"){
+      out+=`<span class="fc-pctl-median">${esc(fcNum(record.p50))}</span>`;
+      if(forecastMeta.units)out+=`<span class="fc-pctl-units">${esc(forecastMeta.units)}</span>`;
+      out+=`</div>`+fcRenderPctlSVG(record,forecastMeta.units,!full,domain);
+    }else{
+      const gran=domain?domain.gran:fcPickDateGran(FC_PERCENTILES.map(p=>record["p"+p]));
+      const isNever=fcIsNever(record.p50);
+      out+=`<span class="fc-pctl-median"${isNever?' style="color:var(--text-dim)"':''}>${esc(fcFmtDate(record.p50,false,gran))}</span>`;
+      out+=`</div>`+fcRenderDatePctlSVG(record,!full,domain);
+    }
+    out+=`</div>`;
+  }
+  if(shown.length<entries.length)out+=`<div class="fc-opt-more">+${entries.length-shown.length} more</div>`;
+  return out+`</div>`;
+}
+
 /* Extract source domains from inline markdown links AND _source_bank
    (whichever is present). Citations get resolved server-side to
    `[title](url)` markdown so the link pattern catches them. */
@@ -785,7 +945,7 @@ function fcExtractDomain(url){
 function fcExtractSources(row){
   const seen=new Set();
   const out=[];
-  /* 1. Use _source_bank if present (preferred — richer, deduped server-side). */
+  /* 1. Use _source_bank if present — richer and already deduped. */
   const sb=row._source_bank;
   let parsed=null;
   if(sb&&typeof sb==="object"&&!Array.isArray(sb))parsed=sb;
@@ -828,7 +988,7 @@ function fcRowTitle(row){
     if(typeof v==="string"&&v.trim())return v.trim();
   }
   /* Fallback: first non-empty string that isn't rationale/probability. */
-  const skip=new Set(["rationale","probability","units","_status","_error","_row_index","_completed_at","_source_bank","research"]);
+  const skip=new Set(["rationale","probability","probabilities","percentiles","units","_status","_error","_row_index","_completed_at","_source_bank","research"]);
   for(const[k,v]of Object.entries(row)){
     if(skip.has(k)||k.startsWith("_"))continue;
     if(typeof v==="string"&&v.trim()&&v.length<200)return v.trim();
@@ -851,6 +1011,167 @@ function fcLinkifyRationale(text){
   return linkify(text);
 }
 
+/* The outcome type's viz for one data object. `full` is the expanded/solo
+   card, which adds the percentile grid and drops the option-bar cap. Columns
+   drawn are recorded in `used` so the card doesn't repeat them as raw text.
+   Returns "" when the expected columns aren't there, which leaves them to the
+   text fallback. */
+function fcRenderOutcome(data,full,used,domain){
+  let out="";
+  if(forecastMeta.forecastType==="binary"){
+    const probRaw=data.probability;
+    const prob=typeof probRaw==="number"?probRaw:Number(probRaw);
+    if(!isNaN(prob)){
+      const pct=Math.max(0,Math.min(100,prob));
+      out+=`<div class="fc-prob"><span class="fc-prob-value">${esc(Math.round(pct))}%</span><span class="fc-prob-label">probability</span></div>`;
+      out+=`<div class="fc-prob-bar"><div class="fc-prob-bar-fill" style="width:${pct}%${pct>0?";min-width:2px":""}"></div></div>`;
+      used.add("probability");
+    }
+  }else if(FC_GROUPED_TYPES.has(forecastMeta.forecastType)){
+    /* A decision's outcome rides one of two columns: `percentiles` when the
+       outcome is numeric or date, `probabilities` when it's binary. Which one
+       is present says which, so no metadata is needed to tell them apart. */
+    const decisionPctl=forecastMeta.forecastType==="decision"?fcExtractDecisionPctl(data):null;
+    if(decisionPctl){
+      out+=fcRenderDecisionPctlBars(decisionPctl.kind,decisionPctl.entries,full);
+      used.add("percentiles");
+    }else{
+      const entries=fcExtractProbabilities(data,forecastMeta.forecastType);
+      if(entries){
+        const ordered=domain&&domain.order?fcApplyOrder(entries,domain.order):entries;
+        out+=fcRenderProbBars(ordered,forecastMeta.forecastType,full);
+        used.add("probabilities");
+      }
+    }
+  }else if(forecastMeta.forecastType==="numeric"&&forecastMeta.outputField){
+    const p=fcExtractPctl(data,forecastMeta.outputField);
+    if(p){
+      out+=`<div class="fc-pctl-bar">`;
+      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median">${esc(fcNum(p.p50))}</span>`;
+      if(forecastMeta.units)out+=`<span class="fc-pctl-units">${esc(forecastMeta.units)}</span>`;
+      out+=`</div>`;
+      out+=fcRenderPctlSVG(p,forecastMeta.units,!full,domain);
+      if(full){
+        out+=`<div class="fc-pctl-grid">`;
+        for(const k of FC_PERCENTILES){
+          const isMed=k===50;
+          out+=`<div class="fc-pctl-cell"><div class="fc-pctl-cell-label">p${k}</div><div class="fc-pctl-cell-val${isMed?" median":""}">${esc(fcNum(p["p"+k]))}</div></div>`;
+        }
+        out+=`</div>`;
+      }
+      out+=`</div>`;
+      for(const k of FC_PERCENTILES)used.add(forecastMeta.outputField+"_p"+k);
+    }
+  }else if(forecastMeta.forecastType==="date"&&forecastMeta.outputField){
+    const dp=fcExtractDatePctl(data,forecastMeta.outputField);
+    if(dp){
+      const gran=domain?domain.gran:fcPickDateGran([dp.p10,dp.p25,dp.p50,dp.p75,dp.p90]);
+      const isNever=fcIsNever(dp.p50);
+      out+=`<div class="fc-pctl-bar">`;
+      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median"${isNever?' style="color:var(--text-dim)"':''}>${esc(fcFmtDate(dp.p50,false,gran))}</span></div>`;
+      out+=fcRenderDatePctlSVG(dp,!full,domain);
+      if(full){
+        out+=`<div class="fc-pctl-grid">`;
+        for(const k of FC_PERCENTILES){
+          const isMed=k===50;
+          const label=isMed?"median":(k+"% by");
+          out+=`<div class="fc-pctl-cell"><div class="fc-pctl-cell-label">${esc(label)}</div><div class="fc-pctl-cell-val${isMed?" median":""}">${esc(fcFmtDate(dp["p"+k],true,gran))}</div></div>`;
+        }
+        out+=`</div>`;
+      }
+      out+=`</div>`;
+      for(const k of FC_PERCENTILES)used.add(forecastMeta.outputField+"_p"+k);
+    }
+  }
+  return out;
+}
+
+/* A conditional forecast forecasts the outcome twice — once in the world where
+   the condition holds, once where it doesn't — in columns suffixed with the
+   branch, sharing one rationale. */
+const FC_BRANCHES=[["given_condition","Condition holds"],["given_not_condition","Condition does NOT hold"]];
+
+function fcBranchData(data,branch){
+  const suffix="_"+branch;
+  const out={};
+  for(const[k,v]of Object.entries(data)){
+    if(k.endsWith(suffix))out[k.slice(0,-suffix.length)]=v;
+  }
+  return out;
+}
+
+/* The condition the two branches split on: shared across the batch, or named
+   per row by an input column. */
+function fcConditionText(data){
+  if(forecastMeta.condition)return forecastMeta.condition;
+  const field=forecastMeta.conditionField;
+  if(field){
+    const v=data[field];
+    if(typeof v==="string"&&v.trim())return v.trim();
+    if(typeof v==="number")return String(v);
+  }
+  return null;
+}
+
+/* The frame sibling cards must share to be comparable: one scale for the
+   continuous outcomes, one row order for the grouped ones. Bars drawn on
+   their own scales look alike however far apart they are, and the same
+   outcome on a different row in each card hides the comparison just as well. */
+function fcSharedDomain(datas){
+  if(FC_GROUPED_TYPES.has(forecastMeta.forecastType)){
+    /* Rank by the total across siblings, so neither branch's ordering wins.
+       Labels keep first-seen order otherwise, which is the engine's
+       meaningful order for thresholded and decision. */
+    const totals=new Map();
+    for(const d of datas){
+      const entries=fcExtractProbabilities(d,forecastMeta.forecastType);
+      if(!entries)continue;
+      for(const e of entries)totals.set(e.label,(totals.get(e.label)||0)+e.value);
+    }
+    if(!totals.size)return null;
+    const order=[...totals.keys()];
+    if(forecastMeta.forecastType==="categorical"){
+      order.sort((a,b)=>totals.get(b)-totals.get(a));
+    }
+    return {order};
+  }
+  const field=forecastMeta.outputField;
+  if(!field)return null;
+  if(forecastMeta.forecastType==="numeric"){
+    return fcNumericDomain(datas.map(d=>fcExtractPctl(d,field)).filter(Boolean));
+  }
+  if(forecastMeta.forecastType==="date"){
+    return fcDateDomain(datas.map(d=>fcExtractDatePctl(d,field)).filter(Boolean));
+  }
+  return null;
+}
+
+/* Draw the outcome card once per branch, under a banner naming the condition
+   so a conditional forecast can't be mistaken for a plain one. */
+function fcRenderBranches(data,full,used){
+  const branches=FC_BRANCHES.map(([branch,label])=>({branch,label,bdata:fcBranchData(data,branch)}));
+  const domain=fcSharedDomain(branches.map(b=>b.bdata));
+  let out="";
+  for(const{branch,label,bdata}of branches){
+    if(!Object.keys(bdata).length)continue;
+    const drawn=new Set();
+    const inner=fcRenderOutcome(bdata,full,drawn,domain);
+    if(!inner)continue;
+    for(const k of drawn)used.add(k+"_"+branch);
+    out+=`<div class="fc-branch"><div class="fc-branch-label">${esc(label)}</div>${inner}</div>`;
+  }
+  if(!out)return "";
+  const condition=fcConditionText(data);
+  const banner=condition
+    ?`<div class="fc-condition"><div class="fc-section-label">condition</div><div class="fc-condition-text">${esc(condition)}</div></div>`
+    :"";
+  /* Only suppress the input column when the banner is what's showing it. */
+  if(condition&&!forecastMeta.condition&&forecastMeta.conditionField){
+    used.add(forecastMeta.conditionField);
+  }
+  return banner+out;
+}
+
 function fcBuildCard(row,idx,isSolo,isExpanded){
   const data=row.display||row;
   const status=data._status||"";
@@ -861,73 +1182,25 @@ function fcBuildCard(row,idx,isSolo,isExpanded){
 
   let body="";
   let displayedFieldKeys=new Set(["rationale","units"]);
+  const full=isExpanded||isSolo;
 
   if(isFailed){
     const err=data._error||"This row failed.";
     body+=`<p class="fc-error" style="color:var(--seg-fail);font-size:11px;margin:0">${esc(err)}</p>`;
-  }else if(forecastMeta.forecastType==="binary"){
-    const probRaw=data.probability;
-    const prob=typeof probRaw==="number"?probRaw:Number(probRaw);
-    if(!isNaN(prob)){
-      const pct=Math.max(0,Math.min(100,prob));
-      body+=`<div class="fc-prob"><span class="fc-prob-value">${esc(Math.round(pct))}%</span><span class="fc-prob-label">probability</span></div>`;
-      body+=`<div class="fc-prob-bar"><div class="fc-prob-bar-marker" style="left:${pct}%"></div></div>`;
-      displayedFieldKeys.add("probability");
-    }
-  }else if(forecastMeta.forecastType==="numeric"&&forecastMeta.outputField){
-    const p=fcExtractPctl(data,forecastMeta.outputField);
-    if(p){
-      body+=`<div class="fc-pctl-bar">`;
-      body+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median">${esc(fcNum(p.p50))}</span>`;
-      if(forecastMeta.units)body+=`<span class="fc-pctl-units">${esc(forecastMeta.units)}</span>`;
-      body+=`</div>`;
-      body+=fcRenderPctlSVG(p,forecastMeta.units,!isExpanded&&!isSolo);
-      if(isExpanded||isSolo){
-        body+=`<div class="fc-pctl-grid">`;
-        for(const k of FC_PERCENTILES){
-          const isMed=k===50;
-          body+=`<div class="fc-pctl-cell"><div class="fc-pctl-cell-label">p${k}</div><div class="fc-pctl-cell-val${isMed?" median":""}">${esc(fcNum(p["p"+k]))}</div></div>`;
-        }
-        body+=`</div>`;
-      }
-      body+=`</div>`;
-      for(const k of FC_PERCENTILES)displayedFieldKeys.add(forecastMeta.outputField+"_p"+k);
-    }
-  }else if(forecastMeta.forecastType==="date"&&forecastMeta.outputField){
-    const dp=fcExtractDatePctl(data,forecastMeta.outputField);
-    if(dp){
-      const gran=fcPickDateGran([dp.p10,dp.p25,dp.p50,dp.p75,dp.p90]);
-      const isNever=fcIsNever(dp.p50);
-      body+=`<div class="fc-pctl-bar">`;
-      body+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median"${isNever?' style="color:var(--text-dim)"':''}>${esc(fcFmtDate(dp.p50,false,gran))}</span></div>`;
-      body+=fcRenderDatePctlSVG(dp,!isExpanded&&!isSolo);
-      if(isExpanded||isSolo){
-        body+=`<div class="fc-pctl-grid">`;
-        for(const k of FC_PERCENTILES){
-          const isMed=k===50;
-          const label=isMed?"median":(k+"% by");
-          body+=`<div class="fc-pctl-cell"><div class="fc-pctl-cell-label">${esc(label)}</div><div class="fc-pctl-cell-val${isMed?" median":""}">${esc(fcFmtDate(dp["p"+k],true,gran))}</div></div>`;
-        }
-        body+=`</div>`;
-      }
-      body+=`</div>`;
-      for(const k of FC_PERCENTILES)displayedFieldKeys.add(forecastMeta.outputField+"_p"+k);
-    }
+  }else if(forecastMeta.isConditional){
+    body+=fcRenderBranches(data,full,displayedFieldKeys);
+  }else{
+    body+=fcRenderOutcome(data,full,displayedFieldKeys);
   }
 
-  /* Rationale — same fc-field-row style as resolution_criteria/units/etc.
-     so the "rationale:" key sits inline with the text and the font matches.
-     Clamped in compact, full in expanded/solo. */
   const rationale=typeof data.rationale==="string"?data.rationale:"";
   if(rationale){
-    const text=(isExpanded||isSolo)?rationale:fcFirstSection(rationale);
-    body+=`<div class="fc-field-row${(isExpanded||isSolo)?"":" clamped"}"><span class="fc-field-key">rationale:</span>${fcLinkifyRationale(text)}</div>`;
+    const text=full?rationale:fcFirstSection(rationale);
+    body+=`<div class="fc-field-row${full?"":" clamped"}"><span class="fc-field-key">rationale:</span>${fcLinkifyRationale(text)}</div>`;
   }
 
-  /* In expanded/solo, show any other scalar output fields the user
-     defined in their response_schema (binary forecasts often just have
-     probability + rationale, but custom schemas may add more). */
-  if(isExpanded||isSolo){
+  /* Any other scalar output field the row carries. */
+  if(full){
     const extras=[];
     const skip=new Set(["_status","_error","_row_index","_completed_at","_source_bank","_expand_index","research","provenance_and_notes"]);
     for(const[k,v]of Object.entries(data)){
@@ -946,7 +1219,7 @@ function fcBuildCard(row,idx,isSolo,isExpanded){
   }
 
   /* Sources */
-  const maxSources=(isExpanded||isSolo)?20:5;
+  const maxSources=full?20:5;
   if(sources.length){
     body+=`<div class="fc-sources">`;
     for(const s of sources.slice(0,maxSources)){
@@ -1031,12 +1304,16 @@ function enterProgressMode(d){
   if(!currentTaskId&&d.progress_url){const m=d.progress_url.match(/progress\\/([0-9a-f-]+)/);if(m)currentTaskId=m[1];}
   if(d.poll_token)pollToken=d.poll_token;
   if(d.download_url)downloadUrl=d.download_url;
-  /* Forecast operations get a card grid instead of the table.
-     forecast_type drives bar selection (binary→prob bar, numeric→percentile
-     SVG, date→date percentile SVG). output_field/units are needed by the
-     numeric/date variants. */
+  /* Forecast operations get a card grid instead of the table. */
   if(d.task_type==="forecast"&&d.forecast_type){
-    forecastMeta={forecastType:d.forecast_type,outputField:d.output_field||null,units:d.units||null};
+    forecastMeta={
+      forecastType:d.forecast_type,
+      outputField:d.output_field||null,
+      units:d.units||null,
+      isConditional:!!d.is_conditional,
+      condition:d.condition||null,
+      conditionField:d.condition_field||null,
+    };
   }
   renderProgress(d);
 }
@@ -1809,8 +2086,6 @@ button:hover{background:#3f41a3}
 }
 """
 
-# Brand marks copied from the app's login buttons (OAuthProviderButton.tsx)
-# so both login pages look the same.
 _GOOGLE_SVG = """<svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)"><path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/><path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/><path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/><path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/></g></svg>"""
 
 _GITHUB_SVG = """<svg width="18" height="18" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/></svg>"""
