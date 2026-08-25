@@ -25,7 +25,11 @@ resources:
 
 env:
   MCP_SERVER_URL: "https://mcp.futuresearch.ai"
-  FUTURESEARCH_API_URL: "https://futuresearch.ai/api/v0"
+  # Engine calls stay on the cluster network rather than round-tripping
+  # through the public hostname and the edge. NOTE: if networkPolicy.enabled
+  # is ever flipped on, its egress rules must allow the cohort namespace on
+  # 8000 — the current 443-only external rule does not cover this.
+  FUTURESEARCH_API_URL: "http://cohort-engine.cohort.svc.cluster.local:8000/api/v0"
   # Rate limiter OFF (2026-08-03, launch day).
   #
   # RateLimitMiddleware keys on `get_client_ip()`, which falls back to the

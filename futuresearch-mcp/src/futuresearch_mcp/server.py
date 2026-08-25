@@ -158,12 +158,11 @@ def _event_mentions_transient(event) -> bool:
 def _sentry_before_send(event, hint):
     """Classify expected fs-mcp errors so the Sentry alert rule can rate-gate.
 
-    Default-to-page (see cohort-engine's ``_sentry_before_send`` and
-    ``docs/error-taxonomy.md``): we NEVER drop an event and touch only the
-    categories we've explicitly recognised as expected. Everything else passes
-    through untouched and keeps paging, so a real bug still fires. The actual
-    page-vs-rate routing is a Sentry UI alert-rule change keyed on the level/tag,
-    NOT here.
+    Default-to-page: we NEVER drop an event and touch only the categories
+    we've explicitly recognised as expected. Everything else passes through
+    untouched and keeps paging, so a real bug still fires. The actual
+    page-vs-rate routing is a Sentry UI alert-rule change keyed on the
+    level/tag, NOT here.
 
     Recognised cases:
 

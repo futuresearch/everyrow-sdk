@@ -6,7 +6,7 @@
 replicaCount: 2
 
 env:
-  FUTURESEARCH_API_URL: "https://engine-staging.futuresearch.ai/api/v0"
+  FUTURESEARCH_API_URL: "http://cohort-staging-engine.cohort-staging.svc.cluster.local:8000/api/v0"
   MCP_SERVER_URL: "https://mcp-staging.futuresearch.ai"
   SUPABASE_URL: "https://jmraczchpxwbrnngyjuf.supabase.co"
   # Was DB 14 on old redis (a DB shared with other apps, e.g. litellm).

@@ -51,10 +51,9 @@ class OpenAIAgentHarness(_BaseAgentHarness):
     """OpenAI Agents SDK harness.
 
     Costs roughly 2-3x more per row than the native ReAct loop at the same
-    model and effort. For gpt-5.5 high, prefer a plain agent map with
-    llm=GPT_5_5_HIGH unless you specifically need this harness. See
-    docs/cost-analysis/2026-07-sdk-agent-spend/case-07-openai-sdk-cost-pathology.md
-    in the delphos repo.
+    model and effort (measured July 2026). For gpt-5.5 high, prefer a plain
+    agent map with llm=GPT_5_5_HIGH unless you specifically need this
+    harness.
     """
 
     type: Literal["openai_agents_sdk"] = "openai_agents_sdk"
