@@ -155,7 +155,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ):
@@ -189,7 +189,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ):
@@ -220,7 +220,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ):
@@ -247,7 +247,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             side_effect=RuntimeError("API down"),
         ):
@@ -275,7 +275,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             side_effect=FuturesearchClientError("JWT has expired", status_code=401),
         ):
@@ -335,7 +335,7 @@ class TestApiProgress:
 
         status_resp = _make_status_response(status="running")
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ) as mock_status:
@@ -361,7 +361,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=_make_status_response(status="running"),
         ) as mock_status:
@@ -387,7 +387,7 @@ class TestApiProgress:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=_make_status_response(status="running"),
         ) as mock_status:

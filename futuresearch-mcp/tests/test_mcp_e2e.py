@@ -176,6 +176,8 @@ class TestMcpProtocol:
                     "futuresearch_results",
                     "futuresearch_status",
                     "futuresearch_task_cost",
+                    "futuresearch_task_data",
+                    "futuresearch_task_download",
                     "futuresearch_upload_data",
                     "futuresearch_use_list",
                 ]

@@ -33,7 +33,7 @@ from futuresearch.ops import (
     merge_async,
 )
 from futuresearch.session import list_sessions
-from futuresearch.task import EffortLevel, cancel_task, get_task_cost
+from futuresearch.task import EffortLevel, cancel_task, get_task_cost, get_task_detail
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from futuresearch_mcp import redis_store
@@ -56,16 +56,21 @@ from futuresearch_mcp.models import (
     RankInput,
     StdioResultsInput,
     TaskCostInput,
+    TaskDataInput,
+    TaskDownloadInput,
     UploadDataInput,
     UseListInput,
 )
+from futuresearch_mcp.progress import build_progress_payload
 from futuresearch_mcp.request_context import get_conversation_id
 from futuresearch_mcp.result_store import (
     _build_result_response,
     _get_csv_url,
+    _sanitize_records,
     clamp_page_to_budget,
 )
 from futuresearch_mcp.tool_helpers import (
+    TERMINAL_STATUSES,
     FuturesearchContext,
     TaskNotReady,
     TaskState,
@@ -73,6 +78,7 @@ from futuresearch_mcp.tool_helpers import (
     _fetch_task_result,
     _get_client,
     _record_task_ownership,
+    _refresh_task_ownership,
     create_linked_session,
     create_tool_response,
     dedupe_summaries,
@@ -1390,11 +1396,11 @@ async def futuresearch_status(
 ) -> CallToolResult:
     """Check task status and display a live progress widget.
 
-    Returns a progress widget that auto-updates via REST polling.
-    The widget handles both progress tracking and result display.
-    After calling this once, do NOT call futuresearch_progress — the
-    widget polls automatically. Only call futuresearch_results if the
-    user explicitly asks to see or discuss the results in the chat.
+    Returns a progress widget that keeps itself up to date and shows the
+    results once the task finishes. After calling this once, do NOT call
+    futuresearch_progress — the widget refreshes itself. Only call
+    futuresearch_results if the user explicitly asks to see or discuss the
+    results in the chat.
     """
     logger.debug("futuresearch_status: task_id=%s", params.task_id)
     task_id = params.task_id
@@ -1428,17 +1434,21 @@ async def futuresearch_status(
     # Always return widget data — even for completed tasks — so the widget
     # can initialize and auto-fetch results.
     mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
-    poll_token = await redis_store.get_poll_token(task_id)
+    # Re-establish what a widget needs to reach this task. The records expire a
+    # day after submission, so without this an older task gets no widget at all
+    # — which is the one case someone is most likely to be asking about.
+    poll_token = await _refresh_task_ownership(task_id, client.token)
 
     if not poll_token or not mcp_server_url:
-        # Fallback: no widget possible, tell Claude to fetch results manually
+        # The caller can read this task but it is recorded against somebody
+        # else, so they get the state without a widget onto it.
         if ts.is_terminal:
             return CallToolResult(
                 content=[TextContent(type="text", text=ts.progress_message(task_id))],
             )
         return _error_result(
-            f"Live progress unavailable for task {task_id} (session may have expired). "
-            "Try calling futuresearch_status again."
+            f"Live progress unavailable for task {task_id}. Report its state to "
+            "the user from the counts above; the widget cannot be shown."
         )
 
     widget_data: dict[str, Any] = {
@@ -1484,6 +1494,121 @@ async def futuresearch_status(
     return CallToolResult(
         content=[TextContent(type="text", text=text)],
         structuredContent=widget_data,
+    )
+
+
+@mcp.tool(
+    name="futuresearch_task_data",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Task Data (widget)",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+    meta={"ui": {"visibility": ["app"]}},
+)
+async def futuresearch_task_data(
+    params: TaskDataInput,
+    ctx: FuturesearchContext,
+) -> CallToolResult:
+    """Widget-only. Not for use by an agent.
+
+    The session widget calls this itself to refresh what it displays. Use
+    futuresearch_status to show a user a task, or futuresearch_results to load
+    row data into the conversation.
+    """
+    task_id = params.task_id
+    logger.debug("futuresearch_task_data: task_id=%s", task_id)
+    client = await _get_client(ctx)
+
+    try:
+        payload = await build_progress_payload(client, task_id, params.cursor)
+    except FuturesearchError as e:
+        logger.warning(f"Failed to read task {task_id}: {e!r}")
+        return _error_result(format_sdk_error(e, doing=f"reading task {task_id}"))
+
+    # The task details never change, so they only need fetching for a widget
+    # that isn't already following along.
+    if not params.cursor:
+        try:
+            detail = await get_task_detail(UUID(task_id), client)
+        except FuturesearchError as e:
+            logger.warning(f"Failed to read task {task_id} detail: {e!r}")
+            return _error_result(format_sdk_error(e, doing=f"reading task {task_id}"))
+        payload["task_type"] = detail.task_type.value
+        if spec := detail.spec:
+            payload["spec"] = spec.to_dict()
+
+    if payload.get("status") in TERMINAL_STATUSES:
+        try:
+            rows, _total, _session_id, _artifact_id = await _fetch_task_result(
+                client, task_id
+            )
+        except FuturesearchError as e:
+            logger.warning(f"Failed to read task {task_id} results: {e!r}")
+            return _error_result(
+                format_sdk_error(e, doing=f"reading results for task {task_id}")
+            )
+        payload["results"] = _sanitize_records(rows)
+        logger.info(
+            "futuresearch_task_data: task_id=%s sent %d result rows", task_id, len(rows)
+        )
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Sent to the widget for {task_id}.")],
+        structuredContent=payload,
+    )
+
+
+@mcp.tool(
+    name="futuresearch_task_download",
+    structured_output=False,
+    annotations=ToolAnnotations(
+        title="Task Download Link (widget)",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    ),
+    meta={"ui": {"visibility": ["app"]}},
+)
+async def futuresearch_task_download(
+    params: TaskDownloadInput,
+    ctx: FuturesearchContext,
+) -> CallToolResult:
+    """Widget-only. Not for use by an agent.
+
+    The session widget calls this to get a link it can open when someone asks
+    to download a task's results. Use futuresearch_results to load row data
+    into the conversation instead.
+    """
+    task_id = params.task_id
+    logger.debug("futuresearch_task_download: task_id=%s", task_id)
+    client = await _get_client(ctx)
+    try:
+        await _call_and_check(
+            get_task_status_tasks_task_id_status_get.asyncio_detailed(
+                task_id=UUID(task_id),
+                client=client,
+            )
+        )
+    except FuturesearchError as e:
+        logger.warning(f"Failed to read task {task_id}: {e!r}")
+        return _error_result(format_sdk_error(e, doing=f"reading task {task_id}"))
+
+    poll_token = await _refresh_task_ownership(task_id, client.token)
+    if poll_token is None:
+        return _error_result(f"Task {task_id} belongs to a different account.")
+
+    mcp_server_url = ctx.request_context.lifespan_context.mcp_server_url
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Download link ready for {task_id}.")],
+        structuredContent={
+            "download_url": f"{mcp_server_url}/api/results/{task_id}/download",
+            "poll_token": poll_token,
+        },
     )
 
 
@@ -1596,9 +1721,7 @@ async def futuresearch_results_http(
         preview_records=rows,
         page_size=params.page_size,
     )
-
-    # Build download URL with poll token for authentication
-    poll_token = await redis_store.get_poll_token(task_id)
+    poll_token = await _refresh_task_ownership(task_id, client.token)
     csv_url = _get_csv_url(task_id, mcp_server_url)
     if poll_token:
         csv_url += f"?token={poll_token}"

@@ -14,6 +14,7 @@ from futuresearch.errors import FuturesearchError, _call_and_check
 from futuresearch.generated.api.tasks import (
     cancel_task_tasks_task_id_cancel_post,
     get_task_cost_tasks_task_id_cost_get,
+    get_task_detail_tasks_task_id_get,
     get_task_result_tasks_task_id_result_get,
     get_task_status_tasks_task_id_status_get,
 )
@@ -21,6 +22,7 @@ from futuresearch.generated.client import AuthenticatedClient
 from futuresearch.generated.models import (
     LLMEnumPublic,
     TaskCostResponse,
+    TaskDetailResponse,
     TaskProgressInfo,
     TaskResultResponse,
     TaskResultResponseDataType1,
@@ -223,6 +225,28 @@ async def get_task_status(
 ) -> TaskStatusResponse:
     return await _call_and_check(
         get_task_status_tasks_task_id_status_get.asyncio_detailed(
+            task_id=task_id, client=client
+        )
+    )
+
+
+async def get_task_detail(
+    task_id: UUID, client: AuthenticatedClient
+) -> TaskDetailResponse:
+    """Get the parameters a task was submitted with.
+
+    These are fixed for the task's life; for status and progress, which change
+    as it runs, use :func:`get_task_status`.
+
+    Args:
+        task_id: The UUID of the task.
+        client: An authenticated client.
+
+    Raises:
+        FuturesearchError: If the task is not found or another error occurs.
+    """
+    return await _call_and_check(
+        get_task_detail_tasks_task_id_get.asyncio_detailed(
             task_id=task_id, client=client
         )
     )

@@ -218,6 +218,39 @@ class TestProgressMessageArtifactId:
         assert "Output artifact_id" not in msg
 
 
+class TestTerminalWithoutAnError:
+    def _state(self, status, completed):
+        p = MagicMock()
+        p.completed = completed
+        p.failed = 10 - completed
+        p.running = 0
+        p.total = 10
+        return TaskState(_make_status_response(status=status, error=None, progress=p))
+
+    def test_revoked_names_the_status_and_the_counts(self):
+        msg = self._state(TaskStatus.REVOKED, 6).progress_message("task-rv")
+
+        assert "revoked" in msg
+        assert "6/10 rows completed successfully" in msg
+
+    def test_revoked_points_at_the_rows_that_survived(self):
+        with override_settings(transport="streamable-http"):
+            msg = self._state(TaskStatus.REVOKED, 6).progress_message("task-rv")
+
+        assert "futuresearch_results(task_id='task-rv'" in msg
+
+    def test_nothing_completed_says_so_without_inventing_an_error(self):
+        msg = self._state(TaskStatus.FAILED, 0).progress_message("task-none")
+
+        assert "No rows completed successfully" in msg
+        assert "Report the error" not in msg
+
+    def test_does_not_claim_an_error_it_was_not_given(self):
+        msg = self._state(TaskStatus.REVOKED, 6).progress_message("task-rv")
+
+        assert "None" not in msg
+
+
 class TestFormatSummaryLines:
     def test_deduplicates_identical_summaries(self):
         summaries = [

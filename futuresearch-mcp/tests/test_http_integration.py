@@ -165,7 +165,7 @@ class TestProgressEndpoint:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ):
@@ -196,7 +196,7 @@ class TestProgressEndpoint:
         )
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=status_resp,
         ):
@@ -219,7 +219,7 @@ class TestProgressEndpoint:
         await redis_store.store_task_token(task_id, "api-key")
 
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             side_effect=RuntimeError("upstream timeout"),
         ):
@@ -251,7 +251,7 @@ class TestProgressLifecycle:
         # 2. Poll progress — task is running
         running_resp = _make_status_response(status="running", completed=1, total=3)
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=running_resp,
         ):
@@ -268,7 +268,7 @@ class TestProgressLifecycle:
             status="completed", completed=3, total=3, running=0
         )
         with patch(
-            "futuresearch_mcp.routes.get_task_status_tasks_task_id_status_get.asyncio_detailed",
+            "futuresearch_mcp.progress.get_task_status_tasks_task_id_status_get.asyncio_detailed",
             new_callable=AsyncMock,
             return_value=completed_resp,
         ):

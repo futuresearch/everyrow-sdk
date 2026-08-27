@@ -9,21 +9,15 @@ import secrets
 from uuid import UUID
 
 import pandas as pd
-from futuresearch.errors import FuturesearchError, _call_and_check
-from futuresearch.generated.api.tasks import get_task_status_tasks_task_id_status_get
-from futuresearch.generated.client import AuthenticatedClient
+from futuresearch.errors import FuturesearchError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from futuresearch_mcp import redis_store
 from futuresearch_mcp.engine_client import NO_ACCOUNT_SELECTED, build_engine_client
+from futuresearch_mcp.progress import build_progress_payload
 from futuresearch_mcp.result_store import _sanitize_records
-from futuresearch_mcp.tool_helpers import (
-    _UI_EXCLUDE,
-    TaskState,
-    _fetch_task_result,
-    dedupe_summaries,
-)
+from futuresearch_mcp.tool_helpers import _fetch_task_result
 
 logger = logging.getLogger(__name__)
 
@@ -99,153 +93,6 @@ async def _validate_poll_token(task_id: str, request: Request) -> JSONResponse |
     return None
 
 
-async def _fetch_summaries_rest(
-    client: AuthenticatedClient, task_id: str, cursor: str | None
-) -> tuple[list[dict] | None, str | None]:
-    """Fetch agent summaries from the Engine API for the REST progress endpoint."""
-    try:
-        params: dict[str, str] = {}
-        if cursor:
-            params["cursor"] = cursor
-        httpx_client = client.get_async_httpx_client()
-        resp = await httpx_client.request(
-            method="get",
-            url=f"/tasks/{task_id}/summaries",
-            params=params,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            raw = data.get("summaries") or None
-            if raw:
-                raw = dedupe_summaries(raw)
-            return raw, data.get("cursor") or cursor
-    except Exception:
-        logger.debug("Failed to fetch summaries for task %s via REST", task_id)
-    return None, cursor
-
-
-async def _fetch_timeline_rest(
-    client: AuthenticatedClient, task_id: str
-) -> list[dict] | None:
-    """Fetch stored aggregate timeline from the Engine API.
-
-    Returns a list of timeline entries (each with aggregate + micro_summaries),
-    or None if the endpoint is unavailable or returns no data.
-    """
-    try:
-        httpx_client = client.get_async_httpx_client()
-        resp = await httpx_client.request(
-            method="get",
-            url=f"/tasks/{task_id}/summaries/timeline",
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            timeline = data.get("timeline")
-            if timeline:
-                # Dedupe micro-summaries within each entry
-                for entry in timeline:
-                    micros = entry.get("micro_summaries")
-                    if micros:
-                        entry["micro_summaries"] = dedupe_summaries(micros)
-                return timeline
-    except Exception:
-        logger.debug("Failed to fetch timeline for task %s via REST", task_id)
-    return None
-
-
-async def _fetch_aggregate_rest(
-    client: AuthenticatedClient, task_id: str, cursor: str | None
-) -> tuple[str | None, list[dict] | None, str | None]:
-    """Fetch aggregate + micro-summaries from the Engine API.
-
-    Returns (aggregate_text, micro_summaries, updated_cursor).
-    Falls back to plain summaries when the aggregate endpoint is unavailable.
-    """
-    try:
-        params: dict[str, str] = {}
-        if cursor:
-            params["cursor"] = cursor
-        httpx_client = client.get_async_httpx_client()
-        resp = await httpx_client.request(
-            method="get",
-            url=f"/tasks/{task_id}/summaries/aggregate",
-            params=params,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            micros = data.get("micro_summaries") or None
-            if micros:
-                micros = dedupe_summaries(micros)
-            return (
-                data.get("aggregate") or None,
-                micros,
-                data.get("cursor") or cursor,
-            )
-    except Exception:
-        pass
-
-    # Fallback: plain summaries without aggregate
-    summaries, new_cursor = await _fetch_summaries_rest(client, task_id, cursor)
-    return None, summaries, new_cursor
-
-
-async def _backfill_timeline(
-    client: AuthenticatedClient, task_id: str, payload: dict
-) -> None:
-    """Populate payload with stored timeline + tail aggregate for re-mount.
-
-    Fetches the stored aggregate timeline (no LLM call), then fills any gap
-    with one aggregate call for micro-summaries that arrived after the last
-    stored aggregate.
-    """
-    timeline = await _fetch_timeline_rest(client, task_id)
-    if timeline:
-        payload["timeline"] = timeline
-        # Find the latest micro-summary timestamp to fill the gap
-        last_cursor = max(
-            (
-                ms.get("updated_at", "")
-                for entry in timeline
-                for ms in entry.get("micro_summaries", [])
-            ),
-            default=None,
-        )
-        if last_cursor:
-            aggregate, summaries, new_cursor = await _fetch_aggregate_rest(
-                client, task_id, last_cursor
-            )
-            if aggregate:
-                payload["aggregate_summary"] = aggregate
-                payload["summaries"] = summaries
-                payload["cursor"] = new_cursor
-    else:
-        # No stored timeline — fall back to generating one aggregate
-        aggregate, summaries, new_cursor = await _fetch_aggregate_rest(
-            client, task_id, None
-        )
-        if aggregate:
-            payload["aggregate_summary"] = aggregate
-        if summaries:
-            payload["summaries"] = summaries
-        if new_cursor:
-            payload["cursor"] = new_cursor
-
-
-async def _apply_live_aggregate(
-    client: AuthenticatedClient, task_id: str, payload: dict, cursor: str | None
-) -> None:
-    """Merge the current aggregate + micro-summaries into a progress payload."""
-    aggregate, summaries, new_cursor = await _fetch_aggregate_rest(
-        client, task_id, cursor
-    )
-    if aggregate:
-        payload["aggregate_summary"] = aggregate
-    if summaries:
-        payload["summaries"] = summaries
-    if new_cursor:
-        payload["cursor"] = new_cursor
-
-
 def _progress_failure(
     exc: FuturesearchError, task_id: str, cors: dict[str, str]
 ) -> JSONResponse:
@@ -308,40 +155,9 @@ async def api_progress(request: Request) -> Response:  # noqa: PLR0911
             account_id=await redis_store.get_task_account(task_id)
             or NO_ACCOUNT_SELECTED,
         )
-        status_response = await _call_and_check(
-            get_task_status_tasks_task_id_status_get.asyncio_detailed(
-                task_id=UUID(task_id),
-                client=client,
-            )
+        payload = await build_progress_payload(
+            client, task_id, request.query_params.get("cursor")
         )
-
-        ts = TaskState(status_response)
-
-        if ts.is_terminal:
-            # Don't pop the token immediately — the widget's autoFetchResults
-            # needs it to call /download-token after task completion.
-            # The token will expire naturally via Redis TTL.
-            pass
-
-        payload = ts.model_dump(mode="json", exclude=_UI_EXCLUDE)
-
-        cursor = request.query_params.get("cursor")
-        # First call (no cursor) = widget just mounted — include stored
-        # timeline so the activity tab can replay prior history, regardless
-        # of whether the task is still running or already terminal.
-        if not cursor:
-            await _backfill_timeline(client, task_id, payload)
-
-        # Fetch live aggregate + micro-summaries for:
-        # - incremental polling (has cursor)
-        # - non-terminal first-call (alongside timeline)
-        # Skip for terminal first-call — _backfill_timeline already
-        # fetched the tail aggregate covering any gap.
-        if not ts.is_terminal:
-            await _apply_live_aggregate(
-                client, task_id, payload, cursor or payload.get("cursor")
-            )
-
         return JSONResponse(payload, headers=cors)
     except FuturesearchError as exc:
         return _progress_failure(exc, task_id, cors)

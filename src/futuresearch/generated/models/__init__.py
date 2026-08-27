@@ -20,9 +20,11 @@ from .claude_agent_harness import ClaudeAgentHarness
 from .claude_agent_harness_effort import ClaudeAgentHarnessEffort
 from .claude_sdk_forecaster_slot import ClaudeSdkForecasterSlot
 from .claude_sdk_forecaster_slot_effort import ClaudeSdkForecasterSlotEffort
+from .conditional_framing import ConditionalFraming
 from .consistency_footprint import ConsistencyFootprint
 from .create_artifact_response import CreateArtifactResponse
 from .create_session import CreateSession
+from .decision_framing import DecisionFraming
 from .dedupe_operation import DedupeOperation
 from .dedupe_operation_input_type_1_item import DedupeOperationInputType1Item
 from .dedupe_operation_input_type_2 import DedupeOperationInputType2
@@ -34,6 +36,8 @@ from .forecast_operation import ForecastOperation
 from .forecast_operation_forecast_type import ForecastOperationForecastType
 from .forecast_operation_input_type_1_item import ForecastOperationInputType1Item
 from .forecast_operation_input_type_2 import ForecastOperationInputType2
+from .forecast_spec import ForecastSpec
+from .forecast_spec_forecast_type import ForecastSpecForecastType
 from .forecast_task_config import ForecastTaskConfig
 from .health_response import HealthResponse
 from .http_validation_error import HTTPValidationError
@@ -85,6 +89,7 @@ from .subscription_info import SubscriptionInfo
 from .subscription_status_response import SubscriptionStatusResponse
 from .task_cost_response import TaskCostResponse
 from .task_cost_status import TaskCostStatus
+from .task_detail_response import TaskDetailResponse
 from .task_progress_info import TaskProgressInfo
 from .task_result_response import TaskResultResponse
 from .task_result_response_data_type_0_item import TaskResultResponseDataType0Item
@@ -92,6 +97,7 @@ from .task_result_response_data_type_1 import TaskResultResponseDataType1
 from .task_status import TaskStatus
 from .task_status_response import TaskStatusResponse
 from .task_status_response_forecast_consistency_type_0 import TaskStatusResponseForecastConsistencyType0
+from .unconditional_framing import UnconditionalFraming
 from .update_session import UpdateSession
 from .upload_complete_response import UploadCompleteResponse
 from .upload_data_artifacts_upload_post_files_body import UploadDataArtifactsUploadPostFilesBody
@@ -128,9 +134,11 @@ __all__ = (
     "ClaudeAgentHarnessEffort",
     "ClaudeSdkForecasterSlot",
     "ClaudeSdkForecasterSlotEffort",
+    "ConditionalFraming",
     "ConsistencyFootprint",
     "CreateArtifactResponse",
     "CreateSession",
+    "DecisionFraming",
     "DedupeOperation",
     "DedupeOperationInputType1Item",
     "DedupeOperationInputType2",
@@ -142,6 +150,8 @@ __all__ = (
     "ForecastOperationForecastType",
     "ForecastOperationInputType1Item",
     "ForecastOperationInputType2",
+    "ForecastSpec",
+    "ForecastSpecForecastType",
     "ForecastTaskConfig",
     "HealthResponse",
     "HTTPValidationError",
@@ -193,6 +203,7 @@ __all__ = (
     "SubscriptionStatusResponse",
     "TaskCostResponse",
     "TaskCostStatus",
+    "TaskDetailResponse",
     "TaskProgressInfo",
     "TaskResultResponse",
     "TaskResultResponseDataType0Item",
@@ -200,6 +211,7 @@ __all__ = (
     "TaskStatus",
     "TaskStatusResponse",
     "TaskStatusResponseForecastConsistencyType0",
+    "UnconditionalFraming",
     "UpdateSession",
     "UploadCompleteResponse",
     "UploadDataArtifactsUploadPostFilesBody",

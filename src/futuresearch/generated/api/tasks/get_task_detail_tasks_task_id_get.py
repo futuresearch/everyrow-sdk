@@ -9,7 +9,7 @@ from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.error_response import ErrorResponse
 from ...models.http_validation_error import HTTPValidationError
-from ...models.task_status_response import TaskStatusResponse
+from ...models.task_detail_response import TaskDetailResponse
 from ...types import Response
 
 
@@ -18,7 +18,7 @@ def _get_kwargs(
 ) -> dict[str, Any]:
     _kwargs: dict[str, Any] = {
         "method": "get",
-        "url": "/tasks/{task_id}/status".format(
+        "url": "/tasks/{task_id}".format(
             task_id=quote(str(task_id), safe=""),
         ),
     }
@@ -28,9 +28,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
+) -> ErrorResponse | HTTPValidationError | TaskDetailResponse | None:
     if response.status_code == 200:
-        response_200 = TaskStatusResponse.from_dict(response.json())
+        response_200 = TaskDetailResponse.from_dict(response.json())
 
         return response_200
 
@@ -52,7 +52,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
+) -> Response[ErrorResponse | HTTPValidationError | TaskDetailResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -65,10 +65,10 @@ def sync_detailed(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
-) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
-    """Get task status
+) -> Response[ErrorResponse | HTTPValidationError | TaskDetailResponse]:
+    """Get task details
 
-     Get the status and metadata of a task by its ID.
+     Get the paramters a task was submitted with.
 
     Args:
         task_id (UUID):
@@ -78,7 +78,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]
+        Response[ErrorResponse | HTTPValidationError | TaskDetailResponse]
     """
 
     kwargs = _get_kwargs(
@@ -96,10 +96,10 @@ def sync(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
-) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
-    """Get task status
+) -> ErrorResponse | HTTPValidationError | TaskDetailResponse | None:
+    """Get task details
 
-     Get the status and metadata of a task by its ID.
+     Get the paramters a task was submitted with.
 
     Args:
         task_id (UUID):
@@ -109,7 +109,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | HTTPValidationError | TaskStatusResponse
+        ErrorResponse | HTTPValidationError | TaskDetailResponse
     """
 
     return sync_detailed(
@@ -122,10 +122,10 @@ async def asyncio_detailed(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
-) -> Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]:
-    """Get task status
+) -> Response[ErrorResponse | HTTPValidationError | TaskDetailResponse]:
+    """Get task details
 
-     Get the status and metadata of a task by its ID.
+     Get the paramters a task was submitted with.
 
     Args:
         task_id (UUID):
@@ -135,7 +135,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ErrorResponse | HTTPValidationError | TaskStatusResponse]
+        Response[ErrorResponse | HTTPValidationError | TaskDetailResponse]
     """
 
     kwargs = _get_kwargs(
@@ -151,10 +151,10 @@ async def asyncio(
     task_id: UUID,
     *,
     client: AuthenticatedClient,
-) -> ErrorResponse | HTTPValidationError | TaskStatusResponse | None:
-    """Get task status
+) -> ErrorResponse | HTTPValidationError | TaskDetailResponse | None:
+    """Get task details
 
-     Get the status and metadata of a task by its ID.
+     Get the paramters a task was submitted with.
 
     Args:
         task_id (UUID):
@@ -164,7 +164,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ErrorResponse | HTTPValidationError | TaskStatusResponse
+        ErrorResponse | HTTPValidationError | TaskDetailResponse
     """
 
     return (

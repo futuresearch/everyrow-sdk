@@ -73,6 +73,14 @@
       "description": "Check task status and display a live progress widget."
     },
     {
+      "name": "futuresearch_task_data",
+      "description": "Widget-only. Not for use by an agent."
+    },
+    {
+      "name": "futuresearch_task_download",
+      "description": "Widget-only. Not for use by an agent."
+    },
+    {
       "name": "futuresearch_results",
       "description": "Retrieve results from a completed futuresearch task and save them to a CSV."
     },

@@ -201,7 +201,7 @@ class TestMcpHttpBasics:
     """Smoke tests for the HTTP transport layer."""
 
     async def test_health_endpoint(self, http_client: httpx.AsyncClient):
-        """GET /health returns {"status": "ok"}."""
+        """GET /health returns 200 OK."""
         r = await http_client.get("/health")
         assert r.status_code == 200
         assert r.json() == {"status": "ok"}
@@ -344,9 +344,9 @@ class TestAgentHttpTransport:
         # ── 6. REST progress endpoint still works ──────────────────
         progress_url = widget["progress_url"]
         progress_resp = await http_client.get(progress_url)
-        # After completion, the task token is popped so progress may return
-        # 403/404. The key point is the endpoint responds and the poll token
-        # was valid during the task lifecycle.
+        # Progress may return 403/404 depending on what the task's records
+        # still hold. The key point is the endpoint responds and the poll
+        # token was valid during the task lifecycle.
         assert progress_resp.status_code in (200, 403, 404), (
             f"Progress endpoint unexpected status: {progress_resp.status_code}"
         )

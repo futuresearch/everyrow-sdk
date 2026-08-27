@@ -704,6 +704,38 @@ class ProgressInput(BaseModel):
         return _validate_task_id(v)
 
 
+class TaskDownloadInput(BaseModel):
+    """Input for the widget's request for a link to a task's results."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task_id: str = Field(..., description="The task ID returned by the operation tool.")
+
+    @field_validator("task_id")
+    @classmethod
+    def validate_task_id(cls, v: str) -> str:
+        return _validate_task_id(v)
+
+
+class TaskDataInput(BaseModel):
+    """Input for the widget's own view of a task."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    task_id: str = Field(..., description="The task ID returned by the operation tool.")
+    cursor: str | None = Field(
+        ...,
+        description="Cursor from the previous call, to receive only the "
+        "summaries since it. Null asks for everything a widget showing this "
+        "task for the first time needs.",
+    )
+
+    @field_validator("task_id")
+    @classmethod
+    def validate_task_id(cls, v: str) -> str:
+        return _validate_task_id(v)
+
+
 class CancelInput(BaseModel):
     """Input for cancelling a running task."""
 

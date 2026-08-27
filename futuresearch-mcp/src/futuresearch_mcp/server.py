@@ -224,10 +224,12 @@ def main():
     settings.transport = transport.value
     mcp._mcp_server.instructions = get_instructions(is_http=input_args.http)
 
-    # futuresearch_status is only useful for widget-capable clients (HTTP mode).
-    # Remove it in stdio mode so Claude Code never sees it.
+    # The widget tools are only useful to widget-capable clients (HTTP mode).
+    # Remove them in stdio mode so Claude Code never sees them.
     if transport != Transport.HTTP:
         mcp._tool_manager.remove_tool("futuresearch_status")
+        mcp._tool_manager.remove_tool("futuresearch_task_data")
+        mcp._tool_manager.remove_tool("futuresearch_task_download")
 
     # tools.py registers futuresearch_results_stdio by default.
     # Override with the HTTP variant when running in HTTP mode.

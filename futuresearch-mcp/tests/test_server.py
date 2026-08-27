@@ -592,11 +592,6 @@ class TestResults:
                 "futuresearch_mcp.tools._get_csv_url",
                 return_value="http://test/download",
             ),
-            patch(
-                "futuresearch_mcp.tools.redis_store.get_poll_token",
-                new_callable=AsyncMock,
-                return_value="poll-tok",
-            ),
         ):
             result = await futuresearch_results_http(
                 HttpResultsInput(task_id=task_id), ctx
@@ -632,11 +627,6 @@ class TestResults:
             patch(
                 "futuresearch_mcp.tools._get_csv_url",
                 return_value="http://test/download",
-            ),
-            patch(
-                "futuresearch_mcp.tools.redis_store.get_poll_token",
-                new_callable=AsyncMock,
-                return_value="poll-tok",
             ),
         ):
             result = await futuresearch_results_http(
@@ -1312,6 +1302,60 @@ class TestUploadData:
         assert params.source == url
 
 
+class TestResultsDownloadLink:
+    """The link results come with has to work when it is handed over."""
+
+    @pytest.mark.asyncio
+    async def test_csv_url_carries_a_re_established_token(self):
+        """The records the token comes from expire a day after submission."""
+        task_id = str(uuid4())
+        mock_client = _make_mock_client()
+        ctx = make_test_context(mock_client, mcp_server_url="https://mcp.test")
+        access_token = MagicMock()
+        access_token.client_id = "user-a"
+        access_token.expires_at = 2**31
+
+        with (
+            override_settings(transport="streamable-http"),
+            patch(
+                "futuresearch_mcp.tools._fetch_task_result",
+                new_callable=AsyncMock,
+                return_value=([{"name": "A"}], 1, str(uuid4()), str(uuid4())),
+            ),
+            patch(
+                "futuresearch_mcp.tools.clamp_page_to_budget",
+                return_value=([{"name": "A"}], 1),
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers.get_access_token",
+                MagicMock(return_value=access_token),
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers.redis_store.get_task_owner",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers.redis_store.get_poll_token",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "futuresearch_mcp.tool_helpers._record_task_ownership",
+                new_callable=AsyncMock,
+                return_value="freshly-minted",
+            ) as minted,
+        ):
+            result = await futuresearch_results_http(
+                HttpResultsInput(task_id=task_id), ctx
+            )
+
+        block = result.content[0]
+        assert isinstance(block, TextContent)
+        assert "token=freshly-minted" in block.text
+        minted.assert_awaited_once()
+
+
 class TestResultsInputValidation:
     """Tests for StdioResultsInput and HttpResultsInput."""
 
@@ -1571,11 +1615,6 @@ class TestResultsWidgetData:
             patch(
                 "futuresearch_mcp.tools._get_csv_url",
                 return_value=csv_url,
-            ),
-            patch(
-                "futuresearch_mcp.tools.redis_store.get_poll_token",
-                new_callable=AsyncMock,
-                return_value="poll-tok",
             ),
         ):
             result = await futuresearch_results_http(

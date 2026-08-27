@@ -55,10 +55,9 @@ body{font-family:'JetBrains Mono',ui-monospace,monospace;margin:0;padding:0;colo
 
 /* ── Progress section ── */
 .progress-section{padding:12px 12px 0}
-.bar-bg{width:100%;background:var(--border-light);border-radius:2px;overflow:hidden;height:14px;margin:8px 0;display:flex}
-.seg{height:100%;transition:width .5s ease;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;overflow:hidden;white-space:nowrap}
-.seg-done{background:var(--seg-done)}.seg-run{background:var(--seg-run)}.seg-fail{background:var(--seg-fail)}.seg-pend{background:transparent}
 .prog-info{font-size:12px;color:var(--text-sec);margin:6px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;letter-spacing:0.01em}
+/* --seg-done is a text colour: dark enough to read on the page in light
+   mode, light enough in dark. It is not usable as a banner background. */
 .status-done{color:var(--seg-done);font-weight:500}.status-fail{color:var(--seg-fail);font-weight:500}
 .eta{color:var(--text-dim);font-size:10px}
 .poll-note{font-size:11px;color:var(--text-dim);margin:2px 0 6px;font-style:italic}
@@ -161,10 +160,10 @@ body.fullscreen .resize-handle{display:none}
 .copy-modal-box textarea{width:100%;height:300px;font-family:inherit;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:8px;background:var(--input-bg);color:var(--text);resize:vertical}
 .copy-modal-box .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 .copy-modal-box button{padding:6px 16px;border:1px solid var(--border);border-radius:4px;background:var(--btn-bg);color:var(--btn-text);cursor:pointer;font-size:11px;font-family:inherit}
-.done-banner{position:fixed;top:0;left:0;right:0;background:var(--seg-done);color:#fff;padding:10px 16px;z-index:250;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.15);transform:translateY(-100%);transition:transform .3s ease}
+.done-banner{position:fixed;top:0;left:0;right:0;background:var(--btn-accent-bg);color:var(--btn-accent-text);padding:10px 16px;z-index:250;display:flex;align-items:center;gap:10px;font-size:12px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,.15);transform:translateY(-100%);transition:transform .3s ease}
 .done-banner.show{transform:translateY(0)}
 .done-banner .banner-text{flex:1}
-.done-banner .banner-close{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;opacity:.8}
+.done-banner .banner-close{background:none;border:none;color:var(--btn-accent-text);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;opacity:.8}
 .done-banner .banner-close:hover{opacity:1}
 .col-resize-handle{position:absolute;top:0;right:-2px;width:4px;height:100%;cursor:col-resize;z-index:5;user-select:none}
 .col-resize-handle:hover{background:var(--accent);opacity:.3}
@@ -186,7 +185,8 @@ body.col-dragging,body.col-dragging *{cursor:grabbing!important;user-select:none
 .fc-toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px 0;flex-wrap:wrap}
 .fc-toolbar #fcSum{flex:1;font-size:11px;color:var(--text-sec);min-width:120px}
 .fc-toolbar button{padding:5px 12px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--btn-bg);color:var(--btn-text);transition:background-color .15s ease;font-family:inherit}
-.fc-toolbar button:hover{background:var(--btn-hover)}
+.fc-toolbar button:hover:not(:disabled){background:var(--btn-hover)}
+.fc-toolbar button:disabled{opacity:.4;cursor:default}
 .fc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:10px;padding:10px 12px 12px;align-items:start}
 .fc-grid.solo{grid-template-columns:1fr}
 .fc-card{border:1px solid var(--border);border-radius:4px;padding:12px 14px;background:var(--bg);display:flex;flex-direction:column;gap:8px;transition:border-color .15s ease,background-color .15s ease;position:relative}
@@ -344,6 +344,10 @@ const fcExportLink=document.getElementById("fcExportLink");
 /* Non-null only for forecast tasks, which render cards, not the table. */
 let forecastMeta=null;
 let forecastRows=null;
+/* One scale and one row order across every card on screen. Held here because
+   expanding a card re-renders it alone, and a card that changed scale on
+   expansion would be worse than one that never shared. */
+let forecastDomain=null;
 
 let csvUrl="",pollToken="",downloadUrl="";
 const TRUNC=200;
@@ -537,7 +541,7 @@ function renderProgress(d){
     wasDone=true;
     progressSection.classList.add("flash");
     /* auto-fetch results on completion */
-    if(!resultsFetched)autoFetchResults();
+    if(!resultsFetched)loadResults(d.results);
     showDoneBanner();
   }
   if(done){setPollNote("");stopPoll();}
@@ -549,38 +553,43 @@ const doneBanner=document.getElementById("doneBanner");
 document.getElementById("closeBanner").addEventListener("click",()=>doneBanner.classList.remove("show"));
 function showDoneBanner(){doneBanner.classList.add("show");}
 
-/* ── auto-fetch results on completion ── */
-async function autoFetchResults(){
+/* ── show results on completion ── */
+function renderResults(rows){
+  if(forecastMeta){
+    /* Forecast tasks get the card grid; the table is hidden. */
+    showForecastUI();
+    renderForecastCards(Array.isArray(rows)?rows:[rows]);
+  }else{
+    /* All other operation types keep the original table UI. */
+    showResultsUI();
+    processData(rows);
+  }
+  switchTab("results");
+  /* NOTE: we deliberately do NOT call app.sendMessage() or
+     app.updateModelContext() here. Both are advertised by claude.ai for
+     custom connectors but their delivery is reconnect-gated — the message
+     only materializes in the chat on page refresh, producing a mystery
+     user message that hurts UX more than it helps. The widget shows
+     results; the user asks Claude to analyze. */
+}
+
+/* A finished task's rows come down with its data, so there is usually nothing
+   left to fetch. The download URL is the fallback, and it needs a poll token,
+   which stops working 24h after the task was submitted. */
+async function loadResults(rows){
   if(resultsFetched)return;
   resultsFetched=true;
+  if(rows){renderResults(rows);return;}
   if(!downloadUrl||!pollToken){return;}
   try{
-    csvUrl=downloadUrl+(downloadUrl.includes("?")?"&":"?")+"token="+encodeURIComponent(pollToken);
-    const jsonUrl=csvUrl+"&format=json";
+    const jsonUrl=downloadUrl+(downloadUrl.includes("?")?"&":"?")+"token="+encodeURIComponent(pollToken)+"&format=json";
     let dataResp=await fetch(jsonUrl);
     if(dataResp.status===404){
       await new Promise(r=>setTimeout(r,2000));
       dataResp=await fetch(jsonUrl);
     }
     if(!dataResp.ok){resultsFetched=false;return;}
-    const data=await dataResp.json();
-    if(forecastMeta){
-      /* Forecast tasks get the card grid; the table is hidden. */
-      showForecastUI();
-      renderForecastCards(Array.isArray(data)?data:[data]);
-      switchTab("results");
-    }else{
-      /* All other operation types keep the original table UI. */
-      showResultsUI();
-      processData(data);
-      switchTab("results");
-    }
-    /* NOTE: we deliberately do NOT call app.sendMessage() or
-       app.updateModelContext() here. Both are advertised by claude.ai for
-       custom connectors but their delivery is reconnect-gated — the message
-       only materializes in the chat on page refresh, producing a mystery
-       user message that hurts UX more than it helps. The widget shows
-       results; the user asks Claude to analyze. */
+    renderResults(await dataResp.json());
   }catch(e){
     resultsFetched=false;
   }
@@ -654,9 +663,29 @@ function fcExtractDatePctl(row,field){
 /* Categorical, thresholded and binary-decision forecasts all put one
    probability per option in a single `probabilities` column, JSON-encoded by
    the engine. Only the meaning of an option and its ordering differ. */
-const FC_GROUPED_TYPES=new Set(["categorical","thresholded","decision"]);
-const FC_GROUPED_LABEL={categorical:"outcomes",thresholded:"thresholds",decision:"alternatives"};
+const FC_GROUPED_TYPES=new Set(["categorical","thresholded"]);
+const FC_GROUPED_LABEL={categorical:"outcomes",thresholded:"thresholds"};
 const FC_GROUPED_VISIBLE=4;
+
+function fcIsDecision(){return forecastMeta.framing.kind==="decision";}
+function fcIsConditional(){return forecastMeta.framing.kind==="conditional";}
+
+/* Grouped: one row carries several labelled outcomes at once. Categorical and
+   thresholded are grouped by their outcome type. A decision is grouped by its
+   framing instead — one outcome per alternative, whatever that outcome is. */
+function fcIsGrouped(){
+  return FC_GROUPED_TYPES.has(forecastMeta.forecast_type)||fcIsDecision();
+}
+
+/* Ranged: the outcome is a distribution, reported as percentiles. */
+function fcIsRanged(){
+  return forecastMeta.forecast_type==="numeric"||forecastMeta.forecast_type==="date";
+}
+
+function fcGroupedLabel(){
+  if(fcIsDecision())return "alternatives";
+  return FC_GROUPED_LABEL[forecastMeta.forecast_type]||"outcomes";
+}
 
 /* Engine columns holding a JSON map arrive as strings; some paths hand back
    the decoded object, so accept both. */
@@ -702,7 +731,7 @@ function fcRenderProbBars(entries,kind,full){
      as the max rather than the first row, since a shared order can put a
      lower-probability outcome first. */
   const lead=kind==="categorical"?Math.max(...entries.map(e=>e.value)):null;
-  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(FC_GROUPED_LABEL[kind]||"outcomes")}</div>`;
+  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(fcGroupedLabel())}</div>`;
   for(const e of shown){
     const pct=Math.max(0,Math.min(100,e.value));
     const isLead=lead!==null&&e.value===lead;
@@ -885,26 +914,19 @@ function fcDateDomain(records){
    single `percentiles` column: {alternative: {p10..p90}}, numbers for a
    numeric outcome and YYYY-MM-DD / "never" strings for a date one. Rejects a
    map whose records don't all carry the five keys of one single kind. */
-function fcExtractDecisionPctl(row){
+function fcExtractDecisionPctl(row,kind){
   const obj=fcParseJsonMap(row.percentiles);
   if(!obj)return null;
-  const isDate=v=>v==="never"||(typeof v==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(v));
-  const isNum=v=>typeof v==="number"&&isFinite(v);
+  const ok=kind==="numeric"
+    ?v=>typeof v==="number"&&isFinite(v)
+    :v=>v==="never"||(typeof v==="string"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(v));
   const entries=[];
-  let kind=null;
   for(const[label,record]of Object.entries(obj)){
     if(!record||typeof record!=="object"||Array.isArray(record))return null;
-    const values=FC_PERCENTILES.map(p=>record["p"+p]);
-    const recordKind=isNum(values[2])?"numeric":(isDate(values[2])?"date":null);
-    if(!recordKind)return null;
-    /* A task is one kind throughout; a mixed map is malformed. */
-    if(kind===null)kind=recordKind;
-    else if(kind!==recordKind)return null;
-    if(!values.every(kind==="numeric"?isNum:isDate))return null;
+    if(!FC_PERCENTILES.every(p=>ok(record["p"+p])))return null;
     entries.push({label,record});
   }
-  if(!entries.length)return null;
-  return {kind,entries};
+  return entries.length?entries:null;
 }
 
 /* One range bar per decision alternative, all on a shared axis: the spread
@@ -915,7 +937,7 @@ function fcRenderDecisionPctlBars(kind,entries,full){
   const records=entries.map(e=>e.record);
   const domain=kind==="numeric"?fcNumericDomain(records):fcDateDomain(records);
   const shown=full?entries:entries.slice(0,FC_GROUPED_VISIBLE);
-  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(FC_GROUPED_LABEL.decision)}</div>`;
+  let out=`<div class="fc-opts"><div class="fc-section-label">${esc(fcGroupedLabel())}</div>`;
   for(const{label,record}of shown){
     out+=`<div class="fc-alt"><div class="fc-pctl-header"><span class="fc-pctl-field">${esc(label)}</span>`;
     if(kind==="numeric"){
@@ -1018,7 +1040,24 @@ function fcLinkifyRationale(text){
    text fallback. */
 function fcRenderOutcome(data,full,used,domain){
   let out="";
-  if(forecastMeta.forecastType==="binary"){
+  /* A decision's alternatives carry a range each when its outcome is numeric
+     or date, and a probability each when it is binary. Both are grouped, and
+     both are tested before binary: a decision's own outcome type is usually
+     binary, and it is the framing that decides how the row is drawn. */
+  if(fcIsDecision()&&fcIsRanged()){
+    const entries=fcExtractDecisionPctl(data,forecastMeta.forecast_type);
+    if(entries){
+      out+=fcRenderDecisionPctlBars(forecastMeta.forecast_type,entries,full);
+      used.add("percentiles");
+    }
+  }else if(fcIsGrouped()){
+    const entries=fcExtractProbabilities(data,forecastMeta.forecast_type);
+    if(entries){
+      const ordered=domain&&domain.order?fcApplyOrder(entries,domain.order):entries;
+      out+=fcRenderProbBars(ordered,forecastMeta.forecast_type,full);
+      used.add("probabilities");
+    }
+  }else if(forecastMeta.forecast_type==="binary"){
     const probRaw=data.probability;
     const prob=typeof probRaw==="number"?probRaw:Number(probRaw);
     if(!isNaN(prob)){
@@ -1027,27 +1066,11 @@ function fcRenderOutcome(data,full,used,domain){
       out+=`<div class="fc-prob-bar"><div class="fc-prob-bar-fill" style="width:${pct}%${pct>0?";min-width:2px":""}"></div></div>`;
       used.add("probability");
     }
-  }else if(FC_GROUPED_TYPES.has(forecastMeta.forecastType)){
-    /* A decision's outcome rides one of two columns: `percentiles` when the
-       outcome is numeric or date, `probabilities` when it's binary. Which one
-       is present says which, so no metadata is needed to tell them apart. */
-    const decisionPctl=forecastMeta.forecastType==="decision"?fcExtractDecisionPctl(data):null;
-    if(decisionPctl){
-      out+=fcRenderDecisionPctlBars(decisionPctl.kind,decisionPctl.entries,full);
-      used.add("percentiles");
-    }else{
-      const entries=fcExtractProbabilities(data,forecastMeta.forecastType);
-      if(entries){
-        const ordered=domain&&domain.order?fcApplyOrder(entries,domain.order):entries;
-        out+=fcRenderProbBars(ordered,forecastMeta.forecastType,full);
-        used.add("probabilities");
-      }
-    }
-  }else if(forecastMeta.forecastType==="numeric"&&forecastMeta.outputField){
-    const p=fcExtractPctl(data,forecastMeta.outputField);
+  }else if(forecastMeta.forecast_type==="numeric"&&forecastMeta.output_field){
+    const p=fcExtractPctl(data,forecastMeta.output_field);
     if(p){
       out+=`<div class="fc-pctl-bar">`;
-      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median">${esc(fcNum(p.p50))}</span>`;
+      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.output_field)}</span><span class="fc-pctl-median">${esc(fcNum(p.p50))}</span>`;
       if(forecastMeta.units)out+=`<span class="fc-pctl-units">${esc(forecastMeta.units)}</span>`;
       out+=`</div>`;
       out+=fcRenderPctlSVG(p,forecastMeta.units,!full,domain);
@@ -1060,15 +1083,15 @@ function fcRenderOutcome(data,full,used,domain){
         out+=`</div>`;
       }
       out+=`</div>`;
-      for(const k of FC_PERCENTILES)used.add(forecastMeta.outputField+"_p"+k);
+      for(const k of FC_PERCENTILES)used.add(forecastMeta.output_field+"_p"+k);
     }
-  }else if(forecastMeta.forecastType==="date"&&forecastMeta.outputField){
-    const dp=fcExtractDatePctl(data,forecastMeta.outputField);
+  }else if(forecastMeta.forecast_type==="date"&&forecastMeta.output_field){
+    const dp=fcExtractDatePctl(data,forecastMeta.output_field);
     if(dp){
       const gran=domain?domain.gran:fcPickDateGran([dp.p10,dp.p25,dp.p50,dp.p75,dp.p90]);
       const isNever=fcIsNever(dp.p50);
       out+=`<div class="fc-pctl-bar">`;
-      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.outputField)}</span><span class="fc-pctl-median"${isNever?' style="color:var(--text-dim)"':''}>${esc(fcFmtDate(dp.p50,false,gran))}</span></div>`;
+      out+=`<div class="fc-pctl-header"><span class="fc-pctl-field">${esc(forecastMeta.output_field)}</span><span class="fc-pctl-median"${isNever?' style="color:var(--text-dim)"':''}>${esc(fcFmtDate(dp.p50,false,gran))}</span></div>`;
       out+=fcRenderDatePctlSVG(dp,!full,domain);
       if(full){
         out+=`<div class="fc-pctl-grid">`;
@@ -1080,7 +1103,7 @@ function fcRenderOutcome(data,full,used,domain){
         out+=`</div>`;
       }
       out+=`</div>`;
-      for(const k of FC_PERCENTILES)used.add(forecastMeta.outputField+"_p"+k);
+      for(const k of FC_PERCENTILES)used.add(forecastMeta.output_field+"_p"+k);
     }
   }
   return out;
@@ -1103,8 +1126,8 @@ function fcBranchData(data,branch){
 /* The condition the two branches split on: shared across the batch, or named
    per row by an input column. */
 function fcConditionText(data){
-  if(forecastMeta.condition)return forecastMeta.condition;
-  const field=forecastMeta.conditionField;
+  if(forecastMeta.framing.condition)return forecastMeta.framing.condition;
+  const field=forecastMeta.framing.condition_field;
   if(field){
     const v=data[field];
     if(typeof v==="string"&&v.trim())return v.trim();
@@ -1118,29 +1141,29 @@ function fcConditionText(data){
    their own scales look alike however far apart they are, and the same
    outcome on a different row in each card hides the comparison just as well. */
 function fcSharedDomain(datas){
-  if(FC_GROUPED_TYPES.has(forecastMeta.forecastType)){
+  if(fcIsGrouped()){
     /* Rank by the total across siblings, so neither branch's ordering wins.
        Labels keep first-seen order otherwise, which is the engine's
        meaningful order for thresholded and decision. */
     const totals=new Map();
     for(const d of datas){
-      const entries=fcExtractProbabilities(d,forecastMeta.forecastType);
+      const entries=fcExtractProbabilities(d,forecastMeta.forecast_type);
       if(!entries)continue;
       for(const e of entries)totals.set(e.label,(totals.get(e.label)||0)+e.value);
     }
     if(!totals.size)return null;
     const order=[...totals.keys()];
-    if(forecastMeta.forecastType==="categorical"){
+    if(forecastMeta.forecast_type==="categorical"){
       order.sort((a,b)=>totals.get(b)-totals.get(a));
     }
     return {order};
   }
-  const field=forecastMeta.outputField;
+  const field=forecastMeta.output_field;
   if(!field)return null;
-  if(forecastMeta.forecastType==="numeric"){
+  if(forecastMeta.forecast_type==="numeric"){
     return fcNumericDomain(datas.map(d=>fcExtractPctl(d,field)).filter(Boolean));
   }
-  if(forecastMeta.forecastType==="date"){
+  if(forecastMeta.forecast_type==="date"){
     return fcDateDomain(datas.map(d=>fcExtractDatePctl(d,field)).filter(Boolean));
   }
   return null;
@@ -1166,8 +1189,8 @@ function fcRenderBranches(data,full,used){
     ?`<div class="fc-condition"><div class="fc-section-label">condition</div><div class="fc-condition-text">${esc(condition)}</div></div>`
     :"";
   /* Only suppress the input column when the banner is what's showing it. */
-  if(condition&&!forecastMeta.condition&&forecastMeta.conditionField){
-    used.add(forecastMeta.conditionField);
+  if(condition&&!forecastMeta.framing.condition&&forecastMeta.framing.condition_field){
+    used.add(forecastMeta.framing.condition_field);
   }
   return banner+out;
 }
@@ -1187,10 +1210,10 @@ function fcBuildCard(row,idx,isSolo,isExpanded){
   if(isFailed){
     const err=data._error||"This row failed.";
     body+=`<p class="fc-error" style="color:var(--seg-fail);font-size:11px;margin:0">${esc(err)}</p>`;
-  }else if(forecastMeta.isConditional){
+  }else if(fcIsConditional()){
     body+=fcRenderBranches(data,full,displayedFieldKeys);
   }else{
-    body+=fcRenderOutcome(data,full,displayedFieldKeys);
+    body+=fcRenderOutcome(data,full,displayedFieldKeys,forecastDomain);
   }
 
   const rationale=typeof data.rationale==="string"?data.rationale:"";
@@ -1251,21 +1274,13 @@ function renderForecastCards(rows){
     fcSum.textContent="No results";
     return;
   }
+  forecastDomain=fcSharedDomain(forecastRows.map(r=>r.display||r));
   for(let i=0;i<forecastRows.length;i++){
     html+=fcBuildCard(forecastRows[i],i,isSolo,false);
   }
   fcGrid.innerHTML=html;
   fcSum.textContent=forecastRows.length+" forecast"+(forecastRows.length>1?"s":"");
-  /* Wire up CSV download */
-  if(downloadUrl&&pollToken){
-    const csvUrlLocal=downloadUrl+(downloadUrl.includes("?")?"&":"?")+"token="+encodeURIComponent(pollToken);
-    fcExportLink.onclick=()=>{
-      try{app.openLink({target:"_blank",url:csvUrlLocal});}
-      catch{window.open(csvUrlLocal,"_blank");}
-    };
-  }else{
-    fcExportLink.style.display="none";
-  }
+  fcExportLink.onclick=exportResults;
 }
 
 /* Click handler: expand/collapse a card. Solo cards are not clickable. */
@@ -1305,17 +1320,107 @@ function enterProgressMode(d){
   if(d.poll_token)pollToken=d.poll_token;
   if(d.download_url)downloadUrl=d.download_url;
   /* Forecast operations get a card grid instead of the table. */
-  if(d.task_type==="forecast"&&d.forecast_type){
-    forecastMeta={
-      forecastType:d.forecast_type,
-      outputField:d.output_field||null,
+  if(d.task_type==="forecast"&&d.forecast_type)forecastMeta=specFromWidgetMeta(d);
+  renderProgress(d);
+}
+
+/* Submission metadata reaches the widget in the shape the API used before a
+   forecast's framing was separated from its outcome type: a decision occupied
+   the outcome type, with the real one carried alongside it. A host that won't
+   proxy tool calls has no other source for any of this, so translating it here
+   is a supported path, not a migration step. */
+function specFromWidgetMeta(d){
+  if(d.forecast_type==="decision"){
+    return {
+      /* Decisions were binary-only before the outcome type rode along. */
+      forecast_type:d.decision_outcome_type||"binary",
+      output_field:d.output_field||null,
       units:d.units||null,
-      isConditional:!!d.is_conditional,
-      condition:d.condition||null,
-      conditionField:d.condition_field||null,
+      framing:{
+        kind:"decision",
+        alternatives_field:d.alternatives_field||null,
+        intervention:null,
+      },
     };
   }
-  renderProgress(d);
+  return {
+    forecast_type:d.forecast_type,
+    output_field:d.output_field||null,
+    units:d.units||null,
+    categories_field:d.categories_field||null,
+    thresholds_field:d.thresholds_field||null,
+    framing:d.is_conditional
+      ?{kind:"conditional",condition:d.condition||null,condition_field:d.condition_field||null}
+      :{kind:"unconditional"},
+  };
+}
+
+/* Everything downstream reads framing.kind, so a spec without one cannot be
+   drawn. Refusing it here keeps that assumption true in a single place, and
+   leaves the submission metadata in place, which is at least coherent. */
+function useForecastSpec(spec){
+  /* Absent is legitimate: the task's outcome type isn't one the API publishes. */
+  if(!spec)return;
+  if(!spec.framing||!spec.framing.kind){
+    console.warn("[fs] forecast spec has no framing; keeping submission metadata",spec);
+    return;
+  }
+  forecastMeta=spec;
+}
+
+/* ── task data ──
+   Two transports for the same payload. A tool call over the host bridge rides
+   the connector's own authentication, so it still answers for a task whose
+   REST poll token expired hours or months ago. REST is what a host that won't
+   proxy tool calls is left with, and it stops answering 24h after submission.
+
+   Both settle to {data} when they got it, {permanent,note} when nothing is
+   going to bring the task back, or {} when a retry might still work. */
+
+function hostProxiesTools(){
+  const caps=app.getHostCapabilities?.();
+  return !!(caps&&caps.serverTools);
+}
+
+async function fetchViaTool(cursor){
+  try{
+    /* Each tool takes a single pydantic model, so its schema nests every
+       argument under "params". */
+    const res=await app.callServerTool({
+      name:"futuresearch_task_data",
+      arguments:{params:{task_id:currentTaskId,cursor:cursor||null}},
+    });
+    if(res&&res.structuredContent)return {data:res.structuredContent};
+  }catch(e){}
+  return {};
+}
+
+async function fetchViaRest(cursor){
+  if(!pollUrl)return {};
+  let url=pollUrl;
+  if(cursor)url+=(url.includes("?")?"&":"?")+"cursor="+encodeURIComponent(cursor);
+  const opts=pollToken?{headers:{"Authorization":"Bearer "+pollToken}}:{};
+  try{
+    const r=await fetch(url,opts);
+    if(r.ok)return {data:await r.json()};
+    let code="";
+    try{code=((await r.clone().json())||{}).code||"";}catch{}
+    if(r.status===401||code==="session_expired")
+      return {permanent:true,note:"Session expired — ask Claude for this task's status again to reconnect."};
+    if(r.status===404)
+      return {permanent:true,note:"This task is no longer available."};
+  }catch(e){}
+  return {};
+}
+
+/* A host that advertises the bridge can still fail an individual call, and
+   REST may be in range, so a tool miss falls through rather than giving up. */
+async function fetchTaskData(cursor){
+  if(currentTaskId&&hostProxiesTools()){
+    const viaTool=await fetchViaTool(cursor);
+    if(viaTool.data)return viaTool;
+  }
+  return await fetchViaRest(cursor);
 }
 
 /* ── polling ── */
@@ -1328,44 +1433,13 @@ function setPollNote(msg){
   pollNote.style.display="block";
 }
 
-/* A failed poll is either permanent (the credential or task is gone — no
-   amount of retrying brings it back) or transient (retry, but say so rather
-   than silently showing stale progress forever). Returns true when handled
-   permanently and polling has been stopped. */
-async function pollFailedPermanently(r){
-  let code="";
-  try{code=((await r.clone().json())||{}).code||"";}catch{}
-  if(r.status===401||code==="session_expired"){
-    stopPoll();
-    setPollNote("Session expired — ask Claude for this task's status again to reconnect.");
-    return true;
-  }
-  if(r.status===404){
-    stopPoll();
-    setPollNote("This task is no longer available.");
-    return true;
-  }
-  return false;
-}
-
 function startPoll(){
-  const opts=pollToken?{headers:{"Authorization":"Bearer "+pollToken}}:{};
   pollTimer=setInterval(async()=>{
-    try{
-      let url=pollUrl;
-      if(pollCursor)url+=(url.includes("?")?"&":"?")+"cursor="+encodeURIComponent(pollCursor);
-      const r=await fetch(url,opts);
-      if(r.ok){setPollNote("");renderProgress(await r.json());return;}
-      if(await pollFailedPermanently(r))return;
-      setPollNote("Reconnecting…");
-    }catch{setPollNote("Reconnecting…");}
+    const r=await fetchTaskData(pollCursor);
+    if(r.data){setPollNote("");renderProgress(r.data);return;}
+    if(r.permanent){stopPoll();setPollNote(r.note);return;}
+    setPollNote("Reconnecting…");
   },10000);
-}
-
-/* Mount-time failure: only poll on if a retry could actually succeed. */
-async function startPollUnlessPermanent(r){
-  if(r&&await pollFailedPermanently(r))return;
-  if(!pollTimer)startPoll();
 }
 
 /* --- data processing --- */
@@ -1844,18 +1918,46 @@ async function copyToClipboard(text){
   return false;
 }
 
+/* The link the widget was handed stops working a day after the task was
+   submitted, so ask for a live one at the moment it is wanted rather than
+   holding one that quietly goes stale. */
+async function refreshDownloadUrl(){
+  if(currentTaskId&&hostProxiesTools()){
+    try{
+      const res=await app.callServerTool({
+        name:"futuresearch_task_download",
+        arguments:{params:{task_id:currentTaskId}},
+      });
+      const sc=res&&res.structuredContent;
+      if(sc&&sc.download_url&&sc.poll_token){
+        downloadUrl=sc.download_url;
+        pollToken=sc.poll_token;
+      }
+    }catch(e){}
+  }
+  return getDownloadUrl();
+}
+
+async function exportResults(ev){
+  const btn=ev&&ev.currentTarget;
+  const label=btn&&btn.textContent;
+  if(btn){btn.disabled=true;btn.textContent="Preparing...";}
+  try{
+    const url=await refreshDownloadUrl();
+    if(!url){showToast("No download link yet");return;}
+    app.openLink({url}).catch(()=>showCopyModal(url));
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=label;}
+  }
+}
+
 function getDownloadUrl(){
   if(downloadUrl&&pollToken){
     return downloadUrl+(downloadUrl.includes("?")?"&":"?")+"token="+encodeURIComponent(pollToken);
   }
   return csvUrl;
 }
-function updateDownloadLink(){}
-document.getElementById("exportLink")?.addEventListener("click",()=>{
-  const url=getDownloadUrl();
-  if(!url){showToast("No download link yet");return;}
-  app.openLink({url}).catch(()=>showCopyModal(url));
-});
+document.getElementById("exportLink")?.addEventListener("click",exportResults);
 
 /* --- row resize (drag bottom border) --- */
 let rowResizing=false,rowResizeTr=null,rowStartY=0,rowStartH=0;
@@ -1916,66 +2018,40 @@ function fetchFullResults(url,opts,hasPreview,total){
   });
 }
 
-/* ── fetch last aggregate summary (for re-mount when task already done) ── */
-async function backfillSummaries(prefetched){
+/* ── ontoolresult: unified entry point ── */
 
-  let d=prefetched;
-  if(!d){
-    if(!pollUrl||!pollToken)return;
-    try{
-      const opts=pollToken?{headers:{"Authorization":"Bearer "+pollToken}}:{};
-      const r=await fetch(pollUrl,opts);
-      if(!r.ok)return;
-      d=await r.json();
-    }catch{return;}
+/* Take up a task the widget has just been handed. The host caches the tool
+   result that mounted us, so the status it carries may be stale — "running"
+   for a task that finished hours ago. Fetch current state before deciding
+   whether there is anything left to poll for. */
+async function followTask(d){
+  enterProgressMode(d);
+  pollUrl=d.progress_url;
+  const r=await fetchTaskData(null);
+  if(!r.data){
+    if(r.permanent){setPollNote(r.note);return;}
+    if(!pollTimer)startPoll();
+    return;
   }
-  /* Timeline rehydration: stored aggregates with their micro-summaries */
-  if(d.timeline&&d.timeline.length){
-    for(const entry of d.timeline){
-      const ts=new Date(entry.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-      const micros=(entry.micro_summaries||[]).map(s=>({text:s.summary||String(s),row_indices:s.row_indices||null,row_index:s.row_index}));
-      aggHistory.push({aggregate:entry.summary,micros,ts});
-    }
-    if(d.cursor)pollCursor=d.cursor;
-    if(aggHistory.length>30)aggHistory.splice(0,aggHistory.length-30);
-
+  /* The task's own spec outlives the metadata the widget was mounted with,
+     which is replayed from Redis and expires a day after submission. */
+  if(r.data.task_type==="forecast")useForecastSpec(r.data.spec);
+  /* The server replays a re-mounted task's history into this payload, so
+     there is nothing to catch up on here. */
+  renderProgress(r.data);
+  if(["completed","failed","revoked"].includes(r.data.status||d.status)){
+    wasDone=true;
+    if(!resultsFetched)loadResults(r.data.results);
+  }else if(!pollTimer){
+    startPoll();
   }
-  /* Render current state (progress bar + activity list) */
-  renderProgress(d);
 }
 
-/* ── ontoolresult: unified entry point ── */
 app.ontoolresult=({content,structuredContent})=>{
 
   /* Entry 1: structuredContent from futuresearch_status (widget data) */
   if(structuredContent&&structuredContent.progress_url){
-    enterProgressMode(structuredContent);
-    pollUrl=structuredContent.progress_url;
-    /* Claude.ai caches the original tool result — structuredContent.status
-       may be stale (e.g. "running" even though the task completed).
-       Always do a one-off fetch to get current status before deciding path. */
-    (async()=>{
-      try{
-        const opts=structuredContent.poll_token?{headers:{"Authorization":"Bearer "+structuredContent.poll_token}}:{};
-        const r=await fetch(pollUrl,opts);
-        if(!r.ok){await startPollUnlessPermanent(r);return;}
-        const d=await r.json();
-        const currentStatus=d.status||structuredContent.status;
-        const done=["completed","failed","revoked"].includes(currentStatus);
-
-        /* Always backfill stored timeline on mount (covers mid-execution re-mount too) */
-        await backfillSummaries(d);
-        if(done){
-          wasDone=true;
-          if(!resultsFetched)autoFetchResults();
-        } else if(!pollTimer){
-          startPoll();
-        }
-      }catch(e){
-
-        if(!pollTimer)startPoll();
-      }
-    })();
+    followTask(structuredContent);
     return;
   }
 
@@ -1986,28 +2062,7 @@ app.ontoolresult=({content,structuredContent})=>{
       try{
         const d=JSON.parse(t.text);
         if(d.progress_url){
-          enterProgressMode(d);
-          pollUrl=d.progress_url;
-          /* Same live-check as Entry 1 — cached status may be stale */
-          (async()=>{
-            try{
-              const opts=d.poll_token?{headers:{"Authorization":"Bearer "+d.poll_token}}:{};
-              const r2=await fetch(pollUrl,opts);
-              if(!r2.ok){await startPollUnlessPermanent(r2);return;}
-              const d2=await r2.json();
-              const currentStatus=d2.status||d.status;
-              const done2=["completed","failed","revoked"].includes(currentStatus);
-              await backfillSummaries(d2);
-              if(done2){
-                wasDone=true;
-                if(!resultsFetched)autoFetchResults();
-              } else if(!pollTimer){
-                startPoll();
-              }
-            }catch(e2){
-              if(!pollTimer)startPoll();
-            }
-          })();
+          followTask(d);
           return;
         }
       }catch{}
@@ -2022,7 +2077,7 @@ app.ontoolresult=({content,structuredContent})=>{
     showResultsUI();
     if(meta.poll_token){pollToken=meta.poll_token;}
     if(meta.download_url){downloadUrl=meta.download_url;}
-    if(meta.csv_url){csvUrl=meta.csv_url;updateDownloadLink();}
+    if(meta.csv_url){csvUrl=meta.csv_url;}
     if(meta.fetch_full_results){
       if(meta.preview)processData(meta.preview);
       fetchFullResultsWithFreshToken(!!meta.preview,meta.total);

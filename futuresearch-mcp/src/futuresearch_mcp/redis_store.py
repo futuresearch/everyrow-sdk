@@ -167,12 +167,6 @@ def get_redis_client() -> Redis:
     return _redis_client
 
 
-def set_redis_client(client: Redis | None) -> None:
-    """Override the Redis client (for testing)."""
-    global _redis_client  # noqa: PLW0603
-    _redis_client = client
-
-
 async def store_task_token(task_id: str, token: str) -> None:
     await get_redis_client().setex(
         build_key("task_token", task_id), TOKEN_TTL, encrypt_value(token)
@@ -184,10 +178,6 @@ async def get_task_token(task_id: str) -> str | None:
     if encrypted is None:
         return None
     return decrypt_value(encrypted)
-
-
-async def pop_task_token(task_id: str) -> None:
-    await get_redis_client().delete(build_key("task_token", task_id))
 
 
 # ── Task credentials ──────────────────────────────────────────

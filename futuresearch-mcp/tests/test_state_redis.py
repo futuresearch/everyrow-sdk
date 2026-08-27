@@ -18,7 +18,7 @@ def _use_fake_redis(fake_redis):
 
 
 class TestTaskTokenRoundTrip:
-    """store_task_token -> get_task_token -> pop_task_token"""
+    """store_task_token -> get_task_token"""
 
     @pytest.mark.asyncio
     async def test_store_and_get(self):
@@ -30,17 +30,6 @@ class TestTaskTokenRoundTrip:
     async def test_get_missing_returns_none(self):
         result = await redis_store.get_task_token("nonexistent")
         assert result is None
-
-    @pytest.mark.asyncio
-    async def test_pop_removes_task_token_only(self):
-        await redis_store.store_task_token("task-2", "key")
-        await redis_store.store_poll_token("task-2", "poll-tok")
-
-        await redis_store.pop_task_token("task-2")
-
-        assert await redis_store.get_task_token("task-2") is None
-        # Poll token is kept — needed for CSV download after task completes
-        assert await redis_store.get_poll_token("task-2") == "poll-tok"
 
 
 class TestTaskCredentialResolution:

@@ -345,6 +345,25 @@ async def _record_task_ownership(task_id: str, token: str) -> str:
     return poll_token
 
 
+async def _refresh_task_ownership(task_id: str, token: str) -> str | None:
+    """Re-establish how a task is reached, and hand back a usable poll token.
+
+    Returns None when the task is recorded against somebody else, so a caller
+    who may read a task still cannot take over the link to it.
+    """
+    access_token = get_access_token()
+    if access_token is None or not access_token.client_id:
+        return None
+    owner = await redis_store.get_task_owner(task_id)
+    if owner and owner != access_token.client_id:
+        return None
+    # The records share one expiry, so a live poll token means the rest is
+    # live too and nothing needs rewriting.
+    if existing := await redis_store.get_poll_token(task_id):
+        return existing
+    return await _record_task_ownership(task_id, token)
+
+
 async def _submission_ui_json(
     task_id: str,
     total: int,
@@ -423,6 +442,9 @@ async def create_tool_response(
 
 
 _UI_EXCLUDE: set[str] = {"is_terminal", "task_type", "error", "started_at"}
+TERMINAL_STATUSES = frozenset(
+    {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.REVOKED}
+)
 
 
 def _format_summary_lines(summaries: list[dict[str, Any]]) -> str:
@@ -495,11 +517,7 @@ class TaskState(BaseModel):
     @computed_field
     @property
     def is_terminal(self) -> bool:
-        return self.status in (
-            TaskStatus.COMPLETED,
-            TaskStatus.FAILED,
-            TaskStatus.REVOKED,
-        )
+        return self.status in TERMINAL_STATUSES
 
     @computed_field
     @property
@@ -587,8 +605,14 @@ class TaskState(BaseModel):
         return round((datetime.now(UTC) - created).total_seconds())
 
     def _error_terminal_message(self, task_id: str) -> str:
-        """Build the message for a terminal task that has an error."""
-        msg = f"Task {self.status.value}: {self.error}"
+        """Build the message for a task that stopped without completing.
+
+        An error is often absent — a revoked task has none, and a failure can
+        arrive without one — so the status and counts have to carry this on
+        their own.
+        """
+        msg = f"Task {self.status.value}"
+        msg += f": {self.error}" if self.error else f" after {self.elapsed_s}s."
         if self.completed > 0:
             msg += f"\n{self.completed}/{self.total} rows completed successfully — results are available."
             if settings.is_http:
@@ -598,7 +622,7 @@ class TaskState(BaseModel):
                 msg += f"\nCall futuresearch_results(task_id='{task_id}', output_path='<path>.csv') to save the available results."
             msg += "\nFailed rows have _status='failed' and _error columns explaining the reason (e.g. content policy violation)."
         else:
-            msg += "\nNo rows completed successfully. Report the error to the user."
+            msg += "\nNo rows completed successfully. Report this to the user."
         return msg
 
     def progress_message(
@@ -610,21 +634,19 @@ class TaskState(BaseModel):
         summaries: list[dict[str, Any]] | None = None,
     ) -> str:
         if self.is_terminal:
-            if self.error:
+            if self.status != TaskStatus.COMPLETED or self.error:
                 return self._error_terminal_message(task_id)
-            if self.status == TaskStatus.COMPLETED:
-                completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
-                if settings.is_http:
-                    page_size = min(self.total, settings.auto_page_size_threshold)
-                    next_call = dedent(f"""\
-                        Call futuresearch_results(task_id='{task_id}', page_size={max(page_size, 1)}) to load the first rows.\
-                         After reviewing the results, ask the user what they'd like to do next — remind them that this output can be used as input to another operation.""")
-                else:
-                    next_call = f"Call futuresearch_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
-                if self.artifact_id:
-                    completed_msg += f"\nOutput artifact_id: {self.artifact_id}"
-                return f"{completed_msg}\n{next_call}"
-            return f"Task {self.status.value}. Report the error to the user."
+            completed_msg = f"Completed: {self.completed}/{self.total} ({self.failed} failed) in {self.elapsed_s}s."
+            if settings.is_http:
+                page_size = min(self.total, settings.auto_page_size_threshold)
+                next_call = dedent(f"""\
+                    Call futuresearch_results(task_id='{task_id}', page_size={max(page_size, 1)}) to load the first rows.\
+                     After reviewing the results, ask the user what they'd like to do next — remind them that this output can be used as input to another operation.""")
+            else:
+                next_call = f"Call futuresearch_results(task_id='{task_id}', output_path='<choose_a_path>.csv') to save the output."
+            if self.artifact_id:
+                completed_msg += f"\nOutput artifact_id: {self.artifact_id}"
+            return f"{completed_msg}\n{next_call}"
 
         fail_part = f", {self.failed} failed" if self.failed else ""
         pool_part = (
