@@ -82,6 +82,7 @@ class LLMEnum(str, Enum):
     GEMINI_3_FLASH_LOW = "GEMINI_3_FLASH_LOW"
     GEMINI_3_FLASH_MEDIUM = "GEMINI_3_FLASH_MEDIUM"
     GEMINI_3_FLASH_MINIMAL = "GEMINI_3_FLASH_MINIMAL"
+    GLM_5_3_FLASH = "GLM_5_3_FLASH"
     GPT_5 = "GPT_5"
     GPT_5_1_LOW = "GPT_5_1_LOW"
     GPT_5_1_NT = "GPT_5_1_NT"
@@ -148,7 +149,6 @@ class LLMEnum(str, Enum):
     MUSE_SPARK_XHIGH = "MUSE_SPARK_XHIGH"
     O3 = "O3"
     O3_MINI = "O3_MINI"
-    OX_ALPHA = "OX_ALPHA"
 
     def __str__(self) -> str:
         return str(self.value)
