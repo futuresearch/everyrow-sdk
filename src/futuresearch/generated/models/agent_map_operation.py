@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
     from ..models.claude_agent_harness import ClaudeAgentHarness
     from ..models.llm_page_reader import LlmPageReader
+    from ..models.mcp_server_spec import McpServerSpec
     from ..models.open_ai_agent_harness import OpenAiAgentHarness
     from ..models.paginated_page_reader import PaginatedPageReader
 
@@ -90,6 +91,11 @@ class AgentMapOperation:
             "page_size_chars": 50000} (the agent reads the page text itself, one page at a time). An llm page_reader cannot
             be combined with document_query_llm (give the reader model once, as page_reader.model); a paginated one can, in
             which case document_query_llm is only the checklist-extraction model. Internal accounts only.
+        mcp_servers (list[McpServerSpec] | None | Unset): MCP servers whose tools each agent gets, next to web search,
+            the page reader and REPORT_RESULT. Listed once when the task starts. Internal accounts only, and only hosts on
+            the engine's allow-list.
+        system_message (None | str | Unset): The agents' system message, verbatim, instead of ours. Pair with
+            prompt_style='bare' to also send the task verbatim. Internal accounts only.
     """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
@@ -115,6 +121,8 @@ class AgentMapOperation:
     tool_description_style: AgentMapOperationToolDescriptionStyleType0 | None | Unset = UNSET
     agent_harness: ClaudeAgentHarness | None | OpenAiAgentHarness | Unset = UNSET
     page_reader: LlmPageReader | None | PaginatedPageReader | Unset = UNSET
+    mcp_servers: list[McpServerSpec] | None | Unset = UNSET
+    system_message: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -276,6 +284,24 @@ class AgentMapOperation:
         else:
             page_reader = self.page_reader
 
+        mcp_servers: list[dict[str, Any]] | None | Unset
+        if isinstance(self.mcp_servers, Unset):
+            mcp_servers = UNSET
+        elif isinstance(self.mcp_servers, list):
+            mcp_servers = []
+            for mcp_servers_type_0_item_data in self.mcp_servers:
+                mcp_servers_type_0_item = mcp_servers_type_0_item_data.to_dict()
+                mcp_servers.append(mcp_servers_type_0_item)
+
+        else:
+            mcp_servers = self.mcp_servers
+
+        system_message: None | str | Unset
+        if isinstance(self.system_message, Unset):
+            system_message = UNSET
+        else:
+            system_message = self.system_message
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -326,6 +352,10 @@ class AgentMapOperation:
             field_dict["agent_harness"] = agent_harness
         if page_reader is not UNSET:
             field_dict["page_reader"] = page_reader
+        if mcp_servers is not UNSET:
+            field_dict["mcp_servers"] = mcp_servers
+        if system_message is not UNSET:
+            field_dict["system_message"] = system_message
 
         return field_dict
 
@@ -336,6 +366,7 @@ class AgentMapOperation:
         from ..models.agent_map_operation_response_schema_type_0 import AgentMapOperationResponseSchemaType0
         from ..models.claude_agent_harness import ClaudeAgentHarness
         from ..models.llm_page_reader import LlmPageReader
+        from ..models.mcp_server_spec import McpServerSpec
         from ..models.open_ai_agent_harness import OpenAiAgentHarness
         from ..models.paginated_page_reader import PaginatedPageReader
 
@@ -637,6 +668,37 @@ class AgentMapOperation:
 
         page_reader = _parse_page_reader(d.pop("page_reader", UNSET))
 
+        def _parse_mcp_servers(data: object) -> list[McpServerSpec] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                mcp_servers_type_0 = []
+                _mcp_servers_type_0 = data
+                for mcp_servers_type_0_item_data in _mcp_servers_type_0:
+                    mcp_servers_type_0_item = McpServerSpec.from_dict(mcp_servers_type_0_item_data)
+
+                    mcp_servers_type_0.append(mcp_servers_type_0_item)
+
+                return mcp_servers_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[McpServerSpec] | None | Unset, data)
+
+        mcp_servers = _parse_mcp_servers(d.pop("mcp_servers", UNSET))
+
+        def _parse_system_message(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        system_message = _parse_system_message(d.pop("system_message", UNSET))
+
         agent_map_operation = cls(
             input_=input_,
             task=task,
@@ -661,6 +723,8 @@ class AgentMapOperation:
             tool_description_style=tool_description_style,
             agent_harness=agent_harness,
             page_reader=page_reader,
+            mcp_servers=mcp_servers,
+            system_message=system_message,
         )
 
         agent_map_operation.additional_properties = d

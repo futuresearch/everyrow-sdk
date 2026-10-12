@@ -41,6 +41,7 @@ from futuresearch.generated.models import (
     ForecastOperationForecastType,
     ForecastOperationInputType1Item,
     LLMEnumPublic,
+    McpServerSpec,
     MergeOperation,
     MergeOperationLeftInputType1Item,
     MergeOperationRightInputType1Item,
@@ -609,6 +610,8 @@ async def _submit_agent_map(
     tool_description_style: Literal["full", "brief"] | None = None,
     agent_harness: AgentHarness | None = None,
     page_reader: PageReader | None = None,
+    mcp_servers: list[str] | None = None,
+    system_message: str | None = None,
 ) -> SubmittedTask:
     """Build and submit an agent_map request."""
     if agent_harness is not None:
@@ -707,6 +710,10 @@ async def _submit_agent_map(
         if tool_description_style is not None
         else UNSET,
         page_reader=_to_generated_page_reader(page_reader) if page_reader else UNSET,
+        mcp_servers=[McpServerSpec(url=url) for url in mcp_servers]
+        if mcp_servers is not None
+        else UNSET,
+        system_message=system_message if system_message is not None else UNSET,
     )
     if agent_harness is not None:
         body.additional_properties["agent_harness"] = agent_harness.to_payload()
@@ -740,8 +747,17 @@ async def agent_map_async(
     tool_description_style: Literal["full", "brief"] | None = None,
     agent_harness: AgentHarness | None = None,
     page_reader: PageReader | None = None,
+    mcp_servers: list[str] | None = None,
+    system_message: str | None = None,
 ) -> FuturesearchTask[BaseModel]:
-    """Submit an agent_map task asynchronously."""
+    """Submit an agent_map task asynchronously.
+
+    ``mcp_servers``: streamable-HTTP MCP server URLs whose tools each agent
+    gets beside its own; ``system_message``: the agents' system message,
+    verbatim. Both internal accounts only; the server must also be on the
+    engine's host allow-list. Put any credential in the URL (short-lived,
+    task-scoped): request parameters are stored with the task.
+    """
     submitted = await _submit_agent_map(
         task=task,
         session=session,
@@ -763,6 +779,8 @@ async def agent_map_async(
         tool_description_style=tool_description_style,
         agent_harness=agent_harness,
         page_reader=page_reader,
+        mcp_servers=mcp_servers,
+        system_message=system_message,
     )
 
     cohort_task = FuturesearchTask(

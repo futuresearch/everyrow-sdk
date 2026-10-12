@@ -396,6 +396,36 @@ async def test_agent_map_default_does_not_set_return_list(mocker, mock_session):
 
 
 @pytest.mark.asyncio
+async def test_agent_map_async_forwards_mcp_servers_and_system_message(
+    mocker, mock_session
+):
+    mock_submit = mocker.patch(
+        "futuresearch.ops.agent_map_operations_agent_map_post.asyncio_detailed",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = _wrap(
+        OperationResponse(
+            task_id=uuid.uuid4(),
+            session_id=mock_session.session_id,
+            status=TaskStatus.PENDING,
+        )
+    )
+    url = "http://tundra.clio.svc.cluster.local:8301/api/v1/mcp/runs/?token=t"
+
+    await agent_map_async(
+        task="grade",
+        session=mock_session,
+        input=pd.DataFrame([{}]),
+        mcp_servers=[url],
+        system_message="You are a grader.",
+    )
+
+    body = mock_submit.await_args.kwargs["body"].to_dict()
+    assert body["mcp_servers"] == [{"url": url}]
+    assert body["system_message"] == "You are a grader."
+
+
+@pytest.mark.asyncio
 async def test_rank_model_validation(mock_session) -> None:
     input_df = pd.DataFrame(
         [

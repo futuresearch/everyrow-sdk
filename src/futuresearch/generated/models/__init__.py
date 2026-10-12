@@ -49,6 +49,7 @@ from .llm_enum import LLMEnum
 from .llm_enum_public import LLMEnumPublic
 from .llm_page_reader import LlmPageReader
 from .low_effort_forecaster_slot import LowEffortForecasterSlot
+from .mcp_server_spec import McpServerSpec
 from .merge_breakdown_response import MergeBreakdownResponse
 from .merge_operation import MergeOperation
 from .merge_operation_left_input_type_1_item import MergeOperationLeftInputType1Item
@@ -171,6 +172,7 @@ __all__ = (
     "LLMEnumPublic",
     "LlmPageReader",
     "LowEffortForecasterSlot",
+    "McpServerSpec",
     "MergeBreakdownResponse",
     "MergeOperation",
     "MergeOperationLeftInputType1Item",
