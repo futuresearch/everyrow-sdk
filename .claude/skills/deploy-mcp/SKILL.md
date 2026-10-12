@@ -105,9 +105,9 @@ feature branch needs each layer the branch touches deployed from that branch:
   deploy the MCP server from your branch (`-f branch=<your-branch> -f deploy_staging=true`),
   or the staging MCP keeps serving the old tool schema and rejects the new arg.
 - **Engine change** the MCP forwards (e.g. a new operation field): deploy cohort-staging from
-  your branch too — see the `manage-cohort-staging` skill — since staging MCP calls
+  your branch too — see the `manage-engine-staging` skill — since staging MCP calls
   `engine-staging`.
-- **everyrow-cc change**: deploy it from your branch — see `manage-everyrow-cc-staging`.
+- **everyrow-cc change**: deploy it from your branch — see `manage-web-staging`.
 
 A change confined to one layer only needs that layer redeployed.
 
