@@ -612,6 +612,7 @@ async def _submit_agent_map(
     page_reader: PageReader | None = None,
     mcp_servers: list[str] | None = None,
     system_message: str | None = None,
+    webhook_url: str | None = None,
 ) -> SubmittedTask:
     """Build and submit an agent_map request."""
     if agent_harness is not None:
@@ -714,6 +715,7 @@ async def _submit_agent_map(
         if mcp_servers is not None
         else UNSET,
         system_message=system_message if system_message is not None else UNSET,
+        webhook_url=webhook_url if webhook_url is not None else UNSET,
     )
     if agent_harness is not None:
         body.additional_properties["agent_harness"] = agent_harness.to_payload()
@@ -749,6 +751,7 @@ async def agent_map_async(
     page_reader: PageReader | None = None,
     mcp_servers: list[str] | None = None,
     system_message: str | None = None,
+    webhook_url: str | None = None,
 ) -> FuturesearchTask[BaseModel]:
     """Submit an agent_map task asynchronously.
 
@@ -757,6 +760,12 @@ async def agent_map_async(
     verbatim. Both internal accounts only; the server must also be on the
     engine's host allow-list. Put any credential in the URL (short-lived,
     task-scoped): request parameters are stored with the task.
+
+    ``webhook_url``: the engine POSTs ``{"event": "task.ended", "task_id",
+    "status", "session_id", ...}`` to it once, when the task reaches a terminal
+    status (completed, failed or revoked). Delivery is retried a few times and
+    then dropped, and the request is unsigned, so treat it as a hint to check
+    the task's status, not as the status itself.
     """
     submitted = await _submit_agent_map(
         task=task,
@@ -781,6 +790,7 @@ async def agent_map_async(
         page_reader=page_reader,
         mcp_servers=mcp_servers,
         system_message=system_message,
+        webhook_url=webhook_url,
     )
 
     cohort_task = FuturesearchTask(

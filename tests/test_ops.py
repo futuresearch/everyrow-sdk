@@ -393,6 +393,33 @@ async def test_agent_map_default_does_not_set_return_list(mocker, mock_session):
 
     submit_kwargs = mock_submit.await_args.kwargs
     assert submit_kwargs["body"].return_list is False
+    # No webhook unless asked for: the field stays off the wire.
+    assert "webhook_url" not in submit_kwargs["body"].to_dict()
+
+
+@pytest.mark.asyncio
+async def test_agent_map_async_forwards_webhook_url(mocker, mock_session):
+    mock_submit = mocker.patch(
+        "futuresearch.ops.agent_map_operations_agent_map_post.asyncio_detailed",
+        new_callable=AsyncMock,
+    )
+    mock_submit.return_value = _wrap(
+        OperationResponse(
+            task_id=uuid.uuid4(),
+            session_id=mock_session.session_id,
+            status=TaskStatus.PENDING,
+        )
+    )
+
+    await agent_map_async(
+        task="capital?",
+        session=mock_session,
+        input=pd.DataFrame([{"country": "India"}]),
+        webhook_url="https://tundra.example/api/v1/hooks/cohort/u-1?token=t",
+    )
+
+    body = mock_submit.await_args.kwargs["body"]
+    assert body.webhook_url == "https://tundra.example/api/v1/hooks/cohort/u-1?token=t"
 
 
 @pytest.mark.asyncio
