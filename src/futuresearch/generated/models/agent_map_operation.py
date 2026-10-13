@@ -96,6 +96,10 @@ class AgentMapOperation:
             the engine's allow-list.
         system_message (None | str | Unset): The agents' system message, verbatim, instead of ours. Pair with
             prompt_style='bare' to also send the task verbatim. Internal accounts only.
+        date_context (bool | None | Unset): False drops the system line giving today's date, for a task that sets its
+            own (e.g. a persona's 'Today is 2001-04-20'), which that line would contradict. Default: the line is sent. Under
+            retro date cutoffs the line carries the retro date, so with a caller system_message turning it off leaves the
+            date entirely to that message.
     """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
@@ -123,6 +127,7 @@ class AgentMapOperation:
     page_reader: LlmPageReader | None | PaginatedPageReader | Unset = UNSET
     mcp_servers: list[McpServerSpec] | None | Unset = UNSET
     system_message: None | str | Unset = UNSET
+    date_context: bool | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -302,6 +307,12 @@ class AgentMapOperation:
         else:
             system_message = self.system_message
 
+        date_context: bool | None | Unset
+        if isinstance(self.date_context, Unset):
+            date_context = UNSET
+        else:
+            date_context = self.date_context
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -356,6 +367,8 @@ class AgentMapOperation:
             field_dict["mcp_servers"] = mcp_servers
         if system_message is not UNSET:
             field_dict["system_message"] = system_message
+        if date_context is not UNSET:
+            field_dict["date_context"] = date_context
 
         return field_dict
 
@@ -699,6 +712,15 @@ class AgentMapOperation:
 
         system_message = _parse_system_message(d.pop("system_message", UNSET))
 
+        def _parse_date_context(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        date_context = _parse_date_context(d.pop("date_context", UNSET))
+
         agent_map_operation = cls(
             input_=input_,
             task=task,
@@ -725,6 +747,7 @@ class AgentMapOperation:
             page_reader=page_reader,
             mcp_servers=mcp_servers,
             system_message=system_message,
+            date_context=date_context,
         )
 
         agent_map_operation.additional_properties = d
