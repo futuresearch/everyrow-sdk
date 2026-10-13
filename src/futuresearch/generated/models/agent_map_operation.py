@@ -100,6 +100,9 @@ class AgentMapOperation:
             own (e.g. a persona's 'Today is 2001-04-20'), which that line would contradict. Default: the line is sent. Under
             retro date cutoffs the line carries the retro date, so with a caller system_message turning it off leaves the
             date entirely to that message.
+        builtin_tools (bool | None | Unset): False gives each agent no web search or page reader: only the tools of its
+            mcp_servers, and REPORT_RESULT. For a task with its own environment (a mailbox, a codebase) that the open web
+            would change, or a single structured call with no tools at all. Default: they are included.
     """
 
     input_: AgentMapOperationInputType2 | list[AgentMapOperationInputType1Item] | UUID
@@ -128,6 +131,7 @@ class AgentMapOperation:
     mcp_servers: list[McpServerSpec] | None | Unset = UNSET
     system_message: None | str | Unset = UNSET
     date_context: bool | None | Unset = UNSET
+    builtin_tools: bool | None | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -313,6 +317,12 @@ class AgentMapOperation:
         else:
             date_context = self.date_context
 
+        builtin_tools: bool | None | Unset
+        if isinstance(self.builtin_tools, Unset):
+            builtin_tools = UNSET
+        else:
+            builtin_tools = self.builtin_tools
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -369,6 +379,8 @@ class AgentMapOperation:
             field_dict["system_message"] = system_message
         if date_context is not UNSET:
             field_dict["date_context"] = date_context
+        if builtin_tools is not UNSET:
+            field_dict["builtin_tools"] = builtin_tools
 
         return field_dict
 
@@ -721,6 +733,15 @@ class AgentMapOperation:
 
         date_context = _parse_date_context(d.pop("date_context", UNSET))
 
+        def _parse_builtin_tools(data: object) -> bool | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(bool | None | Unset, data)
+
+        builtin_tools = _parse_builtin_tools(d.pop("builtin_tools", UNSET))
+
         agent_map_operation = cls(
             input_=input_,
             task=task,
@@ -748,6 +769,7 @@ class AgentMapOperation:
             mcp_servers=mcp_servers,
             system_message=system_message,
             date_context=date_context,
+            builtin_tools=builtin_tools,
         )
 
         agent_map_operation.additional_properties = d
